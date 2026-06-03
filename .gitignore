@@ -1,0 +1,31 @@
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local backend state
+web-backend/.env
+web-backend/storage/
+web-backend/uploads/
+web-portal/.env
+web-backend/*.db
+web-backend/*.db-shm
+web-backend/*.db-wal
+
+# Logs
+*.log
+tmp-backend-*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
