@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertCircle, Eye, FileSignature, Link2, PenLine } from "lucide-react";
+import { AlertCircle, Eye, FileSignature, PenLine } from "lucide-react";
 import { Badge } from "../../shared/components/ui/Badge";
 import { Button } from "../../shared/components/ui/Button";
 import { Card } from "../../shared/components/ui/Card";
@@ -87,4 +87,3 @@ export function SignaturesPage() {
     </>
   );
 }
-

@@ -34,4 +34,3 @@ export function PersonalDataStep({ value, onChange }: { value: PersonalData; onC
     </div>
   );
 }
-

@@ -19,7 +19,11 @@ const envSchema = z.object({
   APP_URL: z.string().url().default("http://localhost:5173"),
   API_URL: z.string().url().default("http://localhost:4000"),
   ADMIN_EMAIL: z.string().email().default("admin@example.com"),
-  ADMIN_PASSWORD: z.string().min(8).default("Admin123456")
+  ADMIN_PASSWORD: z.string().min(8).default("Admin123456"),
+  PKCS11_MODULE_PATH: z.string().optional(),
+  PKCS11_TOOL_PATH: z.string().default("pkcs11-tool"),
+  PKCS11_CERT_ID: z.string().optional(),
+  PYHANKO_PYTHON_PATH: z.string().optional()
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -37,6 +41,44 @@ if (!parsedEnv.success) {
 
 const env = parsedEnv.data;
 
+function assertProductionSecretsAreSafe() {
+  if (env.NODE_ENV !== "production") return;
+
+  const unsafeFields: string[] = [];
+  const weakJwtSecrets = [
+    ["JWT_ACCESS_SECRET", env.JWT_ACCESS_SECRET],
+    ["JWT_REFRESH_SECRET", env.JWT_REFRESH_SECRET]
+  ] as const;
+
+  for (const [name, value] of weakJwtSecrets) {
+    if (value.length < 32 || value.toLowerCase().includes("change_me")) {
+      unsafeFields.push(name);
+    }
+  }
+
+  if (env.ADMIN_PASSWORD === "Admin123456") {
+    unsafeFields.push("ADMIN_PASSWORD");
+  }
+
+  try {
+    const databaseUrl = new URL(env.DATABASE_URL);
+    if (!databaseUrl.password || databaseUrl.password === "firma" || databaseUrl.password.toLowerCase().includes("change_me")) {
+      unsafeFields.push("DATABASE_URL");
+    }
+  } catch {
+    unsafeFields.push("DATABASE_URL");
+  }
+
+  if (unsafeFields.length) {
+    throw new Error(
+      `Unsafe production environment variables: ${unsafeFields.join(", ")}. ` +
+        "Replace all default credentials and secrets before starting in production."
+    );
+  }
+}
+
+assertProductionSecretsAreSafe();
+
 export const config = {
   nodeEnv: env.NODE_ENV,
   port: env.PORT,
@@ -53,5 +95,9 @@ export const config = {
   appUrl: env.APP_URL,
   apiUrl: env.API_URL,
   adminEmail: env.ADMIN_EMAIL,
-  adminPassword: env.ADMIN_PASSWORD
+  adminPassword: env.ADMIN_PASSWORD,
+  pkcs11ModulePath: env.PKCS11_MODULE_PATH,
+  pkcs11ToolPath: env.PKCS11_TOOL_PATH,
+  pkcs11CertId: env.PKCS11_CERT_ID,
+  pyhankoPythonPath: env.PYHANKO_PYTHON_PATH
 };

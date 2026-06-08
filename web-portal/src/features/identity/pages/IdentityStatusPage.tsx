@@ -18,7 +18,7 @@ export function IdentityStatusPage({ status, rejectionReason }: { status: Identi
             {status === "VERIFIED"
               ? "Ya podés firmar y declarar conformidad con tu identidad validada."
               : status === "REJECTED"
-                ? `Motivo: ${rejectionReason ?? "El administrador solicitó corregir datos."}`
+                ? `Motivo: ${rejectionReason ?? "El administrador solicit? corregir datos."}`
                 : "Un administrador revisará la documentación cargada."}
           </p>
         </div>

@@ -21,7 +21,7 @@ export function DashboardPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Operacion"
+        eyebrow="Operaci?n"
         title="Centro de firma y conformidad"
         description="Vista ejecutiva del estado documental, solicitudes activas y trazabilidad reciente."
       />

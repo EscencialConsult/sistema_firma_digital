@@ -5,16 +5,30 @@ import { authenticate, authorize } from "../../middlewares/authenticate.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { query } from "../../database/pool.js";
 import { identityController } from "../identity/identity.controller.js";
+import { scopedDocumentWhere, scopedUserWhere } from "./scope.js";
 
 export const adminRoutes = Router();
 
-adminRoutes.get("/stats", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (_req, res) => {
+adminRoutes.get("/stats", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (req, res) => {
+  const userParams: unknown[] = [];
+  const userScope = scopedUserWhere(req.user!, "u", userParams);
+  const documentParams: unknown[] = [];
+  const documentScope = scopedDocumentWhere(req.user!, "u", documentParams);
+  const identityParams: unknown[] = [];
+  const identityScope = scopedUserWhere(req.user!, "u", identityParams);
+  const organizationParams: unknown[] = [];
+  const organizationScope = req.user!.role === "ADMIN"
+    ? ""
+    : req.user!.organizationId
+      ? (organizationParams.push(req.user!.organizationId), `WHERE o.id = $${organizationParams.length}`)
+      : "WHERE false";
+
   const [users, documents, requests, identityPending, organizations] = await Promise.all([
-    query("SELECT count(*)::int AS count FROM users"),
-    query("SELECT count(*)::int AS count FROM documents"),
-    query("SELECT count(*)::int AS count FROM signature_requests"),
-    query("SELECT count(*)::int AS count FROM identity_verifications WHERE status IN ('PENDING', 'IN_REVIEW')"),
-    query("SELECT count(*)::int AS count FROM organizations")
+    query(`SELECT count(*)::int AS count FROM users u WHERE true ${userScope}`, userParams),
+    query(`SELECT count(*)::int AS count FROM documents d JOIN users u ON u.id = d.owner_id WHERE true ${documentScope}`, documentParams),
+    query(`SELECT count(*)::int AS count FROM signature_requests sr JOIN documents d ON d.id = sr.document_id JOIN users u ON u.id = d.owner_id WHERE true ${documentScope}`, documentParams),
+    query(`SELECT count(*)::int AS count FROM identity_verifications iv JOIN users u ON u.id = iv.user_id WHERE iv.status IN ('PENDING', 'IN_REVIEW') ${identityScope}`, identityParams),
+    query(`SELECT count(*)::int AS count FROM organizations o ${organizationScope}`, organizationParams)
   ]);
   res.json({
     data: {
@@ -27,23 +41,29 @@ adminRoutes.get("/stats", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN")
   });
 }));
 
-adminRoutes.get("/users", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (_req, res) => {
+adminRoutes.get("/users", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (req, res) => {
+  const params: unknown[] = [];
+  const scope = scopedUserWhere(req.user!, "u", params);
   const result = await query(
     `SELECT id, email, full_name, role, verification_status, certificate_status, created_at
-     FROM users
-     ORDER BY created_at DESC`
+     FROM users u
+     WHERE true ${scope}
+     ORDER BY created_at DESC`,
+    params
   );
   res.json({ data: result.rows });
 }));
 
 adminRoutes.get("/users/:id", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (req, res) => {
   const userId = req.params.id;
+  const userParams: unknown[] = [userId];
+  const userScope = scopedUserWhere(req.user!, "u", userParams);
   const [userRes, documentsRes, certificatesRes, identityRes] = await Promise.all([
     query(
       `SELECT id, email, full_name, role, verification_status, certificate_status, created_at
-       FROM users
-       WHERE id = $1`,
-      [userId]
+       FROM users u
+       WHERE id = $1 ${userScope}`,
+      userParams
     ),
     query(
       `SELECT id, title, status, created_at
@@ -84,24 +104,33 @@ adminRoutes.get("/users/:id", authenticate, authorize("ADMIN", "ORGANIZATION_ADM
   });
 }));
 
-adminRoutes.get("/documents", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (_req, res) => {
+adminRoutes.get("/documents", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (req, res) => {
+  const params: unknown[] = [];
+  const scope = scopedDocumentWhere(req.user!, "u", params);
   const result = await query(
     `SELECT d.id, d.title, d.status, d.created_at, d.updated_at, u.email AS owner_email
      FROM documents d
      JOIN users u ON u.id = d.owner_id
-     ORDER BY d.updated_at DESC`
+     WHERE true ${scope}
+     ORDER BY d.updated_at DESC`,
+    params
   );
   res.json({ data: result.rows });
 }));
 
 adminRoutes.get("/identity-verifications", identityController.adminList);
 adminRoutes.get("/identity-verifications/:id", identityController.adminGet);
-adminRoutes.get("/identity-verifications/:id/documents/:docId", authenticate, authorize("ADMIN"), asyncHandler(async (req, res) => {
+adminRoutes.get("/identity-verifications/:id/documents/:docId", authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (req, res) => {
   const { id: verificationId, docId } = req.params;
+  const params: unknown[] = [docId, verificationId];
+  const scope = scopedUserWhere(req.user!, "u", params);
   const result = await query(
-    `SELECT file_name, mime_type FROM identity_documents 
-     WHERE id = $1 AND identity_verification_id = $2`,
-    [docId, verificationId]
+    `SELECT idoc.file_name, idoc.mime_type
+     FROM identity_documents idoc
+     JOIN identity_verifications iv ON iv.id = idoc.identity_verification_id
+     JOIN users u ON u.id = iv.user_id
+     WHERE idoc.id = $1 AND idoc.identity_verification_id = $2 ${scope}`,
+    params
   );
   if (!result.rows.length) {
     res.status(404).json({ error: "Documento no encontrado" });

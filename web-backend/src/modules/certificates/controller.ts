@@ -14,8 +14,11 @@ export const certificateController = {
   get: [authenticate, asyncHandler(async (req, res) => {
     res.json({ data: await certificateService.get(req.user!.id, req.params.id) });
   })],
+  download: [authenticate, asyncHandler(async (req, res) => {
+    const file = await certificateService.download(req.user!.id, req.params.id);
+    res.download(file.storagePath, file.fileName);
+  })],
   updateStatus: [authenticate, validateBody(certificateStatusSchema), asyncHandler(async (req, res) => {
     res.json({ data: await certificateService.updateStatus(req.user!.id, req.params.id, req.body.status) });
   })]
 };
-

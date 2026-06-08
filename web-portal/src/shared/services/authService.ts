@@ -1,4 +1,4 @@
-import { apiClient, apiRequest, clearSessionTokens, getRefreshToken, setSessionTokens } from "./apiClient";
+import { apiClient, apiRequest, clearAccessToken, restoreAccessToken, setAccessToken } from "./apiClient";
 
 export type AuthUser = {
   id: string;
@@ -12,7 +12,6 @@ export type AuthUser = {
 export type AuthResponse = {
   user: AuthUser;
   accessToken: string;
-  refreshToken: string;
 };
 
 export async function login(email: string, password: string) {
@@ -20,7 +19,7 @@ export async function login(email: string, password: string) {
     method: "POST",
     body: JSON.stringify({ email, password })
   });
-  setSessionTokens(response.accessToken, response.refreshToken);
+  setAccessToken(response.accessToken);
   return response.user;
 }
 
@@ -29,8 +28,14 @@ export async function register(input: { fullName: string; email: string; passwor
     method: "POST",
     body: JSON.stringify(input)
   });
-  setSessionTokens(response.accessToken, response.refreshToken);
+  setAccessToken(response.accessToken);
   return response.user;
+}
+
+export async function restoreSession() {
+  const restored = await restoreAccessToken();
+  if (!restored) return null;
+  return fetchMe();
 }
 
 export async function fetchMe() {
@@ -46,9 +51,6 @@ export async function fetchMe() {
 }
 
 export async function logoutLocal() {
-  const refreshToken = getRefreshToken();
-  if (refreshToken) {
-    await apiClient.post("/auth/logout", { refreshToken }).catch(() => undefined);
-  }
-  clearSessionTokens();
+  await apiClient.post("/auth/logout").catch(() => undefined);
+  clearAccessToken();
 }

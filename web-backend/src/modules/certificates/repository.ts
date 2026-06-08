@@ -1,5 +1,13 @@
 import { query } from "../../database/pool.js";
 
+export async function getCertificateOwner(userId: string) {
+  const result = await query(
+    "SELECT id, email, full_name, verification_status FROM users WHERE id = $1",
+    [userId]
+  );
+  return result.rows[0] ?? null;
+}
+
 export async function createCertificate(userId: string, input: Record<string, any>) {
   const result = await query(
     `INSERT INTO certificates
@@ -27,6 +35,12 @@ export async function updateCertificateStatus(userId: string, id: string, status
     "UPDATE certificates SET status = $3 WHERE user_id = $1 AND id = $2 RETURNING *",
     [userId, id, status]
   );
+  if (result.rows[0]) {
+    const active = await query("SELECT 1 FROM certificates WHERE user_id = $1 AND status = 'ACTIVE' LIMIT 1", [userId]);
+    await query("UPDATE users SET certificate_status = $2, updated_at = now() WHERE id = $1", [
+      userId,
+      (active.rowCount ?? 0) > 0 ? "ACTIVE" : "NONE"
+    ]);
+  }
   return result.rows[0] ?? null;
 }
-

@@ -1,4 +1,5 @@
 import forge from "node-forge";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -24,8 +25,8 @@ export async function generateP12Certificate(
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
 
-  // Random serial number
-  const serialHex = Math.floor(Math.random() * 100000000).toString(16).padStart(8, "0");
+  // Random positive serial number encoded as hex.
+  const serialHex = crypto.randomBytes(16).toString("hex");
   cert.serialNumber = serialHex;
 
   const validFrom = new Date();
@@ -83,7 +84,7 @@ export async function generateP12Certificate(
   // Ensure output directory exists
   await fs.mkdir(outputFolder, { recursive: true });
 
-  const fileName = `${userId}_certificate.p12`;
+  const fileName = `${userId}_${serialHex}_certificate.p12`;
   const storagePath = path.join(outputFolder, fileName);
   await fs.writeFile(storagePath, p12Buffer);
 

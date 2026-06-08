@@ -5,6 +5,6 @@ export const certificateRoutes = Router();
 
 certificateRoutes.post("/", certificateController.create);
 certificateRoutes.get("/", certificateController.list);
+certificateRoutes.get("/:id/download", certificateController.download);
 certificateRoutes.get("/:id", certificateController.get);
 certificateRoutes.patch("/:id/status", certificateController.updateStatus);
-

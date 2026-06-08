@@ -1,4 +1,4 @@
-import { AlertCircle, ClipboardCheck, Files } from "lucide-react";
+import { AlertCircle, Files } from "lucide-react";
 import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
@@ -87,4 +87,3 @@ export function ConformityPage() {
     </>
   );
 }
-

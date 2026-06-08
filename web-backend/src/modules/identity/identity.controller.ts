@@ -43,17 +43,17 @@ export const identityController = {
   status: [authenticate, asyncHandler(async (req, res) => {
     res.json({ data: await identityService.status(req.user!.id) });
   })],
-  adminList: [authenticate, authorize("ADMIN"), asyncHandler(async (req, res) => {
+  adminList: [authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (req, res) => {
     const query = identityStatusQuerySchema.parse(req.query);
-    res.json({ data: await identityService.listAdmin(query.status as IdentityStatus | undefined) });
+    res.json({ data: await identityService.listAdmin(req.user!, query.status as IdentityStatus | undefined) });
   })],
-  adminGet: [authenticate, authorize("ADMIN"), asyncHandler(async (req, res) => {
-    res.json({ data: await identityService.getAdmin(req.params.id) });
+  adminGet: [authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (req, res) => {
+    res.json({ data: await identityService.getAdmin(req.user!, req.params.id) });
   })],
-  adminApprove: [authenticate, authorize("ADMIN"), asyncHandler(async (req, res) => {
-    res.json({ data: await identityService.approve(req.user!.id, req.params.id, requestContext(req)) });
+  adminApprove: [authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), asyncHandler(async (req, res) => {
+    res.json({ data: await identityService.approve(req.user!, req.params.id, requestContext(req)) });
   })],
-  adminReject: [authenticate, authorize("ADMIN"), validateBody(rejectIdentitySchema), asyncHandler(async (req, res) => {
-    res.json({ data: await identityService.reject(req.user!.id, req.params.id, req.body.reason, requestContext(req)) });
+  adminReject: [authenticate, authorize("ADMIN", "ORGANIZATION_ADMIN"), validateBody(rejectIdentitySchema), asyncHandler(async (req, res) => {
+    res.json({ data: await identityService.reject(req.user!, req.params.id, req.body.reason, requestContext(req)) });
   })]
 };

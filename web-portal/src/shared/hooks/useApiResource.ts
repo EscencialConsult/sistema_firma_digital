@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export function useApiResource<T>(loader: () => Promise<T>, dependencies: unknown[] = []) {
+export function useApiResource<T>(loader: () => Promise<T>, _dependencies: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +15,7 @@ export function useApiResource<T>(loader: () => Promise<T>, dependencies: unknow
     } finally {
       setLoading(false);
     }
-  }, dependencies);
+  }, [loader]);
 
   useEffect(() => {
     void reload();

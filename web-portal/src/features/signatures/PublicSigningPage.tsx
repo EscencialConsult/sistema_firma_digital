@@ -1,9 +1,9 @@
 import { AlertCircle, CheckCircle, Download, FileSignature, KeyRound, Move } from "lucide-react";
-import { MouseEvent, useEffect, useRef, useState } from "react";
+import { KeyboardEvent, MouseEvent, useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/components/ui/Button";
 import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
-import { apiClient } from "../../shared/services/apiClient";
+import { apiClient, getAccessToken } from "../../shared/services/apiClient";
 import { useAuth } from "../../app/providers/AuthProvider";
 
 
@@ -85,23 +85,25 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
   // Load PDF as blob to support authorization headers in iframe
   useEffect(() => {
     if (!request) return;
+    let objectUrl: string | null = null;
     const downloadUrl = token 
       ? `${apiBase}/signature-requests/${token}/download`
       : `${apiBase}/documents/${request.document_id}/download`;
 
     const headers: Record<string, string> = {};
-    const jwt = localStorage.getItem("accessToken");
+    const jwt = getAccessToken();
     if (!token && jwt) {
       headers["Authorization"] = `Bearer ${jwt}`;
     }
 
-    fetch(downloadUrl, { headers })
+    fetch(downloadUrl, { headers, credentials: "include" })
       .then((res) => {
         if (!res.ok) throw new Error("No se pudo cargar el archivo PDF.");
         return res.blob();
       })
       .then((blob) => {
         const url = URL.createObjectURL(blob);
+        objectUrl = url;
         setPdfUrl(url);
       })
       .catch((err) => {
@@ -110,11 +112,11 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
       });
 
     return () => {
-      if (pdfUrl) {
-        URL.revokeObjectURL(pdfUrl);
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [request, token, id]);
+  }, [apiBase, request, token, id]);
 
   // Drag handlers
   function handleMouseDown(e: MouseEvent<HTMLDivElement>) {
@@ -162,6 +164,25 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     document.removeEventListener("mousemove", handleMouseMoveGlobal);
     document.removeEventListener("mouseup", handleMouseUpGlobal);
     setPos(posRef.current);
+  }
+
+  function handleSignatureKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (signed || !containerRef.current) return;
+    const step = event.shiftKey ? 10 : 2;
+    const delta = {
+      ArrowLeft: { x: -step, y: 0 },
+      ArrowRight: { x: step, y: 0 },
+      ArrowUp: { x: 0, y: -step },
+      ArrowDown: { x: 0, y: step }
+    }[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    const maxX = containerRef.current.clientWidth - size.width;
+    const maxY = containerRef.current.clientHeight - size.height;
+    setPos((current) => ({
+      x: Math.max(0, Math.min(current.x + delta.x, maxX)),
+      y: Math.max(0, Math.min(current.y + delta.y, maxY))
+    }));
   }
 
   // Preset placements
@@ -361,6 +382,10 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                     height: `${size.height}px`,
                   }}
                   onMouseDown={handleMouseDown}
+                  onKeyDown={handleSignatureKeyDown}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Ubicación del sello de firma. Use las flechas para moverlo."
                 >
                   <div className="absolute top-2.5 right-2.5 text-emerald-600">
                     <Move size={12} />
@@ -601,8 +626,9 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                         window.open(directDownloadUrl);
                       } else {
                         // For logged-in users, download with auth header using direct window download helper or fetch
-                        const jwt = localStorage.getItem("accessToken");
+                        const jwt = getAccessToken();
                         fetch(directDownloadUrl, {
+                          credentials: "include",
                           headers: { Authorization: `Bearer ${jwt}` }
                         })
                           .then(res => res.blob())
@@ -634,4 +660,3 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     </div>
   );
 }
-

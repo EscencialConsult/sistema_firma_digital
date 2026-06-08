@@ -12,7 +12,7 @@ npm run db:migrate
 npm run dev
 ```
 
-La API corre por defecto en `http://127.0.0.1:8000`.
+La API corre por defecto en `http://127.0.0.1:4000`.
 
 ## Modulos
 
@@ -28,3 +28,8 @@ La API corre por defecto en `http://127.0.0.1:8000`.
 - `notifications`: cola de notificaciones.
 - `admin`: vistas administrativas.
 
+## Custodia de certificados
+
+La generacion y uso de certificados P12 por software esta permitida solo en desarrollo. En `NODE_ENV=production`, el backend bloquea esos flujos con `CERTIFICATE_CUSTODY_REQUIRED` hasta que se configure una custodia segura de claves privadas mediante KMS, HSM o PKCS#11.
+
+No guardar passphrases ni claves privadas recuperables en PostgreSQL, logs, variables de entorno compartidas o backups sin cifrado administrado externamente.

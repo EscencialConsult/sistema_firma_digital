@@ -1,6 +1,7 @@
-import { Bell, LockKeyhole, LogOut, Search, ShieldCheck } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { routes } from "../router/routes";
+import { Bell, LogOut, Search, ShieldCheck } from "lucide-react";
+import { type ReactNode, useMemo } from "react";
+import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { AuthScreen } from "../../features/auth/AuthScreen";
 import { AdminPage } from "../../features/admin/AdminPage";
 import { AuditPage } from "../../features/audit/AuditPage";
 import { CertificatesPage } from "../../features/certificates/CertificatesPage";
@@ -8,14 +9,17 @@ import { ConformityPage } from "../../features/conformity/ConformityPage";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { DocumentsPage } from "../../features/documents/DocumentsPage";
 import { IdentityPage } from "../../features/identity/IdentityPage";
-import { ProfilePage } from "../../features/users/ProfilePage";
-import { SignaturesPage } from "../../features/signatures/SignaturesPage";
-import type { RouteId } from "../../shared/types/navigation";
-import { useAuth } from "../providers/AuthProvider";
-import { AuthScreen } from "../../features/auth/AuthScreen";
 import { PublicSigningPage } from "../../features/signatures/PublicSigningPage";
+import { SignaturesPage } from "../../features/signatures/SignaturesPage";
+import { ProfilePage } from "../../features/users/ProfilePage";
+import { EmptyState } from "../../shared/components/ui/EmptyState";
+import type { AppRoute, RouteId } from "../../shared/types/navigation";
+import { routes } from "../router/routes";
+import { useAuth } from "../providers/AuthProvider";
 
-const pageByRoute: Record<RouteId, ReactNode> = {
+type PageRouteId = Exclude<RouteId, "login" | "register">;
+
+const pageByRoute: Record<PageRouteId, ReactNode> = {
   dashboard: <DashboardPage />,
   documents: <DocumentsPage />,
   signatures: <SignaturesPage />,
@@ -24,29 +28,45 @@ const pageByRoute: Record<RouteId, ReactNode> = {
   certificates: <CertificatesPage />,
   audit: <AuditPage />,
   profile: <ProfilePage />,
-  admin: <AdminPage />,
-  login: null,
-  register: null
+  admin: <AdminPage />
 };
+
+function NotFoundPage() {
+  return (
+    <EmptyState
+      icon={Search}
+      title="Ruta no encontrada"
+      description="La sección solicitada no existe o no está disponible para tu usuario."
+    />
+  );
+}
+
+function PortalRoutes({ isAdmin }: { isAdmin: boolean }) {
+  const pageRoutes = routes.filter((route): route is AppRoute & { id: PageRouteId } => !route.hidden && route.id !== "admin");
+
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {pageRoutes.map((route) => (
+        <Route key={route.id} path={route.path} element={pageByRoute[route.id]} />
+      ))}
+      <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
+  );
+}
 
 export function PortalShell() {
   const { user, loading, logout } = useAuth();
-  const [activeRoute, setActiveRoute] = useState<RouteId>("dashboard");
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const signToken = searchParams.get("token");
   const visibleRoutes = useMemo(() => routes.filter((route) => {
     if (route.hidden) return false;
     if (route.id === "admin" && user?.role !== "ADMIN") return false;
     return true;
   }), [user]);
-
-  useEffect(() => {
-    if (activeRoute === "admin" && user?.role !== "ADMIN") {
-      setActiveRoute("dashboard");
-    }
-  }, [activeRoute, user]);
-
-  const signToken = useMemo(() => {
-    return new URLSearchParams(window.location.search).get("token");
-  }, []);
 
   if (loading) {
     return <div className="grid min-h-screen place-items-center bg-zinc-50 text-sm font-semibold text-zinc-500">Cargando sesión...</div>;
@@ -67,28 +87,26 @@ export function PortalShell() {
           <div className="grid h-11 w-11 place-items-center rounded-xl bg-zinc-950 text-white shadow-sm">
             <ShieldCheck size={22} />
           </div>
-            <div>
-              <p className="text-sm font-bold">Firma Digital</p>
-              <p className="text-xs text-zinc-500">{user.role} - {user.verificationStatus}</p>
-            </div>
+          <div>
+            <p className="text-sm font-bold">Firma Digital</p>
+            <p className="text-xs text-zinc-500">{user.role} - {user.verificationStatus}</p>
+          </div>
         </div>
 
-        <nav className="space-y-1">
+        <nav className="space-y-1" aria-label="Navegación principal">
           {visibleRoutes.map((route) => {
             const Icon = route.icon;
-            const selected = route.id === activeRoute;
             return (
-              <button
+              <NavLink
                 key={route.id}
-                className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium transition duration-200 active:scale-[0.98] ${
-                  selected ? "bg-zinc-900 text-white shadow-sm" : "text-zinc-500 hover:bg-zinc-100/70 hover:text-zinc-900"
+                className={({ isActive }) => `flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium transition duration-200 active:scale-[0.98] ${
+                  isActive ? "bg-zinc-900 text-white shadow-sm" : "text-zinc-500 hover:bg-zinc-100/70 hover:text-zinc-900"
                 }`}
-                type="button"
-                onClick={() => setActiveRoute(route.id)}
+                to={route.path}
               >
                 <Icon size={18} />
                 {route.label}
-              </button>
+              </NavLink>
             );
           })}
         </nav>
@@ -122,7 +140,11 @@ export function PortalShell() {
               <button className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-200/50 bg-white text-zinc-500 hover:bg-zinc-50/50 hover:text-zinc-900 active:scale-[0.98] transition" type="button" title="Notificaciones">
                 <Bell size={18} />
               </button>
-              <button className="hidden rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 active:scale-[0.98] transition md:inline-flex" type="button" onClick={() => setActiveRoute("documents")}>
+              <button
+                className="hidden rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 active:scale-[0.98] transition md:inline-flex"
+                type="button"
+                onClick={() => navigate("/documents")}
+              >
                 Subir PDF
               </button>
               <button className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-200/50 bg-white text-zinc-500 hover:bg-zinc-50/50 hover:text-zinc-900 active:scale-[0.98] transition" type="button" title="Cerrar sesión" onClick={logout}>
@@ -132,8 +154,8 @@ export function PortalShell() {
           </div>
         </header>
 
-        <main className="px-4 py-6 md:px-8">
-          {pageByRoute[activeRoute]}
+        <main className="px-4 py-6 md:px-8" key={location.pathname}>
+          <PortalRoutes isAdmin={user.role === "ADMIN"} />
         </main>
       </div>
     </div>

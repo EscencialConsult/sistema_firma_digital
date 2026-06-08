@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { fetchMe, login, logoutLocal, register, type AuthUser } from "../../shared/services/authService";
-import { getAccessToken } from "../../shared/services/apiClient";
+import { fetchMe, login, logoutLocal, register, restoreSession, type AuthUser } from "../../shared/services/authService";
+import { getAccessToken, onSessionExpired } from "../../shared/services/apiClient";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -16,15 +16,21 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(Boolean(getAccessToken()));
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getAccessToken()) return;
-    fetchMe()
+    restoreSession()
       .then(setUser)
       .catch(() => void logoutLocal())
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    return onSessionExpired(() => {
+      setUser(null);
+      setLoading(false);
+    });
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({

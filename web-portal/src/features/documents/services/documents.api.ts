@@ -11,6 +11,23 @@ export type DocumentRecord = {
   signers?: number;
 };
 
+export type Pkcs11Certificate = {
+  id: string;
+  label?: string;
+};
+
+export type Pkcs11Token = {
+  modulePath: string;
+  moduleName: string;
+  slot?: string;
+  label?: string;
+  manufacturer?: string;
+  model?: string;
+  serial?: string;
+  certificates: Pkcs11Certificate[];
+  error?: string;
+};
+
 export const documentsApi = {
   async list() {
     const response = await apiClient.get<{ data: DocumentRecord[] }>("/documents");
@@ -32,6 +49,15 @@ export const documentsApi = {
   },
   async sendDocument(id: string, payload: { signers: Array<{ email: string; name?: string; signingOrder?: number }>; expiresInDays: number }) {
     const response = await apiClient.post<{ data: any }>(`/documents/${id}/send`, payload);
+    return response.data;
+  },
+  async detectPkcs11Tokens(pin?: string) {
+    const query = pin ? `?pin=${encodeURIComponent(pin)}` : "";
+    const response = await apiClient.get<{ data: { modulesChecked: string[]; tokens: Pkcs11Token[] } }>(`/documents/pkcs11/tokens${query}`);
+    return response.data;
+  },
+  async signWithPkcs11(id: string, payload: { pin: string; certId?: string; modulePath?: string; slot?: string; metadata?: Record<string, unknown> }) {
+    const response = await apiClient.post<{ data: any }>(`/documents/${id}/sign/pkcs11`, payload);
     return response.data;
   }
 };

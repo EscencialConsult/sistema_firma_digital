@@ -27,13 +27,13 @@ export async function createIdentityAuditLog(input: {
 
 export async function getLatestVerification(userId: string) {
   const result = await query(
-    `SELECT iv.*, u.email AS user_email, u.full_name AS user_full_name,
+    `SELECT iv.*, u.email AS user_email, u.full_name AS user_full_name, u.organization_id AS user_organization_id,
       COALESCE(json_agg(idoc.*) FILTER (WHERE idoc.id IS NOT NULL), '[]') AS documents
      FROM identity_verifications iv
      JOIN users u ON u.id = iv.user_id
      LEFT JOIN identity_documents idoc ON idoc.identity_verification_id = iv.id
      WHERE iv.user_id = $1
-     GROUP BY iv.id, u.email, u.full_name
+     GROUP BY iv.id, u.email, u.full_name, u.organization_id
      ORDER BY iv.created_at DESC
      LIMIT 1`,
     [userId]
@@ -43,13 +43,13 @@ export async function getLatestVerification(userId: string) {
 
 export async function getVerificationById(id: string) {
   const result = await query(
-    `SELECT iv.*, u.email AS user_email, u.full_name AS user_full_name,
+    `SELECT iv.*, u.email AS user_email, u.full_name AS user_full_name, u.organization_id AS user_organization_id,
       COALESCE(json_agg(idoc.*) FILTER (WHERE idoc.id IS NOT NULL), '[]') AS documents
      FROM identity_verifications iv
      JOIN users u ON u.id = iv.user_id
      LEFT JOIN identity_documents idoc ON idoc.identity_verification_id = iv.id
      WHERE iv.id = $1
-     GROUP BY iv.id, u.email, u.full_name`,
+     GROUP BY iv.id, u.email, u.full_name, u.organization_id`,
     [id]
   );
   return result.rows[0] ?? null;
@@ -221,18 +221,19 @@ export async function setUserVerificationStatus(userId: string, status: Identity
   await query("UPDATE users SET verification_status = $2, updated_at = now() WHERE id = $1", [userId, status]);
 }
 
-export async function listVerifications(status?: IdentityStatus) {
+export async function listVerifications(status?: IdentityStatus, organizationId?: string | null) {
   const result = await query(
-    `SELECT iv.*, u.email AS user_email, u.full_name AS user_full_name,
+    `SELECT iv.*, u.email AS user_email, u.full_name AS user_full_name, u.organization_id AS user_organization_id,
       COALESCE(json_agg(idoc.*) FILTER (WHERE idoc.id IS NOT NULL), '[]') AS documents
      FROM identity_verifications iv
      JOIN users u ON u.id = iv.user_id
      LEFT JOIN identity_documents idoc ON idoc.identity_verification_id = iv.id
      WHERE ($1::text IS NULL OR iv.status = $1)
-     GROUP BY iv.id, u.email, u.full_name
+       AND ($2::uuid IS NULL OR u.organization_id = $2)
+     GROUP BY iv.id, u.email, u.full_name, u.organization_id
      ORDER BY iv.updated_at DESC
      LIMIT 200`,
-    [status ?? null]
+    [status ?? null, organizationId ?? null]
   );
   return result.rows;
 }

@@ -22,7 +22,7 @@ async function issueTokens(user: NonNullable<Awaited<ReturnType<typeof findUserB
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const refreshRow = await createRefreshToken(user.id, refreshSecret, expiresAt);
   return {
-    accessToken: signAccessToken({ id: user.id, email: user.email, role: user.role }),
+    accessToken: signAccessToken({ id: user.id, email: user.email, role: user.role, organizationId: user.organization_id }),
     refreshToken: signRefreshToken({ userId: user.id, tokenId: refreshRow.id }) + "." + refreshSecret
   };
 }
@@ -80,4 +80,3 @@ export const authService = {
   publicUser,
   findUserById
 };
-

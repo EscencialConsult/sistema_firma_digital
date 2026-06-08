@@ -37,4 +37,3 @@ export function ReviewStep({ personalData, files, declarationAccepted }: { perso
     </div>
   );
 }
-

@@ -7,6 +7,7 @@ build/
 # Python
 .venv/
 venv/
+web-backend/.venv-pyhanko/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -23,6 +24,7 @@ web-backend/*.db-wal
 # Logs
 *.log
 tmp-backend-*
+tmp-portal-*
 
 # OS / editor
 .DS_Store

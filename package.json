@@ -1,0 +1,10 @@
+{
+  "name": "firma-digital-local",
+  "private": true,
+  "scripts": {
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
+    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/stop-dev.ps1",
+    "check": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-app.ps1",
+    "typecheck": "npm --prefix web-backend run typecheck && npm --prefix web-portal run typecheck"
+  }
+}

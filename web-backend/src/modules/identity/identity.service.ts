@@ -1,6 +1,8 @@
 import path from "node:path";
 import { config } from "../../config/env.js";
+import type { AuthUser } from "../../middlewares/authenticate.js";
 import { AppError } from "../../utils/AppError.js";
+import { assertSoftwareCertificateCustodyAllowed, createDevelopmentP12Password } from "../../utils/certificateCustody.js";
 import { sha256 } from "../../utils/crypto.js";
 import { generateP12Certificate } from "../../utils/certGenerator.js";
 import { createCertificate } from "../certificates/repository.js";
@@ -34,6 +36,17 @@ const uploadActions: Record<IdentityDocumentType, "IDENTITY_DOCUMENT_FRONT_UPLOA
 
 function canEdit(status?: IdentityStatus) {
   return !status || status === "PENDING" || status === "REJECTED";
+}
+
+function adminOrganizationId(user: AuthUser) {
+  return user.role === "ORGANIZATION_ADMIN" ? user.organizationId ?? "00000000-0000-0000-0000-000000000000" : null;
+}
+
+function assertAdminCanAccessVerification(user: AuthUser, verification: any) {
+  if (user.role === "ADMIN") return;
+  if (!user.organizationId || verification.user_organization_id !== user.organizationId) {
+    throw new AppError(403, "FORBIDDEN", "No tenes permisos para acceder a esta verificacion.");
+  }
 }
 
 async function requireDraftVerification(userId: string, context: Context) {
@@ -72,7 +85,7 @@ export const identityService = {
 
   async updatePersonalData(userId: string, input: Record<string, unknown>, context: Context) {
     const verification = await requireDraftVerification(userId, context);
-    const updated = await updatePersonalData(userId, verification.id, input);
+    await updatePersonalData(userId, verification.id, input);
     await createIdentityAuditLog({ userId, verificationId: verification.id, action: "IDENTITY_PERSONAL_DATA_UPDATED", context });
     return mapIdentityVerification(await getVerificationById(verification.id));
   },
@@ -130,24 +143,31 @@ export const identityService = {
     return mapIdentityVerification(await getLatestVerification(userId));
   },
 
-  async listAdmin(status?: IdentityStatus) {
-    const verifications = await listVerifications(status);
+  async listAdmin(user: AuthUser, status?: IdentityStatus) {
+    const verifications = await listVerifications(status, adminOrganizationId(user));
     return verifications.map((verification) => mapIdentityVerification(verification));
   },
 
-  async getAdmin(id: string) {
+  async getAdmin(user: AuthUser, id: string) {
     const verification = await getVerificationById(id);
     if (!verification) throw new AppError(404, "IDENTITY_NOT_FOUND", "Verificacion no encontrada.");
+    assertAdminCanAccessVerification(user, verification);
     return mapIdentityVerification({ ...verification, auditLogs: await getIdentityAuditLogs(id) });
   },
 
-  async approve(adminUserId: string, id: string, context: Context) {
+  async approve(adminUser: AuthUser, id: string, context: Context) {
+    const current = await getVerificationById(id);
+    if (!current) throw new AppError(404, "IDENTITY_NOT_FOUND", "Verificacion no encontrada.");
+    assertAdminCanAccessVerification(adminUser, current);
+    const adminUserId = adminUser.id;
     const verification = await approveVerification(adminUserId, id);
     if (!verification) throw new AppError(404, "IDENTITY_NOT_FOUND", "Verificacion no encontrada.");
     
-    // Generate certificate for verified user
+    assertSoftwareCertificateCustodyAllowed();
+
+    // Generate a development-only certificate for verified user.
     const certFolder = path.resolve(config.uploadDir, "certificates");
-    const password = "password"; // Secure default password for PKCS12 store
+    const password = createDevelopmentP12Password();
     const generatedCert = await generateP12Certificate(
       verification.user_id,
       verification.full_name || "Usuario Verificado",
@@ -177,10 +197,13 @@ export const identityService = {
     return mapIdentityVerification(verification);
   },
 
-  async reject(adminUserId: string, id: string, reason: string, context: Context) {
-    const verification = await rejectVerification(adminUserId, id, reason);
+  async reject(adminUser: AuthUser, id: string, reason: string, context: Context) {
+    const current = await getVerificationById(id);
+    if (!current) throw new AppError(404, "IDENTITY_NOT_FOUND", "Verificacion no encontrada.");
+    assertAdminCanAccessVerification(adminUser, current);
+    const verification = await rejectVerification(adminUser.id, id, reason);
     if (!verification) throw new AppError(404, "IDENTITY_NOT_FOUND", "Verificacion no encontrada.");
-    await createIdentityAuditLog({ userId: verification.user_id, verificationId: id, action: "IDENTITY_REJECTED", context, metadata: { reviewedBy: adminUserId, reason } });
+    await createIdentityAuditLog({ userId: verification.user_id, verificationId: id, action: "IDENTITY_REJECTED", context, metadata: { reviewedBy: adminUser.id, reason } });
     return mapIdentityVerification(verification);
   }
 };

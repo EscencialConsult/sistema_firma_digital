@@ -18,6 +18,44 @@ docs/         Documentacion tecnica
 
 ## Levantar local
 
+Forma recomendada desde la raiz:
+
+```powershell
+npm run dev
+```
+
+Esto levanta PostgreSQL, ejecuta migraciones/seed, inicia el backend y abre el portal en modo desarrollo.
+
+Verificacion rapida:
+
+```powershell
+npm run check
+```
+
+Apagar procesos locales de la app:
+
+```powershell
+npm run stop
+```
+
+Credenciales admin:
+
+```text
+admin@example.com
+Admin123456
+```
+
+Logs generados:
+
+```text
+tmp-backend-out.log
+tmp-backend-err.log
+tmp-portal-out.log
+tmp-portal-err.log
+```
+
+### Arranque manual
+
 Backend:
 
 ```powershell
@@ -52,6 +90,25 @@ Admin seed:
 admin@example.com
 Admin123456
 ```
+
+## Firma con token / certificado Windows
+
+Para desarrollo local, el backend queda preparado para detectar:
+
+- Certificados del store de Windows, incluido el token que Windows ve con clave privada.
+- OpenSC/PKCS#11 si el hardware es compatible con `opensc-pkcs11.dll`.
+- pyHanko desde `web-backend/.venv-pyhanko` para el camino PKCS#11 cuando aplique.
+
+Variables relevantes en `web-backend/.env`:
+
+```text
+PKCS11_TOOL_PATH="C:/Program Files/OpenSC Project/OpenSC/tools/pkcs11-tool.exe"
+PKCS11_MODULE_PATH="C:/Program Files/OpenSC Project/OpenSC/pkcs11/opensc-pkcs11.dll"
+PKCS11_CERT_ID=
+PYHANKO_PYTHON_PATH="C:/Users/santi/Desktop/Escencial/firmaDigital/web-backend/.venv-pyhanko/Scripts/python.exe"
+```
+
+El caso del token que ya probamos funciona por el store de Windows, asi que no requiere que OpenSC reconozca perfecto el hardware.
 
 ## Docker full stack
 

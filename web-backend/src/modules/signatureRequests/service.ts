@@ -7,6 +7,7 @@ import { SignPdf } from "@signpdf/signpdf";
 import { P12Signer } from "@signpdf/signer-p12";
 import { config } from "../../config/env.js";
 import { query } from "../../database/pool.js";
+import { assertSoftwareCertificateCustodyAllowed, createDevelopmentP12Password } from "../../utils/certificateCustody.js";
 import { sha256 } from "../../utils/crypto.js";
 import { generateP12Certificate } from "../../utils/certGenerator.js";
 import { AppError } from "../../utils/AppError.js";
@@ -14,6 +15,7 @@ import { secureToken } from "../../utils/crypto.js";
 import { auditService } from "../audit/service.js";
 import { findPublicUserByEmail } from "../auth/repository.js";
 import { getDocument, getDocumentById } from "../documents/repository.js";
+import { assertCanReadDocumentAudit } from "./access.js";
 import { createSignature, createSignatureRequests, findRequestByToken, listSignatureRequestsForUser, markRejected, markSigned, markViewed, updateDocumentCompletion } from "./repository.js";
 
 export const signatureRequestService = {
@@ -78,7 +80,7 @@ export const signatureRequestService = {
       }
 
       let p12Buffer: Buffer;
-      let p12Password = "password";
+      let p12Password = createDevelopmentP12Password();
       let certificateDbId: string | undefined = input.certificateId;
 
       if (signerUser && signerUser.verification_status === "VERIFIED") {
@@ -88,6 +90,7 @@ export const signatureRequestService = {
         );
         let userCert = userCertResult.rows[0];
         if (!userCert) {
+          assertSoftwareCertificateCustodyAllowed();
           const certFolder = path.resolve(config.uploadDir, "certificates");
           const generatedCert = await generateP12Certificate(
             signerUser.id,
@@ -116,10 +119,15 @@ export const signatureRequestService = {
           );
           userCert = newCertResult.rows[0];
         }
+        assertSoftwareCertificateCustodyAllowed();
         p12Buffer = await fsPromises.readFile(userCert.metadata.storagePath);
-        p12Password = userCert.metadata.password || "password";
+        if (!userCert.metadata.password) {
+          throw new AppError(500, "CERTIFICATE_PASSWORD_MISSING", "El certificado no tiene passphrase configurada.");
+        }
+        p12Password = userCert.metadata.password;
         certificateDbId = userCert.id;
       } else {
+        assertSoftwareCertificateCustodyAllowed();
         const certFolder = path.resolve(config.uploadDir, "certificates");
         const generatedCert = await generateP12Certificate(
           `temp_${Date.now()}`,
@@ -410,9 +418,20 @@ export const signatureRequestService = {
     return request.current_version;
   },
 
-  async documentAudit(documentId: string) {
+  async documentAudit(user: { id: string; email: string; role: string }, documentId: string) {
     const document = await getDocumentById(documentId);
     if (!document) throw new AppError(404, "DOCUMENT_NOT_FOUND", "Documento no encontrado.");
+    let isSigner = false;
+    if (document.owner_id !== user.id && user.role !== "ADMIN" && user.role !== "ORGANIZATION_ADMIN") {
+      const signerCheck = await query(
+        `SELECT 1 FROM signature_requests
+         WHERE document_id = $1 AND lower(signer_email) = lower($2)
+         LIMIT 1`,
+        [documentId, user.email]
+      );
+      isSigner = (signerCheck.rowCount ?? 0) > 0;
+    }
+    assertCanReadDocumentAudit(user, document, isSigner);
     return auditService.listForDocument(documentId);
   }
 };

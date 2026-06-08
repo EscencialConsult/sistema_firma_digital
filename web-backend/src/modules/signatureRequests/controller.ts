@@ -48,6 +48,6 @@ export const signatureRequestController = {
     res.download(file.storage_path, file.file_name);
   })],
   documentAudit: [authenticate, asyncHandler(async (req, res) => {
-    res.json({ data: await signatureRequestService.documentAudit(req.params.id) });
+    res.json({ data: await signatureRequestService.documentAudit(req.user!, req.params.id) });
   })]
 };

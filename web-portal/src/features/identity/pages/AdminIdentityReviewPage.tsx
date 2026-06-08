@@ -2,10 +2,10 @@ import { AlertCircle, CheckCircle2, ClipboardCheck, XCircle, X } from "lucide-re
 import { useEffect, useState } from "react";
 import { adminApi } from "../../admin/services/admin.api";
 import { Button } from "../../../shared/components/ui/Button";
-import { Card, CardHeader } from "../../../shared/components/ui/Card";
 import { EmptyState } from "../../../shared/components/ui/EmptyState";
 import { PageHeader } from "../../../shared/components/ui/PageHeader";
 import { useApiResource } from "../../../shared/hooks/useApiResource";
+import { getAccessToken } from "../../../shared/services/apiClient";
 import { AdminVerificationCard } from "../components/AdminVerificationCard";
 import type { IdentityVerification } from "../types/identity.types";
 
@@ -15,19 +15,21 @@ function SecureImage({ src, alt, className }: { src: string; alt?: string; class
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
+    let objectUrl: string | null = null;
+    const token = getAccessToken();
     const headers: Record<string, string> = {};
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    fetch(src, { headers })
+    fetch(src, { headers, credentials: "include" })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load image");
         return res.blob();
       })
       .then((blob) => {
         const url = URL.createObjectURL(blob);
+        objectUrl = url;
         setImgSrc(url);
         setLoading(false);
       })
@@ -38,8 +40,8 @@ function SecureImage({ src, alt, className }: { src: string; alt?: string; class
       });
 
     return () => {
-      if (imgSrc) {
-        URL.revokeObjectURL(imgSrc);
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
       }
     };
   }, [src]);
@@ -89,8 +91,8 @@ function IdentityReviewModal({
       <div className="w-full max-w-4xl rounded-2xl border border-zinc-200/50 bg-white shadow-2xl overflow-hidden flex flex-col my-8 max-h-[85vh]">
         <header className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 bg-white sticky top-0 z-10">
           <div>
-            <h3 className="text-base font-bold text-zinc-950">{verification.fullName ?? "Solicitud de Validación"}</h3>
-            <p className="text-xs text-zinc-500 mt-0.5">{verification.documentType ?? "Documento"} {verification.documentNumber ?? ""}</p>
+            <h3 className="text-base font-bold text-zinc-950">{verification.fullName || "Solicitud de validaci?n"}</h3>
+            <p className="text-xs text-zinc-500 mt-0.5">{verification.documentType || "Documento"} {verification.documentNumber || ""}</p>
           </div>
           <button
             type="button"
@@ -109,34 +111,34 @@ function IdentityReviewModal({
               <div className="rounded-2xl border border-zinc-200/50 p-4 space-y-2.5 text-xs bg-zinc-50/10">
                 <div className="flex justify-between border-b border-zinc-100 pb-2">
                   <dt className="text-zinc-500 font-medium">Email</dt>
-                  <dd className="font-semibold text-zinc-900">{verification.email ?? "Sin declarar"}</dd>
+                  <dd className="font-semibold text-zinc-900">{verification.email || "Sin declarar"}</dd>
                 </div>
                 <div className="flex justify-between border-b border-zinc-100 pb-2">
                   <dt className="text-zinc-500 font-medium">CUIT/CUIL</dt>
-                  <dd className="font-semibold text-zinc-900 font-mono">{verification.cuitCuil ?? "Sin declarar"}</dd>
+                  <dd className="font-semibold text-zinc-900 font-mono">{verification.cuitCuil || "Sin declarar"}</dd>
                 </div>
                 <div className="flex justify-between border-b border-zinc-100 pb-2">
                   <dt className="text-zinc-500 font-medium">Nacionalidad</dt>
-                  <dd className="font-semibold text-zinc-900">{verification.nationality ?? "Sin declarar"}</dd>
+                  <dd className="font-semibold text-zinc-900">{verification.nationality || "Sin declarar"}</dd>
                 </div>
                 <div className="flex justify-between border-b border-zinc-100 pb-2">
                   <dt className="text-zinc-500 font-medium">Provincia</dt>
-                  <dd className="font-semibold text-zinc-900">{verification.province ?? "Sin declarar"}</dd>
+                  <dd className="font-semibold text-zinc-900">{verification.province || "Sin declarar"}</dd>
                 </div>
                 <div className="flex justify-between border-b border-zinc-100 pb-2">
                   <dt className="text-zinc-500 font-medium">Ciudad</dt>
-                  <dd className="font-semibold text-zinc-900">{verification.city ?? "Sin declarar"}</dd>
+                  <dd className="font-semibold text-zinc-900">{verification.city || "Sin declarar"}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-zinc-500 font-medium">Dirección</dt>
-                  <dd className="font-semibold text-zinc-900 truncate max-w-[200px]" title={verification.address}>{verification.address ?? "Sin declarar"}</dd>
+                  <dt className="text-zinc-500 font-medium">Direcci?n</dt>
+                  <dd className="font-semibold text-zinc-900 truncate max-w-[200px]" title={verification.address}>{verification.address || "Sin declarar"}</dd>
                 </div>
               </div>
             </div>
 
             {/* Interactive Documents Preview Grid */}
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 font-semibold">Documentación Cargada</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400 mb-3 font-semibold">Documentaci?n cargada</h3>
               <div className="grid grid-cols-3 gap-3">
                 {["DOCUMENT_FRONT", "DOCUMENT_BACK", "SELFIE"].map((type) => {
                   const document = verification.documents?.find((item) => item.type === type);
@@ -154,12 +156,13 @@ function IdentityReviewModal({
                   const imgSrc = `${apiBase}/admin/identity-verifications/${verification.id}/documents/${document.id}`;
 
                   return (
-                    <div 
+                    <button
                       key={type} 
-                      className="group relative aspect-square rounded-2xl border border-zinc-200/50 overflow-hidden bg-zinc-50 cursor-pointer shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)] hover-lift transition-all"
+                      className="group relative aspect-square rounded-2xl border border-zinc-200/50 overflow-hidden bg-zinc-50 cursor-pointer shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)] hover-lift transition-all focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2"
+                      type="button"
                       onClick={() => {
                         setLightboxUrl(imgSrc);
-                        setLightboxTitle(`${verification.fullName} · ${label}`);
+                        setLightboxTitle(`${verification.fullName || "Validacion"} - ${label}`);
                       }}
                     >
                       <SecureImage 
@@ -170,7 +173,7 @@ function IdentityReviewModal({
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
                         <span className="text-[9px] font-bold text-white block truncate">{label}</span>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

@@ -1,7 +1,6 @@
 import { AlertCircle, FileSignature, ShieldAlert, UsersRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../shared/components/ui/Button";
-import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
 import { StatCard } from "../../shared/components/ui/StatCard";
@@ -274,7 +273,7 @@ export function AdminPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Administracion" title="Panel admin" description="Supervision real de usuarios, organizaciones, documentos e identidades." />
+      <PageHeader eyebrow="Administraci?n" title="Panel admin" description="Supervision real de usuarios, organizaciones, documentos e identidades." />
       {error ? <EmptyState icon={AlertCircle} title="No se pudieron cargar metricas admin" description={error} /> : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={UsersRound} label="Usuarios registrados" value={loading ? "..." : String(data?.users ?? 0)} detail="Tabla users" onClick={() => setUsersListOpen(true)} />

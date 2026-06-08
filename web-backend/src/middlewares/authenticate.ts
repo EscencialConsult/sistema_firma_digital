@@ -6,6 +6,7 @@ export type AuthUser = {
   id: string;
   email: string;
   role: "USER" | "ADMIN" | "ORGANIZATION_ADMIN";
+  organizationId?: string | null;
 };
 
 declare global {
@@ -33,4 +34,3 @@ export function authorize(...roles: AuthUser["role"][]): RequestHandler {
     next();
   };
 }
-

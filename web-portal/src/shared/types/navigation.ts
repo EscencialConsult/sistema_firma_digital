@@ -17,6 +17,6 @@ export type AppRoute = {
   id: RouteId;
   label: string;
   icon: LucideIcon;
+  path: string;
   hidden?: boolean;
 };
-

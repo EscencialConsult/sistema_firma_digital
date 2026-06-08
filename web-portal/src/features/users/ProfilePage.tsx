@@ -58,7 +58,7 @@ export function ProfilePage() {
       <PageHeader 
         eyebrow="Cuenta" 
         title="Perfil de Usuario" 
-        description="Gestione la información de su cuenta y revise sus estados de validación criptográfica." 
+        description="Gesti?ne la información de su cuenta y revise sus estados de validación criptográfica." 
       />
 
       <div className="grid gap-6 md:grid-cols-3">
