@@ -1,31 +1,56 @@
-/**
- * Audit service — Mock implementation.
- * TODO:SUPABASE — Replace with supabase.from('audit_logs').select('*')
- */
-
+import { supabase } from "../lib/supabase";
 import type { AuditEvent } from "../types/signing";
-import { MOCK_AUDIT_EVENTS } from "../mock/data";
 
-function delay(ms = 400) {
-  return new Promise((r) => setTimeout(r, ms));
+function mapRowToEvent(row: Record<string, unknown>): AuditEvent {
+  return {
+    id:           row.id as string,
+    action:       row.action as string,
+    entityType:   row.entity_type as string,
+    entityId:     (row.entity_id as string) ?? null,
+    documentHash: (row.document_hash as string) ?? null,
+    ipAddress:    (row.ip_address as string) ?? null,
+    userAgent:    (row.user_agent as string) ?? null,
+    metadata:     (row.metadata as Record<string, unknown>) ?? {},
+    createdAt:    row.created_at as string,
+  };
 }
 
-// TODO:SUPABASE — Replace with supabase.from('audit_logs').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(100)
+/** Audit events for the currently authenticated user */
 export async function getMyAuditEvents(): Promise<AuditEvent[]> {
-  await delay();
-  return MOCK_AUDIT_EVENTS;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapRowToEvent(row as Record<string, unknown>));
 }
 
-// TODO:SUPABASE — Replace with supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(200)
+/** All audit events — admin only (RLS enforces this) */
 export async function getAllAuditEvents(): Promise<AuditEvent[]> {
-  await delay();
-  return MOCK_AUDIT_EVENTS;
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapRowToEvent(row as Record<string, unknown>));
 }
 
-// TODO:SUPABASE — Replace with supabase.from('audit_logs').select('*').or(`entity_id.eq.${documentId},metadata->>documentId.eq.${documentId}`)
+/** Audit events related to a specific document */
 export async function getDocumentAuditEvents(documentId: string): Promise<AuditEvent[]> {
-  await delay();
-  return MOCK_AUDIT_EVENTS.filter(
-    (e) => e.entityId === documentId || (e.metadata as Record<string, unknown>)?.documentId === documentId
-  );
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("*")
+    .or(`entity_id.eq.${documentId},metadata->>documentId.eq.${documentId}`)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapRowToEvent(row as Record<string, unknown>));
 }

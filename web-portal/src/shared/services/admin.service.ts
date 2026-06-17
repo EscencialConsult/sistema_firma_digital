@@ -1,14 +1,5 @@
-/**
- * Admin service — Mock implementation.
- * TODO:SUPABASE — Replace with supabase.from('users'), supabase.rpc('get_admin_stats'), etc.
- */
-
-import type { AdminUserSummary } from "../types/user";
-import { MOCK_USERS, MOCK_ADMIN_STATS } from "../mock/data";
-
-function delay(ms = 400) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+import { supabase } from "../lib/supabase";
+import type { AdminUserSummary, UserRole, VerificationStatus, CertificateStatus } from "../types/user";
 
 export interface AdminStats {
   totalUsers: number;
@@ -20,38 +11,64 @@ export interface AdminStats {
   rejectedContracts: number;
 }
 
-// TODO:SUPABASE — Replace with supabase.rpc('get_admin_stats') or multiple count queries
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+/** Uses the get_admin_stats() RPC function defined in the schema */
 export async function getAdminStats(): Promise<AdminStats> {
-  await delay();
-  return MOCK_ADMIN_STATS;
-}
+  const { data, error } = await supabase.rpc("get_admin_stats");
+  if (error) throw new Error(error.message);
 
-// TODO:SUPABASE — Replace with supabase.from('users').select('*').order('created_at', { ascending: false })
-export async function getAllUsers(): Promise<AdminUserSummary[]> {
-  await delay();
-  return Object.values(MOCK_USERS).map((u) => ({
-    id: u.id,
-    email: u.email,
-    fullName: u.fullName,
-    role: u.role,
-    verificationStatus: u.verificationStatus,
-    certificateStatus: u.certificateStatus,
-    createdAt: "2026-05-15T10:00:00Z",
-  }));
-}
-
-// TODO:SUPABASE — Replace with supabase.from('users').select('*').eq('id', id).single()
-export async function getUserById(id: string): Promise<AdminUserSummary | null> {
-  await delay();
-  const user = Object.values(MOCK_USERS).find((u) => u.id === id);
-  if (!user) return null;
+  // The RPC returns a single JSON row
+  const row = Array.isArray(data) ? data[0] : data;
   return {
-    id: user.id,
-    email: user.email,
-    fullName: user.fullName,
-    role: user.role,
-    verificationStatus: user.verificationStatus,
-    certificateStatus: user.certificateStatus,
-    createdAt: "2026-05-15T10:00:00Z",
+    totalUsers:       Number(row?.total_users       ?? 0),
+    verifiedUsers:    Number(row?.verified_users     ?? 0),
+    pendingKyc:       Number(row?.pending_kyc        ?? 0),
+    totalContracts:   Number(row?.total_contracts    ?? 0),
+    signedContracts:  Number(row?.signed_contracts   ?? 0),
+    pendingContracts: Number(row?.pending_contracts  ?? 0),
+    rejectedContracts:Number(row?.rejected_contracts ?? 0),
   };
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+function mapRowToUser(row: Record<string, unknown>): AdminUserSummary {
+  return {
+    id:                 row.id as string,
+    email:              row.email as string,
+    fullName:           row.full_name as string,
+    role:               row.role as UserRole,
+    verificationStatus: row.verification_status as VerificationStatus,
+    certificateStatus:  row.certificate_status as CertificateStatus,
+    createdAt:          row.created_at as string,
+  };
+}
+
+export async function getAllUsers(): Promise<AdminUserSummary[]> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, full_name, role, verification_status, certificate_status, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapRowToUser(row as Record<string, unknown>));
+}
+
+export async function getUserById(id: string): Promise<AdminUserSummary | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, full_name, role, verification_status, certificate_status, created_at")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return mapRowToUser(data as Record<string, unknown>);
+}
+
+/** Promote or demote a user role (admin only, enforced by RLS) */
+export async function updateUserRole(id: string, role: UserRole): Promise<void> {
+  const { error } = await supabase.from("users").update({ role }).eq("id", id);
+  if (error) throw new Error(error.message);
 }

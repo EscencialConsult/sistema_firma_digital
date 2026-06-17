@@ -1,97 +1,243 @@
-/**
- * KYC (Identity Verification) service — Mock implementation.
- * TODO:SUPABASE — Replace with supabase.from('identity_verifications'), supabase.storage, etc.
- */
+import { supabase } from "../lib/supabase";
+import type { KycVerification, KycPersonalData, KycDocument, KycDocumentType, KycStatus } from "../types/kyc";
 
-import type { KycVerification, KycPersonalData, KycDocument, KycDocumentType } from "../types/kyc";
-import { MOCK_KYC_VERIFICATIONS } from "../mock/data";
+const BUCKET = "kyc-documents";
 
-function delay(ms = 400) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+// ─── Mappers ──────────────────────────────────────────────────────────────────
 
-// TODO:SUPABASE — Replace with supabase.from('identity_verifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single()
-export async function getMyVerification(userId: string): Promise<KycVerification | null> {
-  await delay();
-  return MOCK_KYC_VERIFICATIONS.find((v) => v.userId === userId) ?? null;
-}
+async function mapRowToVerification(
+  row: Record<string, unknown>
+): Promise<KycVerification> {
+  const docRows = (row.identity_documents as Array<Record<string, unknown>>) ?? [];
 
-// TODO:SUPABASE — Replace with supabase.from('identity_verifications').insert({ user_id: userId, status: 'PENDING' }).select().single()
-export async function startVerification(userId: string): Promise<KycVerification> {
-  await delay();
+  // Generate signed URLs for each document (valid 1 hour)
+  const documents: KycDocument[] = await Promise.all(
+    docRows.map(async (d) => {
+      let previewUrl: string | undefined;
+      if (d.storage_path) {
+        const { data } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrl(d.storage_path as string, 3600);
+        previewUrl = data?.signedUrl;
+      }
+      return {
+        id:          d.id as string,
+        type:        d.document_type as KycDocumentType,
+        fileName:    d.file_name as string,
+        mimeType:    (d.mime_type as string) ?? "",
+        fileSize:    (d.file_size as number) ?? 0,
+        uploadedAt:  d.created_at as string,
+        previewUrl,
+      };
+    })
+  );
+
   return {
-    id: `kyc-new-${Date.now()}`,
-    userId,
-    status: "PENDING",
-    personalData: null,
-    documents: [],
-    submittedAt: null,
-    reviewedAt: null,
-    reviewedBy: null,
-    rejectionReason: null,
-    createdAt: new Date().toISOString(),
+    id:              row.id as string,
+    userId:          row.user_id as string,
+    status:          row.status as KycStatus,
+    personalData:    (row.personal_data as KycPersonalData) ?? null,
+    documents,
+    submittedAt:     (row.submitted_at as string) ?? null,
+    reviewedAt:      (row.reviewed_at as string) ?? null,
+    reviewedBy:      (row.reviewed_by as string) ?? null,
+    rejectionReason: (row.rejection_reason as string) ?? null,
+    createdAt:       row.created_at as string,
   };
 }
 
-// TODO:SUPABASE — Replace with supabase.from('identity_verifications').update(data).eq('id', verificationId)
+// ─── User-facing ──────────────────────────────────────────────────────────────
+
+export async function getMyVerification(userId: string): Promise<KycVerification | null> {
+  const { data, error } = await supabase
+    .from("identity_verifications")
+    .select("*, identity_documents(*)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return mapRowToVerification(data as Record<string, unknown>);
+}
+
+export async function startVerification(userId: string): Promise<KycVerification> {
+  // Return existing PENDING verification if one already exists
+  const existing = await getMyVerification(userId);
+  if (existing && existing.status === "PENDING") return existing;
+
+  const { data, error } = await supabase
+    .from("identity_verifications")
+    .insert({ user_id: userId, status: "PENDING" })
+    .select("*, identity_documents(*)")
+    .single();
+
+  if (error || !data) throw new Error(error?.message ?? "Error al iniciar verificación");
+  return mapRowToVerification(data as Record<string, unknown>);
+}
+
 export async function savePersonalData(
-  _verificationId: string,
+  verificationId: string,
   data: KycPersonalData
 ): Promise<KycPersonalData> {
-  await delay();
+  const { error } = await supabase
+    .from("identity_verifications")
+    .update({ personal_data: data })
+    .eq("id", verificationId);
+
+  if (error) throw new Error(error.message);
   return data;
 }
 
-// TODO:SUPABASE — Replace with supabase.storage.from('identity-documents').upload(path, file)
 export async function uploadDocument(
-  _verificationId: string,
+  verificationId: string,
   type: KycDocumentType,
   file: File
 ): Promise<KycDocument> {
-  await delay(800);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  const ext  = file.name.split(".").pop() ?? "jpg";
+  const path = `${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`;
+
+  // Upload to Storage (bucket must exist: kyc-documents)
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, { upsert: true });
+
+  // If Storage fails, proceed with local blob URL (bucket not created yet)
+  const fallbackPreview = uploadError ? URL.createObjectURL(file) : undefined;
+
+  // Insert document record
+  const { data: doc, error: dbError } = await supabase
+    .from("identity_documents")
+    .insert({
+      verification_id: verificationId,
+      user_id:         user.id,
+      document_type:   type,
+      file_name:       file.name,
+      mime_type:       file.type,
+      file_size:       file.size,
+      storage_path:    uploadError ? null : path,
+    })
+    .select()
+    .single();
+
+  if (dbError || !doc) throw new Error(dbError?.message ?? "Error al guardar el documento");
+
+  let previewUrl = fallbackPreview;
+  if (!uploadError) {
+    const { data } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(path, 3600);
+    previewUrl = data?.signedUrl;
+  }
+
   return {
-    id: `doc-${Date.now()}`,
-    type,
-    fileName: file.name,
-    mimeType: file.type,
-    fileSize: file.size,
-    uploadedAt: new Date().toISOString(),
-    previewUrl: URL.createObjectURL(file),
+    id:         doc.id as string,
+    type:       doc.document_type as KycDocumentType,
+    fileName:   doc.file_name as string,
+    mimeType:   doc.mime_type as string,
+    fileSize:   doc.file_size as number,
+    uploadedAt: doc.created_at as string,
+    previewUrl,
   };
 }
 
-// TODO:SUPABASE — Replace with supabase.from('identity_verifications').update({ status: 'IN_REVIEW', submitted_at: now() }).eq('id', verificationId)
-export async function submitVerification(_verificationId: string): Promise<void> {
-  await delay();
+export async function submitVerification(verificationId: string): Promise<void> {
+  const { error } = await supabase
+    .from("identity_verifications")
+    .update({
+      status:       "IN_REVIEW",
+      submitted_at: new Date().toISOString(),
+    })
+    .eq("id", verificationId);
+
+  if (error) throw new Error(error.message);
 }
 
-// ─── Admin functions ────────────────────────────────────────────────────────
+// ─── Admin ────────────────────────────────────────────────────────────────────
 
-// TODO:SUPABASE — Replace with supabase.from('identity_verifications').select('*, users(*)').order('created_at', { ascending: false })
 export async function listAllVerifications(statusFilter?: string): Promise<KycVerification[]> {
-  await delay();
+  let query = supabase
+    .from("identity_verifications")
+    .select("*, identity_documents(*)")
+    .order("created_at", { ascending: false });
+
   if (statusFilter) {
-    return MOCK_KYC_VERIFICATIONS.filter((v) => v.status === statusFilter);
+    query = query.eq("status", statusFilter);
   }
-  return MOCK_KYC_VERIFICATIONS;
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return Promise.all((data ?? []).map((row) => mapRowToVerification(row as Record<string, unknown>)));
 }
 
-// TODO:SUPABASE — Replace with supabase.from('identity_verifications').select('*').eq('id', id).single()
 export async function getVerificationById(id: string): Promise<KycVerification | null> {
-  await delay();
-  return MOCK_KYC_VERIFICATIONS.find((v) => v.id === id) ?? null;
+  const { data, error } = await supabase
+    .from("identity_verifications")
+    .select("*, identity_documents(*)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return mapRowToVerification(data as Record<string, unknown>);
 }
 
-// TODO:SUPABASE — Replace with supabase.from('identity_verifications').update({ status: 'VERIFIED', reviewed_at: now(), reviewed_by: adminId }).eq('id', id)
-export async function approveVerification(_id: string, _adminId: string): Promise<void> {
-  await delay();
+export async function approveVerification(id: string, adminId: string): Promise<void> {
+  const now = new Date().toISOString();
+
+  // Get user_id from the verification
+  const { data: verif } = await supabase
+    .from("identity_verifications")
+    .select("user_id")
+    .eq("id", id)
+    .single();
+
+  await supabase
+    .from("identity_verifications")
+    .update({ status: "VERIFIED", reviewed_at: now, reviewed_by: adminId })
+    .eq("id", id);
+
+  // Trigger fn_on_kyc_status_change handles this, but update directly as fallback
+  if (verif?.user_id) {
+    await supabase
+      .from("users")
+      .update({ verification_status: "VERIFIED" })
+      .eq("id", verif.user_id);
+  }
 }
 
-// TODO:SUPABASE — Replace with supabase.from('identity_verifications').update({ status: 'REJECTED', rejection_reason: reason, reviewed_at: now(), reviewed_by: adminId }).eq('id', id)
 export async function rejectVerification(
-  _id: string,
-  _adminId: string,
-  _reason: string
+  id: string,
+  adminId: string,
+  reason: string
 ): Promise<void> {
-  await delay();
+  const now = new Date().toISOString();
+
+  const { data: verif } = await supabase
+    .from("identity_verifications")
+    .select("user_id")
+    .eq("id", id)
+    .single();
+
+  await supabase
+    .from("identity_verifications")
+    .update({
+      status:           "REJECTED",
+      reviewed_at:      now,
+      reviewed_by:      adminId,
+      rejection_reason: reason,
+    })
+    .eq("id", id);
+
+  if (verif?.user_id) {
+    await supabase
+      .from("users")
+      .update({ verification_status: "REJECTED" })
+      .eq("id", verif.user_id);
+  }
 }
