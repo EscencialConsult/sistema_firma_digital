@@ -17,6 +17,8 @@ web-backend/.env
 web-backend/storage/
 web-backend/uploads/
 web-portal/.env
+web-portal/.env.local
+web-portal/.env.*.local
 web-backend/*.db
 web-backend/*.db-shm
 web-backend/*.db-wal
