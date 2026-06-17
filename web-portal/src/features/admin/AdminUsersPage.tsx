@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../../shared/components/ui/Button";
-import { getAllUsers } from "../../shared/services/admin.service";
+import { getAllUsers, createAdminUser } from "../../shared/services/admin.service";
 import type { AdminUserSummary } from "../../shared/types/user";
 import {
   CONTRACT_FIELD_DEFS,
@@ -377,7 +377,7 @@ export function AdminUsersPage() {
   }, [users, filter, search]);
 
   // ── Add user ──
-  function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setAddError("");
     if (!addForm.fullName || !addForm.email || !addForm.password) {
@@ -388,19 +388,19 @@ export function AdminUsersPage() {
       setAddError("La contraseña debe tener al menos 6 caracteres.");
       return;
     }
-    // TODO:SUPABASE — supabase.auth.admin.createUser() + insert profile row
-    const newUser: AdminUserSummary = {
-      id: `u-${Date.now()}`,
-      email: addForm.email,
-      fullName: addForm.fullName,
-      role: addForm.role,
-      verificationStatus: "PENDING",
-      certificateStatus: "NONE",
-      createdAt: new Date().toISOString(),
-    };
-    setUsers((prev) => [newUser, ...prev]);
-    setAddSuccess(true);
-    setAddForm({ fullName: "", email: "", password: "", role: "USER" });
+    try {
+      const newUser = await createAdminUser({
+        fullName: addForm.fullName,
+        email:    addForm.email,
+        password: addForm.password,
+        role:     addForm.role,
+      });
+      setUsers((prev) => [newUser, ...prev]);
+      setAddSuccess(true);
+      setAddForm({ fullName: "", email: "", password: "", role: "USER" });
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Error al crear el usuario");
+    }
   }
 
   // ── CSV processing ──

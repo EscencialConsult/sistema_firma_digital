@@ -72,3 +72,20 @@ export async function updateUserRole(id: string, role: UserRole): Promise<void> 
   const { error } = await supabase.from("users").update({ role }).eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Create a new user from the admin panel.
+ * Calls the admin-create-user Edge Function which uses the service_role key server-side.
+ * Requires deploy: supabase functions deploy admin-create-user
+ */
+export async function createAdminUser(input: {
+  fullName: string;
+  email:    string;
+  password: string;
+  role:     UserRole;
+}): Promise<AdminUserSummary> {
+  const { data, error } = await supabase.functions.invoke("admin-create-user", { body: input });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error ?? "Error al crear el usuario");
+  return mapRowToUser(data.user as Record<string, unknown>);
+}
