@@ -22,21 +22,36 @@ async function mapRowToVerification(
       }
       return {
         id:          d.id as string,
-        type:        d.document_type as KycDocumentType,
+        type:        d.type as KycDocumentType,
         fileName:    d.file_name as string,
         mimeType:    (d.mime_type as string) ?? "",
         fileSize:    (d.file_size as number) ?? 0,
-        uploadedAt:  d.created_at as string,
+        uploadedAt:  (d.uploaded_at as string) ?? "",
         previewUrl,
       };
     })
   );
 
+  const personalData: KycPersonalData | null = row.full_name
+    ? {
+        fullName:       row.full_name       as string,
+        documentType:   (row.document_type   as string) ?? "",
+        documentNumber: (row.document_number as string) ?? "",
+        cuilCuit:       (row.cuil_cuit       as string) ?? "",
+        birthDate:      (row.birth_date      as string) ?? "",
+        phone:          (row.phone           as string) ?? "",
+        address:        (row.address         as string) ?? "",
+        city:           (row.city            as string) ?? "",
+        province:       (row.province        as string) ?? "",
+        country:        (row.country         as string) ?? "",
+      }
+    : null;
+
   return {
     id:              row.id as string,
     userId:          row.user_id as string,
     status:          row.status as KycStatus,
-    personalData:    (row.personal_data as KycPersonalData) ?? null,
+    personalData,
     documents,
     submittedAt:     (row.submitted_at as string) ?? null,
     reviewedAt:      (row.reviewed_at as string) ?? null,
@@ -83,7 +98,18 @@ export async function savePersonalData(
 ): Promise<KycPersonalData> {
   const { error } = await supabase
     .from("identity_verifications")
-    .update({ personal_data: data })
+    .update({
+      full_name:       data.fullName,
+      document_type:   data.documentType,
+      document_number: data.documentNumber,
+      cuil_cuit:       data.cuilCuit,
+      birth_date:      data.birthDate,
+      phone:           data.phone,
+      address:         data.address,
+      city:            data.city,
+      province:        data.province,
+      country:         data.country,
+    })
     .eq("id", verificationId);
 
   if (error) throw new Error(error.message);
@@ -101,47 +127,42 @@ export async function uploadDocument(
   const ext  = file.name.split(".").pop() ?? "jpg";
   const path = `${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`;
 
-  // Upload to Storage (bucket must exist: kyc-documents)
+  // Upload to Storage
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(path, file, { upsert: true });
 
-  // If Storage fails, proceed with local blob URL (bucket not created yet)
-  const fallbackPreview = uploadError ? URL.createObjectURL(file) : undefined;
+  if (uploadError) throw new Error(uploadError.message);
 
-  // Insert document record
+  // Signed URL for preview
+  const { data: signedData } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(path, 3600);
+
+  // Insert document record — upsert por si el usuario reintenta el mismo tipo
   const { data: doc, error: dbError } = await supabase
     .from("identity_documents")
-    .insert({
+    .upsert({
       verification_id: verificationId,
-      user_id:         user.id,
-      document_type:   type,
+      type,
       file_name:       file.name,
       mime_type:       file.type,
       file_size:       file.size,
-      storage_path:    uploadError ? null : path,
-    })
+      storage_path:    path,
+    }, { onConflict: "verification_id,type" })
     .select()
     .single();
 
   if (dbError || !doc) throw new Error(dbError?.message ?? "Error al guardar el documento");
 
-  let previewUrl = fallbackPreview;
-  if (!uploadError) {
-    const { data } = await supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(path, 3600);
-    previewUrl = data?.signedUrl;
-  }
-
   return {
     id:         doc.id as string,
-    type:       doc.document_type as KycDocumentType,
+    type:       doc.type as KycDocumentType,
     fileName:   doc.file_name as string,
     mimeType:   doc.mime_type as string,
     fileSize:   doc.file_size as number,
-    uploadedAt: doc.created_at as string,
-    previewUrl,
+    uploadedAt: doc.uploaded_at as string,
+    previewUrl: signedData?.signedUrl,
   };
 }
 

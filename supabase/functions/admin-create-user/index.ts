@@ -1,24 +1,8 @@
-/**
- * Supabase Edge Function — admin-create-user
- *
- * Crea un usuario desde el panel admin usando la service_role key.
- * El service_role key NUNCA va al frontend — solo existe en el servidor.
- *
- * DEPLOY:
- *   supabase functions deploy admin-create-user
- *
- * ENV VARS: SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son inyectadas automáticamente.
- *
- * Seguridad: solo puede ser llamada por admins (validamos el JWT del caller).
- *
- * REQUEST body:
- *   { fullName: string, email: string, password: string, role: "USER" | "ADMIN" }
- */
-
 import { serve }        from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL")             ?? "";
+const SUPABASE_ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY")        ?? "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const CORS_HEADERS = {
@@ -32,18 +16,18 @@ serve(async (req) => {
   }
 
   try {
-    // Verificar que el caller es un admin usando su JWT
     const authHeader = req.headers.get("Authorization") ?? "";
-    const callerToken = authHeader.replace("Bearer ", "").trim();
-    if (!callerToken) {
+    if (!authHeader) {
       return new Response(
         JSON.stringify({ error: "No autorizado" }),
         { status: 401, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
 
-    // Validar el caller con su propio token (no service role)
-    const callerClient = createClient(SUPABASE_URL, callerToken);
+    // Patrón oficial Supabase: pasar el JWT del usuario como header al crear el client
+    const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
     const { data: { user: caller }, error: authError } = await callerClient.auth.getUser();
     if (authError || !caller) {
       return new Response(
@@ -52,7 +36,7 @@ serve(async (req) => {
       );
     }
 
-    // Verificar rol ADMIN del caller
+    // Verificar rol ADMIN con service role (bypassea RLS)
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const { data: callerProfile } = await adminClient
       .from("users")
@@ -67,7 +51,6 @@ serve(async (req) => {
       );
     }
 
-    // Parsear body
     const { fullName, email, password, role } = await req.json() as {
       fullName: string;
       email:    string;
@@ -82,7 +65,6 @@ serve(async (req) => {
       );
     }
 
-    // Crear usuario en Supabase Auth (service role — puede crear sin confirmación de email)
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password,
@@ -94,13 +76,11 @@ serve(async (req) => {
       throw new Error(createError?.message ?? "No se pudo crear el usuario");
     }
 
-    // Actualizar perfil (trigger fn_handle_new_user ya lo crea, nosotros actualizamos role + nombre)
     await adminClient
       .from("users")
       .update({ full_name: fullName, role: role ?? "USER" })
       .eq("id", newUser.user.id);
 
-    // Leer perfil completo para devolverlo al frontend
     const { data: profile } = await adminClient
       .from("users")
       .select("id, email, full_name, role, verification_status, certificate_status, created_at")

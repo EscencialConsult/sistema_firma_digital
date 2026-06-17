@@ -13,7 +13,7 @@ import {
   listAllVerifications,
   rejectVerification,
 } from "../../shared/services/kyc.service";
-import type { KycPersonalData, KycVerification } from "../../shared/types/kyc";
+import type { KycVerification } from "../../shared/types/kyc";
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
@@ -31,148 +31,26 @@ function statusBadge(status: string) {
   }
 }
 
-// ─── DNI Card (front) ────────────────────────────────────────────────────────
+// ─── Document image ───────────────────────────────────────────────────────────
 
-function DniCardFront({ pd }: { pd: KycPersonalData }) {
-  const lastName  = pd.fullName.split(" ").slice(-1)[0]?.toUpperCase() ?? "";
-  const firstName = pd.fullName.split(" ").slice(0, -1).join(" ").toUpperCase();
-
+function DocImage({ url, label }: { url?: string; label: string }) {
+  if (!url) {
+    return (
+      <div className="flex items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-800 text-zinc-600 text-xs" style={{ minHeight: 158 }}>
+        Sin imagen
+      </div>
+    );
+  }
   return (
-    <div
-      className="relative overflow-hidden rounded-2xl shadow-2xl"
-      style={{ background: "linear-gradient(135deg,#1e3a8a 0%,#1e40af 40%,#1d4ed8 100%)", minHeight: 158 }}
-    >
-      {/* Argentine flag stripe */}
-      <div className="absolute left-0 top-0 h-full w-2 flex flex-col">
-        <div className="flex-1 bg-sky-400" />
-        <div className="flex-1 bg-white" />
-        <div className="flex-1 bg-sky-400" />
-      </div>
-
-      {/* Header */}
-      <div className="pl-5 pr-4 pt-3">
-        <p className="text-[8px] font-bold tracking-[0.18em] text-white/70 uppercase">República Argentina</p>
-        <p className="text-[7px] text-white/40 tracking-wider">Documento Nacional de Identidad</p>
-      </div>
-
-      {/* Content */}
-      <div className="flex gap-3 px-5 pb-3 pt-2">
-        {/* Photo */}
-        <div className="shrink-0 overflow-hidden rounded-lg border border-white/20" style={{ width: 52, height: 68 }}>
-          <img
-            src={`https://i.pravatar.cc/52?u=${pd.documentNumber}-front`}
-            alt="Foto"
-            className="h-full w-full object-cover"
-          />
-        </div>
-
-        {/* Data */}
-        <div className="flex-1 space-y-1">
-          <div>
-            <p className="text-[6px] tracking-widest text-white/40 uppercase">Apellido</p>
-            <p className="text-[11px] font-black leading-tight text-white">{lastName}</p>
-          </div>
-          <div>
-            <p className="text-[6px] tracking-widest text-white/40 uppercase">Nombre/s</p>
-            <p className="text-[10px] font-bold leading-tight text-white">{firstName}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-1 pt-0.5">
-            <div>
-              <p className="text-[6px] tracking-widest text-white/40 uppercase">Nac.</p>
-              <p className="text-[8px] font-semibold text-white">{pd.birthDate}</p>
-            </div>
-            <div>
-              <p className="text-[6px] tracking-widest text-white/40 uppercase">D.N.I.</p>
-              <p className="text-[10px] font-black text-amber-300">{pd.documentNumber}</p>
-            </div>
-          </div>
-          <div>
-            <p className="text-[6px] tracking-widest text-white/40 uppercase">CUIL / CUIT</p>
-            <p className="text-[8px] font-semibold text-white/90">{pd.cuilCuit}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* MRZ */}
-      <div className="bg-black/20 px-5 py-1.5">
-        <p className="truncate font-mono text-[6.5px] tracking-[0.12em] text-white/25">
-          IDARG{pd.documentNumber.padStart(8, "0")}{"<".repeat(12)}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ─── DNI Card (back) ─────────────────────────────────────────────────────────
-
-function DniCardBack({ pd }: { pd: KycPersonalData }) {
-  const bars = [0,2,3,5,8,9,11,14,16,17,19,22,25,26,28,31,33,36,38,39];
-
-  return (
-    <div
-      className="relative overflow-hidden rounded-2xl shadow-2xl"
-      style={{ background: "linear-gradient(135deg,#1e3a8a 0%,#1e40af 40%,#1d4ed8 100%)", minHeight: 158 }}
-    >
-      {/* Left stripe */}
-      <div className="absolute left-0 top-0 h-full w-2 flex flex-col">
-        <div className="flex-1 bg-sky-400" />
-        <div className="flex-1 bg-white" />
-        <div className="flex-1 bg-sky-400" />
-      </div>
-
-      {/* Magnetic stripe */}
-      <div className="bg-black/70 h-9 w-full" />
-
-      {/* Data */}
-      <div className="space-y-2 pl-5 pr-4 pt-3 pb-3">
-        <div>
-          <p className="text-[6px] tracking-widest text-white/40 uppercase">Domicilio</p>
-          <p className="text-[10px] font-semibold text-white">{pd.address}</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <p className="text-[6px] tracking-widest text-white/40 uppercase">Ciudad</p>
-            <p className="text-[9px] font-semibold text-white">{pd.city}</p>
-          </div>
-          <div>
-            <p className="text-[6px] tracking-widest text-white/40 uppercase">Provincia</p>
-            <p className="text-[9px] font-semibold text-white">{pd.province}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Barcode */}
-      <div className="px-5 pb-3">
-        <div className="flex h-7 gap-px">
-          {Array.from({ length: 40 }, (_, i) => (
-            <div
-              key={i}
-              className="flex-1"
-              style={{ background: bars.includes(i) ? "rgba(255,255,255,0.8)" : "transparent" }}
-            />
-          ))}
-        </div>
-        <p className="mt-1 text-center font-mono text-[7px] tracking-widest text-white/30">
-          {pd.documentNumber}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Selfie Card ─────────────────────────────────────────────────────────────
-
-function SelfieCard({ userId }: { userId: string }) {
-  return (
-    <div className="relative overflow-hidden rounded-2xl shadow-2xl bg-zinc-800" style={{ minHeight: 158 }}>
+    <div className="relative overflow-hidden rounded-2xl bg-zinc-800" style={{ minHeight: 158 }}>
       <img
-        src={`https://i.pravatar.cc/300?u=${userId}`}
-        alt="Selfie de verificación"
-        className="h-full w-full object-cover"
-        style={{ minHeight: 158 }}
+        src={url}
+        alt={label}
+        className="w-full h-full object-contain rounded-2xl"
+        style={{ minHeight: 158, maxHeight: 260 }}
       />
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-        <p className="text-[8px] font-bold tracking-widest text-white/70 uppercase">Selfie · Verificación</p>
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+        <p className="text-[8px] font-bold tracking-widest text-white/70 uppercase">{label}</p>
       </div>
     </div>
   );
@@ -208,10 +86,10 @@ function VerificationCard({
     setRejectMode(false);
   }
 
-  const pd = verification.personalData;
-  const hasFront = verification.documents.some((d) => d.type === "DOCUMENT_FRONT");
-  const hasBack  = verification.documents.some((d) => d.type === "DOCUMENT_BACK");
-  const hasSelfie = verification.documents.some((d) => d.type === "SELFIE");
+  const pd        = verification.personalData;
+  const frontDoc  = verification.documents.find((d) => d.type === "DOCUMENT_FRONT");
+  const backDoc   = verification.documents.find((d) => d.type === "DOCUMENT_BACK");
+  const selfieDoc = verification.documents.find((d) => d.type === "SELFIE");
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
@@ -269,24 +147,18 @@ function VerificationCard({
               Documentos presentados
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
-              {pd && hasFront && (
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">DNI — Frente</p>
-                  <DniCardFront pd={pd} />
-                </div>
-              )}
-              {pd && hasBack && (
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">DNI — Dorso</p>
-                  <DniCardBack pd={pd} />
-                </div>
-              )}
-              {hasSelfie && (
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Selfie</p>
-                  <SelfieCard userId={verification.userId} />
-                </div>
-              )}
+              <div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">DNI — Frente</p>
+                <DocImage url={frontDoc?.previewUrl} label="DNI Frente" />
+              </div>
+              <div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">DNI — Dorso</p>
+                <DocImage url={backDoc?.previewUrl} label="DNI Dorso" />
+              </div>
+              <div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Selfie</p>
+                <DocImage url={selfieDoc?.previewUrl} label="Selfie · Verificación" />
+              </div>
             </div>
           </div>
 

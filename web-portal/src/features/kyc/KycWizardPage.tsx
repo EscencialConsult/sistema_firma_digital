@@ -1,5 +1,5 @@
-import { ArrowLeft, ArrowRight, CheckCircle2, Send } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, Camera, CheckCircle2, RefreshCw, Send, Upload } from "lucide-react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
@@ -136,7 +136,7 @@ function DocumentStep({
   );
 }
 
-// ─── Step 3: Selfie + submit ─────────────────────────────────────────────────
+// ─── Step 3: Selfie con cámara en vivo ───────────────────────────────────────
 
 function SelfieStep({
   document,
@@ -153,12 +153,61 @@ function SelfieStep({
   onBack: () => void;
   loading: boolean;
 }) {
+  const videoRef  = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [cameraOn,    setCameraOn]    = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  async function startCamera() {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraOn(true);
+    } catch {
+      setCameraError("No se pudo acceder a la cámara. Verificá los permisos del navegador o subí una foto manualmente.");
+    }
+  }
+
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setCameraOn(false);
+  }
+
+  function capture() {
+    const video  = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      onFile(new File([blob], "selfie.jpg", { type: "image/jpeg" }));
+      stopCamera();
+    }, "image/jpeg", 0.92);
+  }
+
+  function retake() {
+    void startCamera();
+  }
+
+  useEffect(() => () => { stopCamera(); }, []);
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-zinc-950">Selfie de verificación</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Tomá una foto de tu rostro mirando directamente a la cámara, en un lugar bien iluminado.
+          Tomá una foto en vivo mirando directamente a la cámara, en un lugar bien iluminado.
           No uses anteojos de sol ni ningún elemento que tape tu cara.
         </p>
       </div>
@@ -182,21 +231,88 @@ function SelfieStep({
         </div>
       </div>
 
-      <FileUpload
-        label="Selfie"
-        hint="Mirá directo a la cámara"
-        onFile={onFile}
-        preview={document?.previewUrl}
-        loading={uploading}
-        disabled={uploading}
-      />
-
-      {document && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
-          <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
-          Selfie cargada correctamente
+      {/* Cámara activa */}
+      {cameraOn && (
+        <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-black">
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full"
+            style={{ transform: "scaleX(-1)" }}
+          />
+          <div className="absolute inset-0 flex items-end justify-center gap-3 p-4">
+            <Button onClick={capture} className="h-11 px-6 bg-white text-zinc-950 hover:bg-zinc-100 shadow-lg">
+              <Camera size={16} /> Capturar foto
+            </Button>
+            <Button variant="secondary" onClick={stopCamera} className="h-11 px-4 bg-white/80 text-zinc-700">
+              Cancelar
+            </Button>
+          </div>
         </div>
       )}
+
+      {/* Foto capturada */}
+      {document && !cameraOn && (
+        <div className="space-y-3">
+          <img
+            src={document.previewUrl}
+            alt="Selfie capturada"
+            className="w-full rounded-2xl border border-zinc-200 object-cover"
+            style={{ maxHeight: 320, transform: "scaleX(-1)" }}
+          />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+              <CheckCircle2 size={16} className="text-emerald-600" />
+              Selfie cargada correctamente
+            </div>
+            <Button variant="secondary" onClick={retake} disabled={uploading} className="h-9 px-4 text-sm">
+              <RefreshCw size={14} /> Repetir
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Sin foto todavía */}
+      {!document && !cameraOn && (
+        <div className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50 p-8">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100">
+            <Camera size={24} className="text-zinc-500" />
+          </div>
+          <div className="text-center">
+            <p className="font-medium text-zinc-800">Usá tu cámara para tomar la selfie</p>
+            <p className="mt-1 text-sm text-zinc-500">O subí una foto si preferís</p>
+          </div>
+          <div className="flex flex-col gap-2 w-full max-w-xs">
+            <Button onClick={startCamera} disabled={uploading} className="h-11 w-full">
+              <Camera size={16} /> Abrir cámara
+            </Button>
+            <label className="flex cursor-pointer items-center justify-center gap-2 h-10 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+              <Upload size={14} />
+              Subir foto
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {cameraError && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {cameraError}
+        </p>
+      )}
+
+      {uploading && (
+        <p className="text-sm text-zinc-500 text-center animate-pulse">Subiendo selfie...</p>
+      )}
+
+      <canvas ref={canvasRef} className="hidden" />
 
       <div className="flex items-center justify-between">
         <Button variant="secondary" onClick={onBack} type="button">
@@ -204,7 +320,7 @@ function SelfieStep({
         </Button>
         <Button
           onClick={onSubmit}
-          disabled={!document || uploading || loading}
+          disabled={!document || uploading || loading || cameraOn}
           className="h-11 px-8"
         >
           {loading ? "Enviando..." : "Enviar verificación"}
@@ -239,8 +355,26 @@ export function KycWizardPage() {
       try {
         const existing = await kycService.getMyVerification(user.id);
         if (existing) {
+          // Si ya fue enviada, ir a la página de espera
+          if (existing.status !== "PENDING") {
+            navigate("/kyc/pending");
+            return;
+          }
           setVerificationId(existing.id);
           if (existing.personalData) setPersonalData(existing.personalData);
+
+          // Restaurar documentos ya subidos
+          const docsMap: Partial<Record<"DOCUMENT_FRONT" | "DOCUMENT_BACK" | "SELFIE", KycDocument>> = {};
+          for (const doc of existing.documents) {
+            docsMap[doc.type as "DOCUMENT_FRONT" | "DOCUMENT_BACK" | "SELFIE"] = doc;
+          }
+          setDocuments(docsMap);
+
+          // Avanzar al primer paso incompleto
+          if (docsMap.SELFIE)          setStep(3);
+          else if (docsMap.DOCUMENT_BACK)  setStep(3);
+          else if (docsMap.DOCUMENT_FRONT) setStep(2);
+          else if (existing.personalData)  setStep(1);
         } else {
           const v = await kycService.startVerification(user.id);
           setVerificationId(v.id);
@@ -259,8 +393,8 @@ export function KycWizardPage() {
     try {
       await kycService.savePersonalData(verificationId, personalData);
       setStep(1);
-    } catch {
-      setError("Error al guardar los datos. Intentá de nuevo.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar los datos.");
     } finally {
       setLoading(false);
     }
@@ -276,8 +410,8 @@ export function KycWizardPage() {
     try {
       const doc = await kycService.uploadDocument(verificationId, type, file);
       setDocuments((prev) => ({ ...prev, [type]: doc }));
-    } catch {
-      setError("Error al subir el archivo. Intentá con una imagen más pequeña.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al subir el archivo.");
     } finally {
       setUploading(null);
     }
