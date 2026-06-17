@@ -99,16 +99,16 @@ export async function savePersonalData(
   const { error } = await supabase
     .from("identity_verifications")
     .update({
-      full_name:       data.fullName,
-      document_type:   data.documentType,
-      document_number: data.documentNumber,
-      cuil_cuit:       data.cuilCuit,
-      birth_date:      data.birthDate,
-      phone:           data.phone,
-      address:         data.address,
-      city:            data.city,
-      province:        data.province,
-      country:         data.country,
+      full_name:       data.fullName       || null,
+      document_type:   data.documentType   || "DNI",
+      document_number: data.documentNumber || null,
+      cuil_cuit:       data.cuilCuit       || null,
+      birth_date:      data.birthDate      || null,
+      phone:           data.phone          || null,
+      address:         data.address        || null,
+      city:            data.city           || null,
+      province:        data.province       || null,
+      country:         data.country        || "Argentina",
     })
     .eq("id", verificationId);
 
