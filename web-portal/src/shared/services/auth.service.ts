@@ -1,93 +1,114 @@
 /**
- * Authentication service — Mock implementation.
- * TODO:SUPABASE — Replace with supabase.auth.signInWithPassword(), supabase.auth.signUp(), etc.
+ * Authentication service — Supabase implementation.
+ * Replaces the previous mock that used sessionStorage.
  */
 
-import type { AuthUser } from "../types/user";
-import { MOCK_USERS } from "../mock/data";
+import { supabase } from "../lib/supabase";
+import type { AuthUser, UserRole, VerificationStatus, CertificateStatus } from "../types/user";
 
-const STORAGE_KEY = "firma_mock_session";
+// ─── Profile helper ───────────────────────────────────────────────────────────
 
-function delay(ms = 400) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+/** Fetch the public.users profile row and map to AuthUser */
+export async function fetchProfile(userId: string): Promise<AuthUser | null> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, full_name, role, verification_status, certificate_status, organization_id")
+    .eq("id", userId)
+    .single();
 
-function findMockUser(email: string, password: string) {
-  return Object.values(MOCK_USERS).find(
-    (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-  );
-}
+  if (error || !data) return null;
 
-function toAuthUser(u: (typeof MOCK_USERS)[keyof typeof MOCK_USERS]): AuthUser {
   return {
-    id: u.id,
-    email: u.email,
-    fullName: u.fullName,
-    role: u.role,
-    verificationStatus: u.verificationStatus,
-    certificateStatus: u.certificateStatus,
+    id:                 data.id,
+    email:              data.email,
+    fullName:           data.full_name,
+    role:               data.role               as UserRole,
+    verificationStatus: data.verification_status as VerificationStatus,
+    certificateStatus:  data.certificate_status  as CertificateStatus,
+    organizationId:     data.organization_id ?? undefined,
   };
 }
 
-// TODO:SUPABASE — Replace with supabase.auth.signInWithPassword({ email, password })
+// ─── Auth actions ─────────────────────────────────────────────────────────────
+
 export async function login(email: string, password: string): Promise<AuthUser> {
-  await delay();
-  const user = findMockUser(email, password);
-  if (!user) throw new Error("Email o contraseña incorrectos.");
-  const authUser = toAuthUser(user);
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
-  return authUser;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+  if (!data.user) throw new Error("No se pudo iniciar sesión.");
+
+  // Fetch profile (created by trigger on signup)
+  const profile = await fetchProfile(data.user.id);
+  if (!profile) throw new Error("No se encontró el perfil del usuario.");
+  return profile;
 }
 
-// TODO:SUPABASE — Replace with supabase.auth.signUp({ email, password, options: { data: { full_name } } })
 export async function register(input: {
   fullName: string;
   email: string;
   password: string;
 }): Promise<AuthUser> {
-  await delay();
-  const existing = Object.values(MOCK_USERS).find(
-    (u) => u.email.toLowerCase() === input.email.toLowerCase()
-  );
-  if (existing) throw new Error("El email ya está registrado.");
-  const newUser: AuthUser = {
-    id: `u-new-${Date.now()}`,
-    email: input.email,
-    fullName: input.fullName,
-    role: "USER",
+  const { data, error } = await supabase.auth.signUp({
+    email:    input.email,
+    password: input.password,
+    options:  { data: { full_name: input.fullName } },
+  });
+
+  if (error) throw new Error(error.message);
+  if (!data.user) throw new Error("No se pudo crear la cuenta.");
+
+  // Trigger fn_handle_new_user creates the profile, but may take a brief moment.
+  // Retry up to 3 times with 600ms delay.
+  for (let i = 0; i < 3; i++) {
+    const profile = await fetchProfile(data.user.id);
+    if (profile) return profile;
+    await new Promise((r) => setTimeout(r, 600));
+  }
+
+  // Fallback: return minimal profile from auth data
+  return {
+    id:                 data.user.id,
+    email:              input.email,
+    fullName:           input.fullName,
+    role:               "USER",
     verificationStatus: "PENDING",
-    certificateStatus: "NONE",
+    certificateStatus:  "NONE",
   };
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
-  return newUser;
 }
 
-// TODO:SUPABASE — Replace with supabase.auth.getSession()
 export async function restoreSession(): Promise<AuthUser | null> {
-  await delay(200);
-  const stored = sessionStorage.getItem(STORAGE_KEY);
-  if (!stored) return null;
-  return JSON.parse(stored) as AuthUser;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return null;
+  return fetchProfile(session.user.id);
 }
 
-// TODO:SUPABASE — Replace with supabase.auth.getUser()
 export async function fetchMe(): Promise<AuthUser | null> {
-  return restoreSession();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  return fetchProfile(user.id);
 }
 
-// TODO:SUPABASE — Replace with supabase.auth.signOut()
 export async function logout(): Promise<void> {
-  sessionStorage.removeItem(STORAGE_KEY);
+  await supabase.auth.signOut();
 }
 
 /**
- * Update the cached user in session (used after KYC status changes).
- * TODO:SUPABASE — This won't be needed; Supabase session auto-refreshes.
+ * Update local profile data in Supabase.
+ * Used after KYC status changes (admin approval).
+ * Returns updated AuthUser or null if failed.
  */
-export function updateSessionUser(updates: Partial<AuthUser>): AuthUser | null {
-  const stored = sessionStorage.getItem(STORAGE_KEY);
-  if (!stored) return null;
-  const user = { ...JSON.parse(stored), ...updates } as AuthUser;
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-  return user;
+export async function updateSessionUser(updates: Partial<AuthUser>): Promise<AuthUser | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.fullName)           dbUpdates.full_name           = updates.fullName;
+  if (updates.verificationStatus) dbUpdates.verification_status = updates.verificationStatus;
+  if (updates.certificateStatus)  dbUpdates.certificate_status  = updates.certificateStatus;
+  if (updates.role)               dbUpdates.role                = updates.role;
+
+  if (Object.keys(dbUpdates).length > 0) {
+    await supabase.from("users").update(dbUpdates).eq("id", user.id);
+  }
+
+  return fetchProfile(user.id);
 }

@@ -1,11 +1,11 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { supabase } from "../../shared/lib/supabase";
 import {
   login,
   register,
-  restoreSession,
   logout as logoutService,
+  fetchProfile,
   fetchMe,
-  updateSessionUser,
 } from "../../shared/services/auth.service";
 import type { AuthUser } from "../../shared/types/user";
 
@@ -23,15 +23,28 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser]       = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
 
   useEffect(() => {
-    restoreSession()
-      .then((u) => setUser(u))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    // Listen for Supabase auth state changes (fires INITIAL_SESSION immediately)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const profile = await fetchProfile(session.user.id);
+          setUser(profile);
+        } else {
+          setUser(null);
+        }
+        // Mark loading done after the initial session check
+        if (event === "INITIAL_SESSION") {
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -39,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       error,
+
       async signIn(email, password) {
         setError(null);
         try {
@@ -48,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw err;
         }
       },
+
       async signUp(input) {
         setError(null);
         try {
@@ -57,17 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw err;
         }
       },
+
       logout() {
         void logoutService();
         setUser(null);
       },
+
       async reloadUser() {
         const u = await fetchMe();
         if (u) setUser(u);
       },
+
+      // Optimistic local update — call reloadUser() to sync from DB
       updateUser(updates) {
-        const updated = updateSessionUser(updates);
-        if (updated) setUser(updated);
+        setUser((prev) => (prev ? { ...prev, ...updates } : prev));
       },
     }),
     [error, loading, user]
@@ -77,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used inside AuthProvider");
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
 }
