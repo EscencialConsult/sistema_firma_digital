@@ -1,31 +1,35 @@
 -- Storage buckets para Sistema Firma Digital
+-- Seguro para ejecutar sobre una DB existente (DROP POLICY IF EXISTS antes de cada CREATE)
 -- Ejecutar en Supabase → SQL Editor
 
--- Bucket para documentos KYC (DNI, selfie, CUIL) — privado
+-- ─── Buckets ──────────────────────────────────────────────────────────────────
+
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'kyc-documents',
   'kyc-documents',
   false,
-  10485760, -- 10 MB
+  10485760,
   ARRAY['image/jpeg','image/png','image/webp','application/pdf']
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Bucket para PDFs de contratos — público para que el firmante pueda ver el documento
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'contract-pdfs',
   'contract-pdfs',
   true,
-  52428800, -- 50 MB
+  52428800,
   ARRAY['application/pdf','image/png','image/jpeg']
 )
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── RLS: kyc-documents ───────────────────────────────────────────────────────
 
--- Usuarios solo pueden leer sus propios docs
+DROP POLICY IF EXISTS "kyc_user_select"   ON storage.objects;
+DROP POLICY IF EXISTS "kyc_user_insert"   ON storage.objects;
+DROP POLICY IF EXISTS "kyc_admin_select"  ON storage.objects;
+
 CREATE POLICY "kyc_user_select"
 ON storage.objects FOR SELECT
 USING (
@@ -33,7 +37,6 @@ USING (
   AND auth.uid()::text = (storage.foldername(name))[1]
 );
 
--- Usuarios solo pueden subir a su propia carpeta
 CREATE POLICY "kyc_user_insert"
 ON storage.objects FOR INSERT
 WITH CHECK (
@@ -41,7 +44,6 @@ WITH CHECK (
   AND auth.uid()::text = (storage.foldername(name))[1]
 );
 
--- Admins pueden ver todos los docs KYC
 CREATE POLICY "kyc_admin_select"
 ON storage.objects FOR SELECT
 USING (
@@ -54,12 +56,13 @@ USING (
 
 -- ─── RLS: contract-pdfs ──────────────────────────────────────────────────────
 
--- Cualquiera puede leer (es público, pero por si acaso se activa RLS)
+DROP POLICY IF EXISTS "contract_pdfs_public_select" ON storage.objects;
+DROP POLICY IF EXISTS "contract_pdfs_admin_insert"  ON storage.objects;
+
 CREATE POLICY "contract_pdfs_public_select"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'contract-pdfs');
 
--- Solo admins pueden subir
 CREATE POLICY "contract_pdfs_admin_insert"
 ON storage.objects FOR INSERT
 WITH CHECK (
