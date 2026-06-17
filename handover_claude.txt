@@ -1,0 +1,80 @@
+=============================================================================
+HANDOVER DOCUMENT: REESTRUCTURACIÓN FRONTEND - FIRMA ELECTRÓNICA
+=============================================================================
+
+ESTADO GENERAL DEL PROYECTO
+-----------------------------------------------------------------------------
+Estamos en proceso de reestructurar completamente el frontend (web-portal) 
+para adaptarlo al nuevo flujo legal especificado en el memorándum. 
+
+El objetivo principal es implementar un sistema de Firma Electrónica Robusta 
+con validación de identidad (KYC), doble factor de autenticación (OTP al 
+firmar), inmutabilidad y un sistema de control de acceso por niveles.
+
+Adicionalmente, estamos preparando toda la arquitectura de datos del frontend 
+para que sea migrada fácilmente a Supabase en el futuro inmediato. Por ahora, 
+no estamos tocando el backend en Express, sino aislando el frontend con 
+servicios "Mock" que simulan el comportamiento que tendrá Supabase.
+
+¿QUÉ SE HA HECHO HASTA AHORA? (FASE A - INFRAESTRUCTURA INICIAL)
+-----------------------------------------------------------------------------
+1. Planificación Arquitectónica:
+   - Se definió una arquitectura de acceso en 4 niveles:
+     * Nivel 0: No autenticado (Login, Registro, Firma pública con token).
+     * Nivel 1: Autenticado, NO verificado (Solo ve Wizard KYC).
+     * Nivel 2: Autenticado y Verificado (Dashboard, Contratos, Firma).
+     * Nivel 3: Admin (Panel completo de gestión).
+
+2. Tipado Fuerte (Typescript):
+   - Se crearon las interfaces completas en `src/shared/types/`:
+     * `user.ts`: Roles, estados de verificación, perfiles.
+     * `kyc.ts`: Pasos de verificación, datos personales, documentos (frente, dorso, selfie).
+     * `contract.ts`: Estados del contrato, firmantes, templates.
+     * `signing.ts`: Flujo de firma, OTP challenge, eventos de auditoría.
+
+3. Datos Simulados (Mock Data):
+   - Se centralizó toda la data simulada en `src/shared/mock/data.ts`.
+   - Contiene usuarios, solicitudes de KYC, contratos, flujos de firma y auditoría.
+
+4. Servicios Mock (Preparados para Supabase):
+   - Se crearon los servicios en `src/shared/services/` que consumen la mock data.
+   - IMPORTANTE: Cada función dentro de estos servicios tiene un comentario 
+     explícito `// TODO:SUPABASE` con la instrucción exacta de cómo reemplazar 
+     esa función por su equivalente en el SDK de Supabase.
+   - Servicios creados:
+     * `auth.service.ts` (Login, registro, sesión con sessionStorage).
+     * `kyc.service.ts` (Subida de datos y documentos, revisión admin).
+     * `contracts.service.ts` (Listado y detalle de contratos).
+     * `signing.service.ts` (Flujo de conformidad, OTP mock "123456", firma).
+     * `audit.service.ts` (Listado de eventos de auditoría).
+     * `admin.service.ts` (Estadísticas y gestión general).
+
+
+¿QUÉ HAY QUE HACER AHORA? (PRÓXIMOS PASOS PARA CLAUDE)
+-----------------------------------------------------------------------------
+El trabajo debe continuar siguiendo el orden lógico de las fases planteadas 
+en el archivo `task.md`.
+
+Paso 1: Completar Fase A (Infraestructura UI y Ruteo)
+- Crear los Guards de rutas: `AuthGuard`, `VerifiedGuard`, `AdminGuard`.
+- Crear los Layouts: `AuthLayout`, `KycLayout`, `AppLayout` (con sidebar), `AdminLayout`.
+- Configurar el router central en `AppRouter.tsx` aplicando los layouts y guards correspondientes.
+- Actualizar `AuthProvider.tsx` para que consuma el nuevo `auth.service.ts`.
+- Desarrollar componentes UI base faltantes (Input, OtpInput para los 6 dígitos, Stepper para el KYC, FileUpload, StatusIndicator).
+
+Paso 2: Fase B (Páginas de Acceso y KYC)
+- Reescribir `LoginPage` y `RegisterPage` con un diseño más premium y adaptado al memo.
+- Construir el `KycWizard` completo con sus 4 pasos (Datos personales, Frente DNI, Dorso DNI, Selfie).
+- Crear las páginas de estado: `KycPendingPage` y `KycRejectedPage`.
+
+Paso 3: Fase C (Vistas de Alumno Verificado)
+- Reescribir `DashboardPage`.
+- Crear `ContractsPage` (listado) y `ContractDetailPage` (detalle con PDF).
+- Construir el corazón probatorio: `SigningFlowPage`. Este es un wizard de 3 pasos: 1) Conformidad legal, 2) Ingreso de OTP (simulado por ahora), 3) Confirmación de firma.
+
+Paso 4: Fase D (Panel Administrativo)
+- Construir `AdminDashboard` con las estadísticas mock.
+- Páginas de gestión: `AdminUsersPage`, `AdminKycReview` (para aprobar/rechazar verificaciones), `AdminContractsPage`, `AdminAuditPage`.
+
+Paso 5: Integración Final y Supabase (Futuro)
+- Cuando el frontend esté completo y navegable con la mock data, el último paso será ir archivo por archivo en `src/shared/services/` y reemplazar el código mock por las llamadas reales a Supabase basándose en los comentarios `// TODO:SUPABASE`.

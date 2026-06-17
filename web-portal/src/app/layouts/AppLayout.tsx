@@ -1,0 +1,145 @@
+import {
+  Bell,
+  FileSignature,
+  Files,
+  Gauge,
+  LogOut,
+  Menu,
+  ShieldCheck,
+  UserCircle,
+  UsersRound,
+  X,
+} from "lucide-react";
+import { useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useAuth } from "../providers/AuthProvider";
+
+const USER_NAV = [
+  { path: "/dashboard", label: "Dashboard", icon: Gauge, end: true },
+  { path: "/contracts", label: "Mis contratos", icon: Files },
+  { path: "/signing", label: "Por firmar", icon: FileSignature },
+  { path: "/profile", label: "Perfil", icon: UserCircle },
+];
+
+const ADMIN_EXTRA = [{ path: "/admin", label: "Panel admin", icon: UsersRound }];
+
+function NavItem({ path, label, icon: Icon, end }: { path: string; label: string; icon: React.ElementType; end?: boolean }) {
+  return (
+    <NavLink
+      to={path}
+      end={end}
+      className={({ isActive }) =>
+        `flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition duration-200 active:scale-[0.98] ${
+          isActive
+            ? "bg-zinc-900 text-white shadow-sm"
+            : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+        }`
+      }
+    >
+      <Icon size={17} />
+      {label}
+    </NavLink>
+  );
+}
+
+export function AppLayout() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const isAdmin = user?.role === "ADMIN";
+  const navItems = isAdmin ? [...USER_NAV, ...ADMIN_EXTRA] : USER_NAV;
+
+  const sidebar = (
+    <>
+      <div className="mb-8 flex items-center gap-3 px-2">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-zinc-950 text-white shadow-sm">
+          <ShieldCheck size={20} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold leading-none">Firma Digital</p>
+          <p className="mt-0.5 truncate text-[11px] text-zinc-500">{user?.email}</p>
+        </div>
+      </div>
+
+      <nav className="flex-1 space-y-1">
+        {navItems.map((item) => (
+          <NavItem key={item.path} {...item} />
+        ))}
+      </nav>
+
+      <div className="mt-auto rounded-2xl border border-zinc-200/60 bg-zinc-50 p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
+          <p className="text-xs font-semibold text-zinc-900 truncate">{user?.fullName}</p>
+        </div>
+        <p className="text-[11px] text-zinc-500 capitalize">
+          {user?.role?.toLowerCase()} · Verificado
+        </p>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-zinc-50/50 text-zinc-950">
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-zinc-200/50 bg-white/80 px-4 py-5 backdrop-blur-md lg:flex">
+        {sidebar}
+      </aside>
+
+      {/* Mobile sidebar overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-30 lg:hidden">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+          <aside className="relative flex h-full w-72 flex-col bg-white px-4 py-5">
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="mb-4 self-end rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100"
+              type="button"
+            >
+              <X size={18} />
+            </button>
+            {sidebar}
+          </aside>
+        </div>
+      )}
+
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-10 border-b border-zinc-200/60 bg-white/90 backdrop-blur">
+          <div className="flex h-14 items-center justify-between gap-4 px-4 md:px-6">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 lg:hidden"
+              type="button"
+            >
+              <Menu size={16} />
+            </button>
+            <div className="flex flex-1 items-center gap-2 lg:justify-end">
+              <button
+                className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 transition"
+                type="button"
+                title="Notificaciones"
+              >
+                <Bell size={16} />
+              </button>
+              <button
+                className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-red-600 transition"
+                type="button"
+                title="Cerrar sesión"
+                onClick={logout}
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="min-h-[calc(100vh-3.5rem)] px-4 py-6 md:px-6">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

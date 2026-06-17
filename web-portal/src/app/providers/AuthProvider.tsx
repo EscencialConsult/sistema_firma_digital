@@ -1,15 +1,23 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { fetchMe, login, logoutLocal, register, restoreSession, type AuthUser } from "../../shared/services/authService";
-import { getAccessToken, onSessionExpired } from "../../shared/services/apiClient";
+import {
+  login,
+  register,
+  restoreSession,
+  logout as logoutService,
+  fetchMe,
+  updateSessionUser,
+} from "../../shared/services/auth.service";
+import type { AuthUser } from "../../shared/types/user";
 
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (input: { fullName: string; email: string; password: string; organizationName?: string }) => Promise<void>;
+  signUp: (input: { fullName: string; email: string; password: string }) => Promise<void>;
   logout: () => void;
   reloadUser: () => Promise<void>;
+  updateUser: (updates: Partial<AuthUser>) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -21,54 +29,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     restoreSession()
-      .then(setUser)
-      .catch(() => void logoutLocal())
+      .then((u) => setUser(u))
+      .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    return onSessionExpired(() => {
-      setUser(null);
-      setLoading(false);
-    });
-  }, []);
-
-  const value = useMemo<AuthContextValue>(() => ({
-    user,
-    loading,
-    error,
-    async signIn(email, password) {
-      setError(null);
-      try {
-        setUser(await login(email, password));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "No se pudo iniciar sesion.");
-        throw err;
-      }
-    },
-    async signUp(input) {
-      setError(null);
-      try {
-        setUser(await register(input));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "No se pudo crear la cuenta.");
-        throw err;
-      }
-    },
-    logout() {
-      void logoutLocal();
-      setUser(null);
-    },
-    async reloadUser() {
-      if (!getAccessToken()) return;
-      try {
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      loading,
+      error,
+      async signIn(email, password) {
+        setError(null);
+        try {
+          setUser(await login(email, password));
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "No se pudo iniciar sesión.");
+          throw err;
+        }
+      },
+      async signUp(input) {
+        setError(null);
+        try {
+          setUser(await register(input));
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "No se pudo crear la cuenta.");
+          throw err;
+        }
+      },
+      logout() {
+        void logoutService();
+        setUser(null);
+      },
+      async reloadUser() {
         const u = await fetchMe();
-        setUser(u);
-      } catch (err) {
-        console.error("Failed to reload user", err);
-      }
-    }
-  }), [error, loading, user]);
+        if (u) setUser(u);
+      },
+      updateUser(updates) {
+        const updated = updateSessionUser(updates);
+        if (updated) setUser(updated);
+      },
+    }),
+    [error, loading, user]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
