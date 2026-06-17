@@ -2,7 +2,6 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
-  Clock,
   FileSignature,
   Hash,
   PenLine,
@@ -14,24 +13,19 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
-import { OtpInput } from "../../shared/components/ui/OtpInput";
 import { Stepper } from "../../shared/components/ui/Stepper";
 import {
   acceptConformity,
   executeSignature,
   getSigningRequest,
-  requestOtp,
-  verifyOtp,
 } from "../../shared/services/signing.service";
-import type { OtpChallenge, SignatureResult, SigningRequest } from "../../shared/types/signing";
+import type { SignatureResult, SigningRequest } from "../../shared/types/signing";
 
-type StepIndex = 0 | 1 | 2 | 3 | 4;
+type StepIndex = 0 | 1 | 2 | 3;
 
 const STEPS = [
   "Conformidad legal",
-  "Código OTP",
   "Verificación facial",
   "Tu firma",
   "Confirmación",
@@ -122,76 +116,7 @@ function ConformityStep({
   );
 }
 
-// ─── Step 1: OTP ──────────────────────────────────────────────────────────────
-
-function OtpStep({
-  challenge,
-  onVerify,
-  onResend,
-  loading,
-}: {
-  challenge: OtpChallenge;
-  onVerify: (code: string) => void;
-  onResend: () => void;
-  loading: boolean;
-}) {
-  const [resendCount, setResendCount] = useState(0);
-  const expiresAt = new Date(challenge.expiresAt);
-  const minutesLeft = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 60000));
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-zinc-950">Verificación de identidad</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Enviamos un código de 6 dígitos a{" "}
-          <span className="font-semibold text-zinc-700">{challenge.maskedEmail}</span>
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center space-y-6">
-        <div className="grid h-16 w-16 place-items-center rounded-full bg-zinc-100 mx-auto">
-          <Shield size={28} className="text-zinc-700" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 mb-1">Ingresá el código de 6 dígitos</p>
-          <p className="text-xs text-zinc-400 flex items-center justify-center gap-1">
-            <Clock size={12} />
-            Expira en {minutesLeft} minuto{minutesLeft !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <OtpInput onComplete={onVerify} disabled={loading} error={false} />
-        {loading && <p className="text-sm text-zinc-500">Verificando código...</p>}
-      </div>
-
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
-        <p className="text-xs text-amber-700 font-medium">
-          Modo prueba — código válido:{" "}
-          <span className="font-mono font-bold tracking-widest">123456</span>
-        </p>
-      </div>
-
-      <div className="text-center">
-        <p className="text-xs text-zinc-500">
-          ¿No recibiste el código?{" "}
-          {resendCount < 3 ? (
-            <button
-              type="button"
-              onClick={() => { setResendCount((n) => n + 1); onResend(); }}
-              className="font-semibold text-zinc-900 hover:underline"
-            >
-              Reenviar
-            </button>
-          ) : (
-            <span className="text-zinc-400">Límite de reenvíos alcanzado</span>
-          )}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Step 2: Face Verification ────────────────────────────────────────────────
+// ─── Step 1: Face Verification ────────────────────────────────────────────────
 
 type FaceState = "idle" | "streaming" | "captured" | "verifying" | "verified" | "failed";
 
@@ -380,7 +305,7 @@ function FaceVerificationStep({ onVerified }: { onVerified: () => void }) {
   );
 }
 
-// ─── Step 3: Signature Pad ────────────────────────────────────────────────────
+// ─── Step 2: Signature Pad ────────────────────────────────────────────────────
 
 function SignaturePadStep({ onConfirm }: { onConfirm: (dataUrl: string) => void }) {
   const canvasRef    = useRef<HTMLCanvasElement>(null);
@@ -540,7 +465,7 @@ function SignaturePadStep({ onConfirm }: { onConfirm: (dataUrl: string) => void 
   );
 }
 
-// ─── Step 4: Success ──────────────────────────────────────────────────────────
+// ─── Step 3: Success ──────────────────────────────────────────────────────────
 
 function SuccessStep({ result }: { result: SignatureResult }) {
   return (
@@ -599,30 +524,26 @@ function SuccessStep({ result }: { result: SignatureResult }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function SigningFlowPage() {
-  const { id }       = useParams<{ id: string }>();
-  const { user }     = useAuth();
-  const navigate     = useNavigate();
-  const [request, setRequest]       = useState<SigningRequest | null>(null);
-  const [challenge, setChallenge]   = useState<OtpChallenge | null>(null);
-  const [result, setResult]         = useState<SignatureResult | null>(null);
-  const [step, setStep]             = useState<StepIndex>(0);
-  const [loading, setLoading]       = useState(false);
+  const { id }     = useParams<{ id: string }>();
+  const navigate   = useNavigate();
+  const [request, setRequest]         = useState<SigningRequest | null>(null);
+  const [result, setResult]           = useState<SignatureResult | null>(null);
+  const [step, setStep]               = useState<StepIndex>(0);
+  const [loading, setLoading]         = useState(false);
   const [initLoading, setInitLoading] = useState(true);
-  const [error, setError]           = useState<string | null>(null);
+  const [error, setError]             = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     getSigningRequest(id).then((r) => { setRequest(r); setInitLoading(false); });
   }, [id]);
 
-  // Step 0 → 1
+  // Step 0 → 1: conformidad → verificación facial
   async function handleAcceptConformity() {
     if (!request) return;
     setLoading(true); setError(null);
     try {
       await acceptConformity(request.id, "Declaro conformidad con el documento.");
-      const ch = await requestOtp(request.id, user?.email ?? "");
-      setChallenge(ch);
       setStep(1);
     } catch {
       setError("Error al registrar la conformidad. Intentá de nuevo.");
@@ -631,33 +552,12 @@ export function SigningFlowPage() {
     }
   }
 
-  // Step 1 → 2
-  async function handleVerifyOtp(code: string) {
-    if (!request) return;
-    setLoading(true); setError(null);
-    try {
-      const ok = await verifyOtp(request.id, code);
-      if (!ok) { setError("Código incorrecto."); setLoading(false); return; }
-      setStep(2);
-    } catch {
-      setError("Error al verificar el código. Intentá de nuevo.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleResendOtp() {
-    if (!request) return;
-    const ch = await requestOtp(request.id, user?.email ?? "");
-    setChallenge(ch);
-  }
-
-  // Step 2 → 3
+  // Step 1 → 2: facial verificado → pad de firma
   function handleFaceVerified() {
-    setStep(3);
+    setStep(2);
   }
 
-  // Step 3 → 4
+  // Step 2 → 3: firma confirmada → ejecutar y mostrar confirmación
   async function handleSignatureConfirmed(signatureDataUrl: string) {
     if (!request) return;
     setLoading(true); setError(null);
@@ -668,7 +568,7 @@ export function SigningFlowPage() {
         signatureData: signatureDataUrl,
       });
       setResult(sig);
-      setStep(4);
+      setStep(3);
     } catch {
       setError("Error al registrar la firma. Intentá de nuevo.");
     } finally {
@@ -754,16 +654,13 @@ export function SigningFlowPage() {
           {step === 0 && (
             <ConformityStep request={request} onAccept={handleAcceptConformity} loading={loading} />
           )}
-          {step === 1 && challenge && (
-            <OtpStep challenge={challenge} onVerify={handleVerifyOtp} onResend={handleResendOtp} loading={loading} />
-          )}
-          {step === 2 && (
+          {step === 1 && (
             <FaceVerificationStep onVerified={handleFaceVerified} />
           )}
-          {step === 3 && (
+          {step === 2 && (
             <SignaturePadStep onConfirm={handleSignatureConfirmed} />
           )}
-          {step === 4 && result && (
+          {step === 3 && result && (
             <SuccessStep result={result} />
           )}
         </div>
