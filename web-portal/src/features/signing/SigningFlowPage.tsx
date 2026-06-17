@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   FileSignature,
   Hash,
+  Printer,
   PenLine,
   RefreshCw,
   Shield,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ContractDocument } from "../admin/components/ContractRenderer";
 import { Button } from "../../shared/components/ui/Button";
 import { Stepper } from "../../shared/components/ui/Stepper";
 import {
@@ -54,23 +56,53 @@ function ConformityStep({
       </div>
 
       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 overflow-hidden">
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-3">
           <div className="flex items-center gap-2">
             <FileSignature size={16} className="text-zinc-500" />
             <p className="text-sm font-semibold text-zinc-900">{request.documentTitle}</p>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
-            <Hash size={11} />
-            <span className="font-mono">{request.sha256Hash.slice(0, 16)}...</span>
+          <div className="flex items-center gap-3">
+            {request.sha256Hash && (
+              <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                <Hash size={11} />
+                <span className="font-mono">{request.sha256Hash.slice(0, 16)}...</span>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 hover:bg-zinc-50 transition"
+            >
+              <Printer size={11} /> Imprimir / PDF
+            </button>
           </div>
         </div>
-        <div className="flex h-48 flex-col items-center justify-center text-center px-6">
-          <FileSignature size={32} className="text-zinc-300 mb-2" />
-          <p className="text-sm font-medium text-zinc-400">Vista previa del documento</p>
-          <p className="text-xs text-zinc-400 mt-1">
-            El PDF estará disponible cuando se conecte Supabase Storage
-          </p>
-        </div>
+
+        {/* Contract content — rendered from template or placeholder */}
+        {request.templateId && request.templateFields ? (
+          <div className="p-3">
+            <ContractDocument
+              templateId={request.templateId}
+              fields={request.templateFields}
+              alumno={{
+                nombre:    request.signerName,
+                email:     request.signerEmail,
+                dni:       request.templateFields.dni_firmante      ?? request.templateFields.documento_numero ?? "",
+                cuil:      request.templateFields.cuil_firmante     ?? request.templateFields.cuil_cuit        ?? "",
+                domicilio: request.templateFields.domicilio_firmante ?? "",
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex h-48 flex-col items-center justify-center text-center px-6">
+            <FileSignature size={32} className="text-zinc-300 mb-2" />
+            <p className="text-sm font-medium text-zinc-400">Vista previa del documento</p>
+            <p className="text-xs text-zinc-400 mt-1">
+              Este documento no tiene template asociado. Revisá con el administrador.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">

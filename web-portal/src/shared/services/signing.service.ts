@@ -17,19 +17,26 @@ function mapRowToSigningRequest(
     ? supabase.storage.from("contract-pdfs").getPublicUrl(latestV.storage_path as string).data.publicUrl
     : null;
 
+  const rawFields = document.template_fields as Record<string, unknown> | null;
+  const templateFields = rawFields
+    ? Object.fromEntries(Object.entries(rawFields).map(([k, v]) => [k, String(v ?? "")]))
+    : undefined;
+
   return {
-    id:                sr.id as string,
-    documentId:        sr.document_id as string,
-    documentTitle:     (document.title as string) ?? "",
-    signerEmail:       sr.signer_email as string,
-    signerName:        sr.signer_name as string,
-    status:            sr.status as SigningRequest["status"],
+    id:                 sr.id as string,
+    documentId:         sr.document_id as string,
+    documentTitle:      (document.title as string) ?? "",
+    signerEmail:        sr.signer_email as string,
+    signerName:         sr.signer_name as string,
+    status:             sr.status as SigningRequest["status"],
     acceptedConformity: (sr.accepted_conformity as boolean) ?? false,
-    sha256Hash:        (latestV.sha256_hash as string) ?? "",
-    fileName:          (latestV.file_name as string) ?? "",
+    sha256Hash:         (latestV.sha256_hash as string) ?? "",
+    fileName:           (latestV.file_name as string) ?? "",
     pdfUrl,
-    sentAt:            sr.sent_at as string,
-    expiresAt:         sr.expires_at as string,
+    sentAt:             sr.sent_at as string,
+    expiresAt:          sr.expires_at as string,
+    templateId:         (document.template_id as string) ?? undefined,
+    templateFields,
   };
 }
 

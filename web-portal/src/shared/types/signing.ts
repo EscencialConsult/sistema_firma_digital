@@ -13,6 +13,9 @@ export interface SigningRequest {
   pdfUrl: string | null;
   sentAt: string;
   expiresAt: string;
+  /** Set when the document was created from a template in the admin panel */
+  templateId?: string;
+  templateFields?: Record<string, string>;
 }
 
 export interface OtpChallenge {

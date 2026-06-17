@@ -143,5 +143,17 @@ export async function createContract(input: {
   // 3. Update status to SENT
   await supabase.from("documents").update({ status: "SENT" }).eq("id", doc.id);
 
+  // 4. Notify signer by email (Edge Function — requires deploy + RESEND_API_KEY)
+  supabase.functions
+    .invoke("send-signing-email", {
+      body: {
+        signerEmail:   input.signerEmail,
+        signerName:    input.signerName,
+        documentTitle: input.title,
+        requestId:     doc.id, // será resuelto por la SR cuando el firmante abra /signing/:srId
+      },
+    })
+    .catch((e: unknown) => console.warn("[email] Edge Function no disponible:", e));
+
   return mapDocToContract(doc as Record<string, unknown>);
 }
