@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../shared/components/ui/Button";
-import { getAllContracts } from "../../shared/services/contracts.service";
+import { getAllContracts, createContract } from "../../shared/services/contracts.service";
 import { getAllUsers } from "../../shared/services/admin.service";
 import type { Contract, ContractStatus } from "../../shared/types/contract";
 import type { AdminUserSummary } from "../../shared/types/user";
@@ -229,26 +229,33 @@ export function AdminContractsPage() {
   const step2Valid = selectedUser && alumno.nombre && alumno.email;
 
   async function handleConfirm() {
+    if (!selectedTemplate) return;
     setCreating(true);
-    // TODO:SUPABASE — insert contract + signing_request, trigger email
-    await new Promise((r) => setTimeout(r, 900));
-    const newContract: Contract = {
-      id: `c-${Date.now()}`,
-      title: selectedTemplate?.legalTitle ?? "Contrato",
-      description: `Firmante: ${alumno.nombre} (${alumno.email})`,
-      status: "SENT",
-      ownerEmail: "admin@escencial.com",
-      sha256Hash: Array.from({ length: 64 }, (_, i) => "0123456789abcdef"[i % 16]).join(""),
-      versionNumber: 1,
-      fileName: `contrato_${selectedTemplate?.id ?? "doc"}_${(alumno.nombre).toLowerCase().replace(/\s+/g,"_")}.pdf`,
-      totalSigners: 1,
-      completedSigners: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setContracts((c) => [newContract, ...c]);
-    setCreating(false);
-    setCreated(true);
+    try {
+      // Merge template fields + signer personal data so ContractDocument can render them
+      const templateFields: Record<string, string> = {
+        ...fields,
+        dni_firmante:       alumno.dni,
+        cuil_firmante:      alumno.cuil,
+        domicilio_firmante: alumno.domicilio,
+      };
+
+      const newContract = await createContract({
+        title:          selectedTemplate.legalTitle,
+        description:    `Firmante: ${alumno.nombre} (${alumno.email})`,
+        templateId:     selectedTemplate.id,
+        templateFields,
+        signerEmail:    alumno.email,
+        signerName:     alumno.nombre,
+      });
+
+      setContracts((c) => [newContract, ...c]);
+      setCreated(true);
+    } catch (err) {
+      console.error("[AdminContracts] Error al crear contrato:", err);
+    } finally {
+      setCreating(false);
+    }
   }
 
   function resetCreate() {
