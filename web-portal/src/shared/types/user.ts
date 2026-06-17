@@ -17,6 +17,7 @@ export interface AuthUser {
   verificationStatus: VerificationStatus;
   certificateStatus: CertificateStatus;
   organizationId?: string;
+  termsAcceptedAt?: string;
 }
 
 export interface UserProfile extends AuthUser {

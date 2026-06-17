@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
-import { getMyAuditEvents } from "../../shared/services/audit.service";
+import { getAllAuditEvents, getMyAuditEvents } from "../../shared/services/audit.service";
+import { useAuth } from "../../app/providers/AuthProvider";
 import type { AuditEvent } from "../../shared/types/signing";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -28,26 +29,29 @@ function formatDate(iso: string) {
 }
 
 export function AuditPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [events,  setEvents]  = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
-    getMyAuditEvents()
+    const fetcher = isAdmin ? getAllAuditEvents() : getMyAuditEvents();
+    fetcher
       .then(setEvents)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Error al cargar"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isAdmin]);
 
   return (
     <>
       <PageHeader
         eyebrow="Trazabilidad"
         title="Historial de actividad"
-        description="Cada acción relevante genera una evidencia con fecha, entidad afectada y metadata."
+        description={isAdmin ? "Todos los eventos del sistema con fecha, entidad y metadata." : "Cada acción relevante genera una evidencia con fecha, entidad afectada y metadata."}
       />
       <Card>
-        <CardHeader title="Timeline de eventos" subtitle="Eventos registrados en Supabase para tu usuario." />
+        <CardHeader title="Timeline de eventos" subtitle={isAdmin ? "Todos los eventos registrados en Supabase." : "Eventos registrados en Supabase para tu usuario."} />
         <div className="p-5 space-y-0">
           {loading && <p className="text-sm text-zinc-500">Cargando...</p>}
           {error   && <EmptyState icon={AlertCircle} title="No se pudo cargar el historial" description={error} />}

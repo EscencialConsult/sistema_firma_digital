@@ -1,6 +1,5 @@
 import {
   BadgeCheck,
-  ClipboardCheck,
   FileClock,
   FileSignature,
   Files,
@@ -17,7 +16,6 @@ export const routes: AppRoute[] = [
   { id: "dashboard", label: "Dashboard", icon: Gauge, path: "/dashboard" },
   { id: "documents", label: "Documentos", icon: Files, path: "/documents" },
   { id: "signatures", label: "Solicitudes", icon: FileSignature, path: "/signatures" },
-  { id: "conformity", label: "Conformidad", icon: ClipboardCheck, path: "/conformity" },
   { id: "identity", label: "Identidad", icon: IdCard, path: "/identity" },
   { id: "certificates", label: "Certificados", icon: KeyRound, path: "/certificates" },
   { id: "audit", label: "Auditoria", icon: FileClock, path: "/audit" },

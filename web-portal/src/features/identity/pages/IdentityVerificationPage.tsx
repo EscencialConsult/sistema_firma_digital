@@ -81,14 +81,14 @@ export function IdentityVerificationPage() {
           {identity.step === 1 ? <DocumentUploadStep files={identity.files} setFiles={identity.setFiles} /> : null}
           {identity.step === 2 ? <SelfieUploadStep files={identity.files} setFiles={identity.setFiles} /> : null}
           {identity.step === 3 ? <DeclarationStep accepted={identity.declarationAccepted} onAcceptedChange={identity.setDeclarationAccepted} /> : null}
-          {identity.step === 4 ? <ReviewStep personalData={identity.personalData} files={identity.files} declarationAccepted={identity.declarationAccepted} /> : null}
+          {identity.step === 4 ? <ReviewStep personalData={identity.personalData} files={identity.files} declarationAccepted={identity.declarationAccepted} termsAccepted={identity.termsAccepted} onTermsChange={identity.setTermsAccepted} /> : null}
 
           <div className="mt-6 flex flex-col justify-between gap-3 border-t border-zinc-100 pt-5 md:flex-row">
             <Button variant="secondary" type="button" disabled={identity.step === 0} onClick={() => identity.setStep(Math.max(0, identity.step - 1))}>
               <ArrowLeft size={16} /> Atrás
             </Button>
             {isLastStep ? (
-              <Button type="button" disabled={!identity.declarationAccepted} onClick={identity.submit}>
+              <Button type="button" disabled={!identity.declarationAccepted || !identity.termsAccepted} onClick={identity.submit}>
                 <Send size={14} /> Enviar a revisión
               </Button>
             ) : (

@@ -14,11 +14,27 @@ async function mapRowToVerification(
   const documents: KycDocument[] = await Promise.all(
     docRows.map(async (d) => {
       let previewUrl: string | undefined;
-      if (d.storage_path) {
-        const { data } = await supabase.storage
+      const storagePath = d.storage_path as string | undefined;
+      if (storagePath) {
+        const { data: signedData, error: signedError } = await supabase.storage
           .from(BUCKET)
-          .createSignedUrl(d.storage_path as string, 3600);
-        previewUrl = data?.signedUrl;
+          .createSignedUrl(storagePath, 3600);
+        if (signedData?.signedUrl) {
+          previewUrl = signedData.signedUrl;
+        } else {
+          console.error("[kyc] createSignedUrl failed", { storagePath, error: signedError });
+          // Fallback: download and create object URL
+          try {
+            const { data: blobData } = await supabase.storage
+              .from(BUCKET)
+              .download(storagePath);
+            if (blobData) {
+              previewUrl = URL.createObjectURL(blobData);
+            }
+          } catch (downloadErr) {
+            console.error("[kyc] download fallback also failed", { storagePath, error: downloadErr });
+          }
+        }
       }
       return {
         id:          d.id as string,

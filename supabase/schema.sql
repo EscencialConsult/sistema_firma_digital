@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   cuil_cuit           TEXT,
   birth_date          DATE,
   organization_id     UUID REFERENCES public.organizations(id) ON DELETE SET NULL,
+  terms_accepted_at   TIMESTAMPTZ,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );

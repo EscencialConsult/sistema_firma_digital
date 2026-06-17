@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Camera, CheckCircle2, RefreshCw, Send, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, CheckCircle2, RefreshCw, Send, ShieldCheck, Upload } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -6,6 +6,7 @@ import { Button } from "../../shared/components/ui/Button";
 import { FileUpload } from "../../shared/components/ui/FileUpload";
 import { Input } from "../../shared/components/ui/Input";
 import { Stepper } from "../../shared/components/ui/Stepper";
+import { supabase } from "../../shared/lib/supabase";
 import * as kycService from "../../shared/services/kyc.service";
 import { KYC_STEP_LABELS, type KycDocument, type KycPersonalData } from "../../shared/types/kyc";
 
@@ -142,14 +143,14 @@ function SelfieStep({
   document,
   uploading,
   onFile,
-  onSubmit,
+  onNext,
   onBack,
   loading,
 }: {
   document?: KycDocument;
   uploading: boolean;
   onFile: (f: File) => void;
-  onSubmit: () => void;
+  onNext: () => void;
   onBack: () => void;
   loading: boolean;
 }) {
@@ -319,10 +320,69 @@ function SelfieStep({
           <ArrowLeft size={15} /> Atrás
         </Button>
         <Button
-          onClick={onSubmit}
-          disabled={!document || uploading || loading || cameraOn}
+          onClick={onNext}
+          disabled={!document || uploading || cameraOn}
           className="h-11 px-8"
         >
+          Continuar <ArrowRight size={15} />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 4: Terms + submit ──────────────────────────────────────────────────
+
+const TERMS_TEXT =
+  "Acepto los Términos y Condiciones de Uso de la plataforma Firma Digital Portal, incluyendo las políticas de privacidad y tratamiento de datos personales conforme a la Ley N° 25.326.";
+
+function TermsStep({
+  accepted,
+  onAcceptedChange,
+  onSubmit,
+  onBack,
+  loading,
+}: {
+  accepted: boolean;
+  onAcceptedChange: (v: boolean) => void;
+  onSubmit: () => void;
+  onBack: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-bold text-zinc-950">
+          <ShieldCheck size={20} className="inline-block mr-2 -mt-0.5 text-zinc-500" />
+          Términos y condiciones
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Revisá y aceptá los términos para finalizar la verificación.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/30 p-5 max-h-60 overflow-y-auto text-sm text-zinc-600 leading-relaxed">
+        {TERMS_TEXT}
+      </div>
+
+      <label className="flex cursor-pointer items-start gap-3 select-none">
+        <input
+          type="checkbox"
+          className="mt-0.5 accent-zinc-900 cursor-pointer"
+          checked={accepted}
+          onChange={(e) => onAcceptedChange(e.target.checked)}
+        />
+        <span className="text-sm text-zinc-700 leading-relaxed">
+          <span className="font-semibold">Leí y acepto</span> los Términos y Condiciones
+          de Uso de la plataforma.
+        </span>
+      </label>
+
+      <div className="flex items-center justify-between">
+        <Button variant="secondary" onClick={onBack} type="button">
+          <ArrowLeft size={15} /> Atrás
+        </Button>
+        <Button onClick={onSubmit} disabled={!accepted || loading} className="h-11 px-8">
           {loading ? "Enviando..." : "Enviar verificación"}
           <Send size={15} />
         </Button>
@@ -336,7 +396,7 @@ function SelfieStep({
 export function KycWizardPage() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+  const [step, setStep] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [personalData, setPersonalData] = useState<KycPersonalData>({
     ...EMPTY_PERSONAL,
@@ -347,6 +407,7 @@ export function KycWizardPage() {
   >({});
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -418,10 +479,17 @@ export function KycWizardPage() {
   }
 
   async function handleSubmit() {
-    if (!verificationId) return;
+    if (!verificationId || !user) return;
     setError(null);
     setLoading(true);
     try {
+      if (termsAccepted && !user?.termsAcceptedAt) {
+        const { error: termsError } = await supabase
+          .from("users")
+          .update({ terms_accepted_at: new Date().toISOString() })
+          .eq("id", user.id);
+        if (termsError) throw new Error("No se pudieron guardar los términos aceptados.");
+      }
       await kycService.submitVerification(verificationId);
       updateUser({ verificationStatus: "IN_REVIEW" });
       navigate("/kyc/pending");
@@ -486,8 +554,17 @@ export function KycWizardPage() {
             document={documents["SELFIE"]}
             uploading={uploading === "SELFIE"}
             onFile={(f) => handleFileUpload("SELFIE", f)}
-            onSubmit={handleSubmit}
+            onNext={() => setStep(4)}
             onBack={() => setStep(2)}
+            loading={loading}
+          />
+        )}
+        {step === 4 && (
+          <TermsStep
+            accepted={termsAccepted}
+            onAcceptedChange={setTermsAccepted}
+            onSubmit={handleSubmit}
+            onBack={() => setStep(3)}
             loading={loading}
           />
         )}

@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, Download, FileSignature, KeyRound, Move } from "lucide-react";
+import { AlertCircle, CheckCircle, Download, FileSignature, KeyRound, Move, XCircle } from "lucide-react";
 import { KeyboardEvent, MouseEvent, useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/components/ui/Button";
 import { Card, CardHeader } from "../../shared/components/ui/Card";
@@ -48,6 +48,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
   const [signing, setSigning] = useState(false);
   const [rejected, setRejected] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const [expired, setExpired] = useState(false);
 
   // Conformity states
   const [acceptedConformity, setAcceptedConformity] = useState(false);
@@ -72,6 +73,9 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
         }
         if (res.data.status === "REJECTED") {
           setRejected(true);
+        }
+        if (res.data.status === "EXPIRED") {
+          setExpired(true);
         }
         setAcceptedConformity(res.data.accepted_conformity);
       })
@@ -316,6 +320,30 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
   const directDownloadUrl = token 
     ? `${apiBase}/signature-requests/${token}/download`
     : `${apiBase}/documents/${request?.document_id}/download`;
+
+  if (expired) {
+    return (
+      <div className="grid min-h-[400px] place-items-center p-4">
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-red-100">
+            <XCircle size={40} className="text-red-400" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-zinc-950">Este enlace venció</h1>
+            <p className="text-sm text-zinc-500 leading-relaxed">
+              El plazo para firmar este documento ha expirado. Contactá al remitente
+              para solicitar un nuevo enlace de firma.
+            </p>
+          </div>
+          {onComplete ? (
+            <Button variant="secondary" onClick={onComplete}>
+              Volver
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="text-zinc-950 space-y-6">

@@ -40,11 +40,12 @@ export interface KycVerification {
 }
 
 /** KYC Wizard step index */
-export type KycStep = 0 | 1 | 2 | 3;
+export type KycStep = 0 | 1 | 2 | 3 | 4;
 
 export const KYC_STEP_LABELS = [
   "Datos personales",
   "Frente del DNI",
   "Dorso del DNI",
   "Selfie",
+  "Terminos",
 ] as const;

@@ -52,6 +52,8 @@ export type IdentityVerification = {
   declarationAccepted?: boolean;
   declarationText?: string;
   declarationVersion?: string;
+  termsAccepted?: boolean;
+  termsAcceptedAt?: string;
   requestHash?: string;
   submittedAt?: string;
   reviewedAt?: string;

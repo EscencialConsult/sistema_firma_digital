@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { IdentityDocumentType, IdentityStatus, PersonalData } from "../types/identity.types";
 import { identityApi } from "../services/identity.api";
+import { supabase } from "../../../shared/lib/supabase";
 import { useAuth } from "../../../app/providers/AuthProvider";
 
 const initialPersonalData: PersonalData = {
@@ -30,6 +31,7 @@ export function useIdentityVerification() {
     SELFIE: null
   });
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(!!user?.termsAcceptedAt);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,13 +82,15 @@ export function useIdentityVerification() {
 
   const completion = useMemo(() => {
     const personalReady = Boolean(personalData.fullName && personalData.documentNumber && personalData.birthDate && personalData.email && personalData.phone);
-    const docsReady = Boolean(files.DOCUMENT_FRONT || files.DOCUMENT_BACK); // UI lists individual dropzones
+    const docsReady = Boolean(files.DOCUMENT_FRONT || files.DOCUMENT_BACK);
     const selfieReady = Boolean(files.SELFIE);
-    return { personalReady, docsReady, selfieReady, declarationReady: declarationAccepted };
-  }, [declarationAccepted, files, personalData]);
+    const termsReady = termsAccepted || !!user?.termsAcceptedAt;
+    return { personalReady, docsReady, selfieReady, declarationReady: declarationAccepted, termsReady };
+  }, [declarationAccepted, files, personalData, termsAccepted, user?.termsAcceptedAt]);
 
   // Dynamic step navigation with automatic backend syncing
   async function navigateToStep(targetStep: number) {
+    if (targetStep > 4) return; // step 5 is visual-only in the stepper
     setError(null);
     try {
       // 1. If moving from Personal Data (Step 0)
@@ -125,13 +129,22 @@ export function useIdentityVerification() {
   async function submit() {
     setError(null);
     try {
+      // Save terms acceptance if not already saved
+      if (!user?.termsAcceptedAt && termsAccepted) {
+        const { error: updateError } = await supabase
+          .from("users")
+          .update({ terms_accepted_at: new Date().toISOString() })
+          .eq("id", user!.id);
+
+        if (updateError) throw new Error("No se pudieron guardar los términos aceptados.");
+      }
+
       await identityApi.submit({
         declarationAccepted: true,
         declarationText: "Acepto y declaro bajo juramento que los datos e imágenes presentados son válidos y verdaderos.",
         declarationVersion: "1.0"
       });
       setStatus("IN_REVIEW");
-      setStep(4);
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "No se pudo enviar la solicitud de verificación.");
@@ -148,6 +161,7 @@ export function useIdentityVerification() {
       setRejectionReason(undefined);
       setStep(0);
       setDeclarationAccepted(false);
+      setTermsAccepted(!!user?.termsAcceptedAt);
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "No se pudo reiniciar el proceso.");
@@ -167,6 +181,8 @@ export function useIdentityVerification() {
     setFiles,
     declarationAccepted,
     setDeclarationAccepted,
+    termsAccepted,
+    setTermsAccepted,
     completion,
     loading,
     error,

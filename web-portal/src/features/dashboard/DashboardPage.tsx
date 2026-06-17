@@ -74,9 +74,9 @@ export function DashboardPage() {
     void load();
   }, [user]);
 
-  const signed = contracts.filter((c) => c.status === "SIGNED" || c.status === "COMPLETED").length;
+  const signed = contracts.filter((c) => c.status === "COMPLETED").length;
   const active = contracts.filter(
-    (c) => c.status === "SENT" || c.status === "VIEWED" || c.status === "CONFORMITY_ACCEPTED"
+    (c) => c.status === "SENT" || c.status === "VIEWED" || c.status === "CONFORMITY_ACCEPTED" || c.status === "SIGNED"
   ).length;
 
   return (

@@ -12,7 +12,7 @@ import type { AuthUser, UserRole, VerificationStatus, CertificateStatus } from "
 export async function fetchProfile(userId: string): Promise<AuthUser | null> {
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, full_name, role, verification_status, certificate_status, organization_id")
+    .select("id, email, full_name, role, verification_status, certificate_status, organization_id, terms_accepted_at")
     .eq("id", userId)
     .single();
 
@@ -26,6 +26,7 @@ export async function fetchProfile(userId: string): Promise<AuthUser | null> {
     verificationStatus: data.verification_status as VerificationStatus,
     certificateStatus:  data.certificate_status  as CertificateStatus,
     organizationId:     data.organization_id ?? undefined,
+    termsAcceptedAt:    data.terms_accepted_at ?? undefined,
   };
 }
 
@@ -33,7 +34,12 @@ export async function fetchProfile(userId: string): Promise<AuthUser | null> {
 
 export async function login(email: string, password: string): Promise<AuthUser> {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const status = (error as any)?.status;
+    if (status === 400) throw new Error("Credenciales incorrectas");
+    if (status === 500) throw new Error("Error del servidor, intentá más tarde.");
+    throw new Error(error.message);
+  }
   if (!data.user) throw new Error("No se pudo iniciar sesión.");
 
   // Fetch profile (created by trigger on signup)

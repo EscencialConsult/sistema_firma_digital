@@ -1,10 +1,10 @@
 import { Check } from "lucide-react";
 
-const steps = ["Datos personales", "Documento", "Selfie", "Declaracion", "Revision final"];
+const steps = ["Datos personales", "Documento", "Selfie", "Declaracion", "Terminos", "Revision final"];
 
 export function IdentityStepper({ currentStep, onStepChange }: { currentStep: number; onStepChange: (step: number) => void }) {
   return (
-    <div className="grid gap-3 md:grid-cols-5">
+    <div className="grid gap-3 md:grid-cols-6">
       {steps.map((step, index) => {
         const active = index === currentStep;
         const done = index < currentStep;

@@ -55,9 +55,6 @@ const ProfilePage = lazy(() =>
 const AuditPage = lazy(() =>
   import("../../features/audit/AuditPage").then((m) => ({ default: m.AuditPage }))
 );
-const ConformityPage = lazy(() =>
-  import("../../features/conformity/ConformityPage").then((m) => ({ default: m.ConformityPage }))
-);
 const IdentityPage = lazy(() =>
   import("../../features/identity/IdentityPage").then((m) => ({ default: m.IdentityPage }))
 );
@@ -100,7 +97,8 @@ const AdminAuditPage = lazy(() =>
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function DefaultRedirect() {
   const { user } = useAuth();
-  if (user?.role === "ADMIN") return <Navigate to="/admin" replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === "ADMIN") return <Navigate to="/admin" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -160,7 +158,6 @@ export function AppRouter() {
               <Route path="/contracts/:id"    element={<ContractDetailPage />} />
               <Route path="/signatures"       element={<SignaturesPage />} />
               <Route path="/documents"        element={<DocumentsPage />} />
-              <Route path="/conformity"       element={<ConformityPage />} />
               <Route path="/identity"         element={<IdentityPage />} />
               <Route path="/certificates"     element={<CertificatesPage />} />
               <Route path="/audit"            element={<AuditPage />} />
