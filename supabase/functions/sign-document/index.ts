@@ -171,7 +171,7 @@ serve(async (req) => {
       }
       const { data: sr } = await supabase
         .from("signature_requests")
-        .select("*, documents(*, document_versions(*))")
+        .select("*, documents(*, document_versions:document_versions!document_versions_document_id_fkey(*))")
         .eq("id", body.requestId)
         .eq("signer_email", user.email)
         .single();
