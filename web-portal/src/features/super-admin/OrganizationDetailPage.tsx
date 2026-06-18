@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Clock,
   Copy,
+  Link2,
   Loader2,
   Pencil,
   Save,
@@ -43,18 +44,38 @@ export function OrganizationDetailPage() {
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied]           = useState(false);
+  const [diditUnlocked, setDiditUnlocked] = useState(false);
+  const [showDiditInput, setShowDiditInput] = useState(false);
+  const [diditInput, setDiditInput]   = useState("");
+  const [diditSaving, setDiditSaving] = useState(false);
 
   function copyId() {
     if (!id) return;
     navigator.clipboard.writeText(id);
     setCopied(true);
+    setDiditUnlocked(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function saveDiditWorkflowId() {
+    if (!org || !id || !diditInput.trim()) return;
+    setDiditSaving(true);
+    setError(null);
+    try {
+      await updateOrganization(id, { diditWorkflowId: diditInput.trim() });
+      setOrg({ ...org, diditWorkflowId: diditInput.trim() });
+      setShowDiditInput(false);
+      setDiditInput("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar");
+    } finally {
+      setDiditSaving(false);
+    }
   }
 
   // edit fields
   const [name, setName]               = useState("");
-  const [diditWorkflowId, setDiditWorkflowId] = useState("");
   const [maxUsers, setMaxUsers]       = useState(50);
   const [contactEmail, setContactEmail] = useState("");
   const [logoDark, setLogoDark]       = useState<File | null>(null);
@@ -68,7 +89,6 @@ export function OrganizationDetailPage() {
         setStats(s);
         if (o) {
           setName(o.name);
-          setDiditWorkflowId(o.diditWorkflowId ?? "");
           setMaxUsers(o.maxUsers);
           setContactEmail(o.contactEmail ?? "");
         }
@@ -90,14 +110,13 @@ export function OrganizationDetailPage() {
 
       await updateOrganization(id, {
         name: name.trim(),
-        diditWorkflowId: diditWorkflowId.trim() || undefined,
         maxUsers,
         contactEmail: contactEmail.trim() || undefined,
         logoDarkUrl:  logoDarkUrl  ?? null,
         logoLightUrl: logoLightUrl ?? null,
       });
 
-      setOrg({ ...org, name: name.trim(), diditWorkflowId: diditWorkflowId.trim() || undefined, maxUsers, contactEmail: contactEmail.trim() || undefined, logoDarkUrl, logoLightUrl });
+      setOrg({ ...org, name: name.trim(), maxUsers, contactEmail: contactEmail.trim() || undefined, logoDarkUrl, logoLightUrl });
       setEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar");
@@ -212,6 +231,105 @@ export function OrganizationDetailPage() {
         </button>
       </div>
 
+      {/* Conexión DIDIT */}
+      <div className={`rounded-2xl border bg-zinc-900 p-5 space-y-4 ${!org.diditWorkflowId ? "border-amber-800/50" : "border-zinc-800"}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link2 size={14} className={org.diditWorkflowId ? "text-emerald-400" : "text-amber-400"} />
+            <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Conexión DIDIT</p>
+          </div>
+          {org.diditWorkflowId ? (
+            <span className="flex items-center gap-1 text-xs font-medium text-emerald-400">
+              <CheckCircle size={12} /> Conectado
+            </span>
+          ) : (
+            <span className="text-xs font-medium text-amber-400">Pendiente</span>
+          )}
+        </div>
+
+        {org.diditWorkflowId ? (
+          <div className="space-y-3">
+            <div>
+              <p className="text-[11px] text-zinc-500 mb-1">Workflow ID</p>
+              <p className="text-sm font-mono text-zinc-200">{org.diditWorkflowId}</p>
+            </div>
+            {!showDiditInput ? (
+              <button
+                type="button"
+                onClick={() => { setDiditInput(org.diditWorkflowId ?? ""); setShowDiditInput(true); }}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition underline underline-offset-2"
+              >
+                Cambiar Workflow ID
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={diditInput}
+                  onChange={(e) => setDiditInput(e.target.value)}
+                  placeholder="wf_xxxxxxxxxxxxxxxx"
+                  className="flex-1 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white font-mono placeholder-zinc-600 focus:border-zinc-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={saveDiditWorkflowId}
+                  disabled={diditSaving || !diditInput.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-zinc-100 transition disabled:opacity-40"
+                >
+                  {diditSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                  Guardar
+                </button>
+                <button type="button" onClick={() => setShowDiditInput(false)} className="px-3 text-xs text-zinc-500 hover:text-white transition">
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </div>
+        ) : showDiditInput ? (
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-400">Pegá el Workflow ID que obtuviste en tu cuenta de DIDIT.</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={diditInput}
+                onChange={(e) => setDiditInput(e.target.value)}
+                placeholder="wf_xxxxxxxxxxxxxxxx"
+                autoFocus
+                className="flex-1 rounded-xl border border-amber-700 bg-zinc-800 px-4 py-2.5 text-sm text-white font-mono placeholder-zinc-600 focus:border-amber-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={saveDiditWorkflowId}
+                disabled={diditSaving || !diditInput.trim()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-zinc-100 transition disabled:opacity-40"
+              >
+                {diditSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                Guardar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Copiá el ID de organización de arriba, creá la empresa en tu cuenta de DIDIT usando ese ID en "Datos del proveedor", y volvé acá con el Workflow ID.
+            </p>
+            <button
+              type="button"
+              disabled={!diditUnlocked}
+              onClick={() => setShowDiditInput(true)}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-semibold transition ${
+                diditUnlocked
+                  ? "border-amber-700 text-amber-400 hover:bg-amber-950/30 cursor-pointer"
+                  : "border-zinc-800 text-zinc-600 cursor-not-allowed"
+              }`}
+            >
+              <Link2 size={14} />
+              {diditUnlocked ? "Ingresar Workflow ID" : "Copiá el ID primero para continuar"}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Info / Edit form */}
       <form onSubmit={handleSave} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
         <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Datos de la organización</p>
@@ -258,21 +376,6 @@ export function OrganizationDetailPage() {
               <p className="text-sm text-zinc-200">{org.contactEmail ?? "—"}</p>
             )}
           </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-semibold text-zinc-400">DIDIT Workflow ID</label>
-          {editing ? (
-            <input
-              type="text"
-              value={diditWorkflowId}
-              onChange={(e) => setDiditWorkflowId(e.target.value)}
-              placeholder="wf_xxxxxxxxxxxxxxxx"
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white font-mono placeholder-zinc-600 focus:border-zinc-500 focus:outline-none"
-            />
-          ) : (
-            <p className="text-sm font-mono text-zinc-200">{org.diditWorkflowId ?? "—"}</p>
-          )}
         </div>
 
         {editing && (
