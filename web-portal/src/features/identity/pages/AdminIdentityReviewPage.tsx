@@ -5,46 +5,41 @@ import { Button } from "../../../shared/components/ui/Button";
 import { EmptyState } from "../../../shared/components/ui/EmptyState";
 import { PageHeader } from "../../../shared/components/ui/PageHeader";
 import { useApiResource } from "../../../shared/hooks/useApiResource";
-import { getAccessToken } from "../../../shared/services/apiClient";
+import { supabase } from "../../../shared/lib/supabase";
 import { AdminVerificationCard } from "../components/AdminVerificationCard";
-import type { IdentityVerification } from "../types/identity.types";
+import type { IdentityDocument, IdentityVerification } from "../types/identity.types";
 
-function SecureImage({ src, alt, className }: { src: string; alt?: string; className?: string }) {
+const IDENTITY_BUCKET = "identity-documents";
+
+function DocumentImage({ document, alt, className }: { document: IdentityDocument; alt?: string; className?: string }) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    let objectUrl: string | null = null;
-    const token = getAccessToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    fetch(src, { headers, credentials: "include" })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load image");
-        return res.blob();
-      })
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        objectUrl = url;
-        setImgSrc(url);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
+    let cancelled = false;
+    async function load() {
+      if (!document.storagePath) {
         setError(true);
         setLoading(false);
-      });
-
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
+        return;
       }
-    };
-  }, [src]);
+      const { data, error: signedError } = await supabase.storage
+        .from(IDENTITY_BUCKET)
+        .createSignedUrl(document.storagePath, 3600);
+      if (cancelled) return;
+      if (signedError || !data?.signedUrl) {
+        console.error("Error creating signed URL:", signedError);
+        setError(true);
+        setLoading(false);
+        return;
+      }
+      setImgSrc(data.signedUrl);
+      setLoading(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [document.storagePath]);
 
   if (loading) {
     return (
@@ -71,8 +66,7 @@ interface IdentityReviewModalProps {
   onApprove: () => void;
   onReject: () => void;
   reviewing: boolean;
-  apiBase: string;
-  setLightboxUrl: (url: string) => void;
+  setLightboxDocument: (doc: IdentityDocument) => void;
   setLightboxTitle: (title: string) => void;
 }
 
@@ -82,8 +76,7 @@ function IdentityReviewModal({
   onApprove,
   onReject,
   reviewing,
-  apiBase,
-  setLightboxUrl,
+  setLightboxDocument,
   setLightboxTitle
 }: IdentityReviewModalProps) {
   return (
@@ -153,20 +146,18 @@ function IdentityReviewModal({
                     );
                   }
 
-                  const imgSrc = `${apiBase}/admin/identity-verifications/${verification.id}/documents/${document.id}`;
-
                   return (
                     <button
                       key={type} 
                       className="group relative aspect-square rounded-2xl border border-zinc-200/50 overflow-hidden bg-zinc-50 cursor-pointer shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)] hover-lift transition-all focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2"
                       type="button"
                       onClick={() => {
-                        setLightboxUrl(imgSrc);
+                        setLightboxDocument(document);
                         setLightboxTitle(`${verification.fullName || "Validacion"} - ${label}`);
                       }}
                     >
-                      <SecureImage 
-                        src={imgSrc} 
+                      <DocumentImage 
+                        document={document}
                         alt={label} 
                         className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                       />
@@ -251,7 +242,7 @@ export function AdminIdentityReviewPage() {
   const [approvingVerification, setApprovingVerification] = useState<IdentityVerification | null>(null);
 
   // Lightbox modal states
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxDocument, setLightboxDocument] = useState<IdentityDocument | null>(null);
   const [lightboxTitle, setLightboxTitle] = useState("");
 
   const selected = data?.find((verification) => verification.id === selectedId) ?? null;
@@ -297,8 +288,6 @@ export function AdminIdentityReviewPage() {
     }
   }
 
-  const apiBase = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:4000/api";
-
   return (
     <>
       <PageHeader
@@ -334,14 +323,13 @@ export function AdminIdentityReviewPage() {
           onApprove={() => startApprove(selected)}
           onReject={() => startReject(selected)}
           reviewing={reviewing}
-          apiBase={apiBase}
-          setLightboxUrl={setLightboxUrl}
+          setLightboxDocument={setLightboxDocument}
           setLightboxTitle={setLightboxTitle}
         />
       ) : null}
 
       {/* Lightbox Modal */}
-      {lightboxUrl ? (
+      {lightboxDocument ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/80 p-4 backdrop-blur-[2px]">
           <div className="relative max-w-2xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <header className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 bg-white">
@@ -351,20 +339,20 @@ export function AdminIdentityReviewPage() {
               <button
                 type="button"
                 className="rounded-xl p-1.5 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 active:scale-95 transition-all"
-                onClick={() => setLightboxUrl(null)}
+                onClick={() => setLightboxDocument(null)}
               >
                 <X size={18} />
               </button>
             </header>
             <div className="p-6 overflow-auto flex-1 flex justify-center bg-zinc-50">
-              <SecureImage 
-                src={lightboxUrl} 
+              <DocumentImage 
+                document={lightboxDocument}
                 alt={lightboxTitle} 
                 className="max-h-[60vh] object-contain rounded-lg border border-zinc-200/50 shadow-md" 
               />
             </div>
             <footer className="flex justify-end border-t border-zinc-100 px-6 py-4 bg-zinc-50/50">
-              <Button variant="secondary" onClick={() => setLightboxUrl(null)}>Cerrar Previsualización</Button>
+              <Button variant="secondary" onClick={() => setLightboxDocument(null)}>Cerrar Previsualización</Button>
             </footer>
           </div>
         </div>

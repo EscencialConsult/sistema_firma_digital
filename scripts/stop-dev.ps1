@@ -6,7 +6,7 @@ $processes = Get-CimInstance Win32_Process -Filter "name = 'node.exe'" |
   Where-Object {
     $_.CommandLine -and
     $_.CommandLine.Contains($rootText) -and
-    ($_.CommandLine.Contains("web-backend") -or $_.CommandLine.Contains("web-portal"))
+    ($_.CommandLine.Contains("web-portal") -or $_.CommandLine.Contains("local-agent"))
   }
 
 if (-not $processes) {

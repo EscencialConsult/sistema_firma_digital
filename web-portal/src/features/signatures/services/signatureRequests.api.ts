@@ -1,4 +1,4 @@
-import { apiClient } from "../../../shared/services/apiClient";
+import { supabase } from "../../../shared/lib/supabase";
 
 export type SignatureRequestRecord = {
   id: string;
@@ -13,7 +13,11 @@ export type SignatureRequestRecord = {
 
 export const signatureRequestsApi = {
   async listMine() {
-    const response = await apiClient.get<{ data: SignatureRequestRecord[] }>("/signature-requests");
-    return response.data;
+    const { data, error } = await supabase
+      .from("signature_requests")
+      .select("*")
+      .order("sent_at", { ascending: false });
+    if (error) throw error;
+    return data as SignatureRequestRecord[];
   }
 };

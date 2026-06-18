@@ -18,6 +18,8 @@ export function LoginPage() {
     try {
       await signIn(email, password);
       navigate("/");
+    } catch {
+      // AuthProvider exposes the user-facing error.
     } finally {
       setLoading(false);
     }

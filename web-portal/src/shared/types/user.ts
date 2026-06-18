@@ -25,6 +25,7 @@ export interface UserProfile extends AuthUser {
   address?: string;
   documentNumber?: string;
   cuilCuit?: string;
+  birthDate?: string;
   createdAt: string;
 }
 

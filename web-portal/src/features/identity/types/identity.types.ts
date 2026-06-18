@@ -25,6 +25,8 @@ export type IdentityDocument = {
   fileSize: number;
   checksumSha256: string;
   uploadedAt: string;
+  storagePath?: string;
+  previewUrl?: string;
 };
 
 export type IdentityAuditLog = {

@@ -3,7 +3,7 @@ import { KeyboardEvent, MouseEvent, useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/components/ui/Button";
 import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
-import { apiClient, getAccessToken } from "../../shared/services/apiClient";
+import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../app/providers/AuthProvider";
 
 
@@ -14,13 +14,21 @@ interface SignatureRequestDetails {
   signer_name: string;
   status: string;
   accepted_conformity: boolean;
-  document: {
+  pdfUrl?: string;
+  document?: {
     title: string;
+    document_versions?: Array<{ storage_path: string }>;
   };
-  current_version: {
+  current_version?: {
     file_name: string;
     sha256_hash: string;
+    storage_path?: string;
   };
+  documents?: Array<{
+    id: string;
+    title: string;
+    document_versions?: Array<{ storage_path: string; sha256_hash: string; file_name: string }>;
+  }>;
 }
 
 export function PublicSigningPage({ token, id, onComplete }: { token?: string; id?: string; onComplete?: () => void }) {
@@ -60,67 +68,75 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
   const isDragging = useRef(false);
   const dragStartOffset = useRef({ x: 0, y: 0 });
 
-  const apiBase = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:4000/api";
-
   // Fetch signature request details
   useEffect(() => {
-    const fetchUrl = token ? `/signature-requests/${token}` : `/signature-requests/id/${id}`;
-    apiClient.get<{ data: SignatureRequestDetails }>(fetchUrl)
-      .then((res) => {
-        setRequest(res.data);
-        if (res.data.status === "SIGNED") {
-          setSigned(true);
+    async function fetchRequest() {
+      try {
+        let data;
+        if (token) {
+          const { data: rpcData } = await supabase.rpc("get_signature_request_by_token", { p_token: token });
+          data = rpcData;
+        } else if (id) {
+          const { data: sr } = await supabase
+            .from("signature_requests")
+            .select("*, documents(*, document_versions(*))")
+            .eq("id", id)
+            .single();
+          data = sr;
         }
-        if (res.data.status === "REJECTED") {
-          setRejected(true);
-        }
-        if (res.data.status === "EXPIRED") {
-          setExpired(true);
-        }
-        setAcceptedConformity(res.data.accepted_conformity);
-      })
-      .catch((err) => {
-        console.error(err);
+        if (!data) throw new Error("Not found");
+        setRequest(data as unknown as SignatureRequestDetails);
+        const status = (data as Record<string, unknown>).status as string;
+        if (status === "SIGNED") setSigned(true);
+        if (status === "REJECTED") setRejected(true);
+        if (status === "EXPIRED") setExpired(true);
+        setAcceptedConformity((data as Record<string, unknown>).accepted_conformity as boolean);
+      } catch {
         setError("La solicitud de firma no existe, ha expirado o no tienes permisos.");
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    }
+    void fetchRequest();
   }, [token, id]);
 
-  // Load PDF as blob to support authorization headers in iframe
+  // Load PDF via Supabase Storage signed URL
   useEffect(() => {
     if (!request) return;
     let objectUrl: string | null = null;
-    const downloadUrl = token 
-      ? `${apiBase}/signature-requests/${token}/download`
-      : `${apiBase}/documents/${request.document_id}/download`;
 
-    const headers: Record<string, string> = {};
-    const jwt = getAccessToken();
-    if (!token && jwt) {
-      headers["Authorization"] = `Bearer ${jwt}`;
-    }
+    async function loadPdf() {
+      try {
+        if (!token && !id) return;
+        const req = request as any;
+        const storagePath = (req.pdfUrl as string) ?? req.document?.document_versions?.[0]?.storage_path;
+        if (!storagePath) throw new Error("No storage path");
 
-    fetch(downloadUrl, { headers, credentials: "include" })
-      .then((res) => {
-        if (!res.ok) throw new Error("No se pudo cargar el archivo PDF.");
-        return res.blob();
-      })
-      .then((blob) => {
+        const { data: signedData } = await supabase.storage
+          .from("contract-pdfs")
+          .createSignedUrl(storagePath, 3600);
+
+        if (!signedData?.signedUrl) throw new Error("No se pudo generar URL de descarga");
+
+        const resp = await fetch(signedData.signedUrl);
+        if (!resp.ok) throw new Error("No se pudo cargar el archivo PDF.");
+        const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         objectUrl = url;
         setPdfUrl(url);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error(err);
         setError("Error al cargar la previsualización del documento PDF.");
-      });
+      }
+    }
+    void loadPdf();
 
     return () => {
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [apiBase, request, token, id]);
+  }, [request, token, id]);
 
   // Drag handlers
   function handleMouseDown(e: MouseEvent<HTMLDivElement>) {
@@ -208,11 +224,24 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     if (!request) return;
     setAcceptingConformity(true);
     setError(null);
-    const conformityUrl = token ? `/signature-requests/${token}/conformity` : `/signature-requests/id/${id}/conformity`;
     try {
-      await apiClient.post(conformityUrl, {
-        acceptanceText: "Declaro haber leido y aceptado el contenido del documento, prestando conformidad de manera libre, voluntaria e informada."
-      });
+      if (token) {
+        await supabase.rpc("accept_conformity_by_token", {
+          p_token: token,
+          p_acceptance_text: "Declaro haber leido y aceptado el contenido del documento, prestando conformidad de manera libre, voluntaria e informada.",
+          p_ip_address: null,
+          p_user_agent: navigator.userAgent,
+        });
+      } else if (id) {
+        await supabase.from("conformity_acceptances").insert({
+          signature_request_id: id,
+          acceptance_text: "Declaro haber leido y aceptado el contenido del documento, prestando conformidad de manera libre, voluntaria e informada.",
+          user_agent: navigator.userAgent,
+        });
+        await supabase.from("signature_requests")
+          .update({ status: "CONFORMITY_ACCEPTED", accepted_conformity: true })
+          .eq("id", id);
+      }
       setAcceptedConformity(true);
     } catch (err: any) {
       console.error(err);
@@ -238,20 +267,15 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     const pdfW = Math.round((size.width / containerW) * pdfPageW);
     const pdfH = Math.round((size.height / containerH) * pdfPageH);
 
-    const signUrl = token ? `/signature-requests/${token}/sign` : `/signature-requests/id/${id}/sign`;
-
     try {
-      await apiClient.post(signUrl, {
-        acceptedTerms: true,
-        signatureType: "DIGITAL_CERTIFICATE",
-        metadata: {
-          x: pdfX,
-          y: pdfY,
-          width: pdfW,
-          height: pdfH,
-          page: page
-        }
+      const { error: signError } = await supabase.functions.invoke("sign-document", {
+        body: {
+          ...(token ? { token } : { requestId: id }),
+          otp: "000000", // OTP será manejado en flujo separado
+          metadata: { x: pdfX, y: pdfY, width: pdfW, height: pdfH, page },
+        },
       });
+      if (signError) throw new Error(signError.message);
       setSigned(true);
       if (onComplete) {
         onComplete();
@@ -271,10 +295,15 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     
     setRejecting(true);
     setError(null);
-    const rejectUrl = token ? `/signature-requests/${token}/reject` : `/signature-requests/id/${id}/reject`;
-    
+
     try {
-      await apiClient.post(rejectUrl, { reason });
+      if (token) {
+        await supabase.rpc("reject_signature_request", { p_token: token });
+      } else if (id) {
+        await supabase.from("signature_requests")
+          .update({ status: "REJECTED" })
+          .eq("id", id);
+      }
       setRejected(true);
       alert("La solicitud de firma ha sido rechazada.");
       if (onComplete) {
@@ -317,9 +346,12 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     );
   }
 
-  const directDownloadUrl = token 
-    ? `${apiBase}/signature-requests/${token}/download`
-    : `${apiBase}/documents/${request?.document_id}/download`;
+  async function getDownloadUrl() {
+    const storagePath = (request as any)?.current_version?.storage_path as string;
+    if (!storagePath) return null;
+    const { data } = await supabase.storage.from("contract-pdfs").createSignedUrl(storagePath, 3600);
+    return data?.signedUrl ?? null;
+  }
 
   if (expired) {
     return (
@@ -349,7 +381,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     <div className="text-zinc-950 space-y-6">
       <PageHeader
         eyebrow="Portal de Firma Seguro"
-        title={request?.document.title || "Firma de documento"}
+        title={request?.document?.title || request?.documents?.[0]?.title || "Firma de documento"}
         description={`Solicitado a ${request?.signer_email} · Trazabilidad completa por hash SHA-256.`}
         action={
           signed ? (
@@ -463,11 +495,11 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
               </div>
               <div className="flex justify-between border-b border-zinc-100 pb-2">
                 <span className="text-zinc-500">Archivo</span>
-                <span className="font-semibold text-zinc-800 truncate max-w-[200px]" title={request?.current_version.file_name}>{request?.current_version.file_name}</span>
+                <span className="font-semibold text-zinc-800 truncate max-w-[200px]" title={request?.current_version?.file_name ?? ""}>{request?.current_version?.file_name ?? "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500">Hash original</span>
-                <span className="font-mono text-xs text-zinc-400" title={request?.current_version.sha256_hash}>{request?.current_version.sha256_hash.slice(0, 16)}...</span>
+                <span className="font-mono text-xs text-zinc-400" title={request?.current_version?.sha256_hash ?? ""}>{(request?.current_version?.sha256_hash ?? "").slice(0, 16)}...</span>
               </div>
             </div>
           </Card>
@@ -649,26 +681,10 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
 
                   <Button 
                     className="w-full justify-center"
-                    onClick={() => {
-                      if (token) {
-                        window.open(directDownloadUrl);
-                      } else {
-                        // For logged-in users, download with auth header using direct window download helper or fetch
-                        const jwt = getAccessToken();
-                        fetch(directDownloadUrl, {
-                          credentials: "include",
-                          headers: { Authorization: `Bearer ${jwt}` }
-                        })
-                          .then(res => res.blob())
-                          .then(blob => {
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = request?.current_version.file_name || "signed_document.pdf";
-                            a.click();
-                            URL.revokeObjectURL(url);
-                          });
-                      }
+                    onClick={async () => {
+                      const signedUrl = await getDownloadUrl();
+                      if (!signedUrl) return;
+                      window.open(signedUrl);
                     }}
                   >
                     <Download size={16} /> Descargar PDF firmado

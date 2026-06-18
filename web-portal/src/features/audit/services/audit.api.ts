@@ -1,4 +1,4 @@
-import { apiClient } from "../../../shared/services/apiClient";
+import { supabase } from "../../../shared/lib/supabase";
 
 export type AuditRecord = {
   id: string;
@@ -11,7 +11,11 @@ export type AuditRecord = {
 
 export const auditApi = {
   async mine() {
-    const response = await apiClient.get<{ data: AuditRecord[] }>("/audit/me");
-    return response.data;
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data as AuditRecord[];
   }
 };

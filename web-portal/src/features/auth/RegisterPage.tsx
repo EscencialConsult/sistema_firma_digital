@@ -30,6 +30,8 @@ export function RegisterPage() {
     try {
       await signUp({ fullName, email, password });
       navigate("/kyc");
+    } catch {
+      // AuthProvider exposes the user-facing error.
     } finally {
       setLoading(false);
     }

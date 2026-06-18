@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (event, session) => {
         try {
           if (session?.user) {
-            const profile = await fetchProfile(session.user.id);
+            const profile = await fetchProfile(session.user.id, session.user);
             setUser(profile);
           } else {
             setUser(null);
@@ -67,7 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async signIn(email, password) {
         setError(null);
         try {
-          setUser(await login(email, password));
+          const user = await login(email, password);
+          setUser(user);
         } catch (err) {
           const message = err instanceof Error
             ? err.message
@@ -82,7 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async signUp(input) {
         setError(null);
         try {
-          setUser(await register(input));
+          const user = await register(input);
+          setUser(user);
         } catch (err) {
           setError(err instanceof Error ? err.message : "No se pudo crear la cuenta.");
           throw err;

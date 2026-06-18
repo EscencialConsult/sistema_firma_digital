@@ -174,8 +174,10 @@ CREATE TABLE IF NOT EXISTS public.signature_requests (
   signer_dni          TEXT,
   signer_cuil         TEXT,
   signer_domicilio    TEXT,
+  token               TEXT UNIQUE NOT NULL,
   status              public.signer_status NOT NULL DEFAULT 'PENDING',
   accepted_conformity BOOLEAN NOT NULL DEFAULT false,
+  signing_order       INTEGER DEFAULT 0,
   sent_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
   viewed_at           TIMESTAMPTZ,
   signed_at           TIMESTAMPTZ,
@@ -262,6 +264,7 @@ CREATE INDEX IF NOT EXISTS idx_sig_req_signer_email     ON public.signature_requ
 CREATE INDEX IF NOT EXISTS idx_sig_req_signer_id        ON public.signature_requests(signer_id);
 CREATE INDEX IF NOT EXISTS idx_sig_req_status           ON public.signature_requests(status);
 CREATE INDEX IF NOT EXISTS idx_sig_req_expires          ON public.signature_requests(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sig_req_token            ON public.signature_requests(token);
 
 CREATE INDEX IF NOT EXISTS idx_signatures_document      ON public.signatures(document_id);
 CREATE INDEX IF NOT EXISTS idx_signatures_signer_email  ON public.signatures(signer_email);
@@ -445,6 +448,192 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_admin_stats() TO authenticated;
+
+
+-- ────────────────────────────────────────────────────────────
+-- RPC: get_my_kyc_status()
+-- Uso: supabase.rpc('get_my_kyc_status')
+-- ────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.get_my_kyc_status()
+RETURNS JSON
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+  v_result JSON;
+BEGIN
+  SELECT row_to_json(iv.*) INTO v_result
+  FROM public.identity_verifications iv
+  WHERE iv.user_id = auth.uid()
+  ORDER BY iv.created_at DESC
+  LIMIT 1;
+
+  RETURN v_result;
+END; $$;
+
+GRANT EXECUTE ON FUNCTION public.get_my_kyc_status() TO authenticated;
+
+
+-- ────────────────────────────────────────────────────────────
+-- RPC: FUNCIONES DE ACCESO PÚBLICO POR TOKEN
+-- Se ejecutan con SECURITY DEFINER para leer signature_requests
+-- sin requerir autenticación (el token es el mecanismo de auth).
+-- ────────────────────────────────────────────────────────────
+
+-- Obtener solicitud de firma por token público
+CREATE OR REPLACE FUNCTION public.get_signature_request_by_token(p_token TEXT)
+RETURNS JSON
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+  v_result JSON;
+BEGIN
+  SELECT json_build_object(
+    'id', sr.id,
+    'documentId', sr.document_id,
+    'signerEmail', sr.signer_email,
+    'signerName', sr.signer_name,
+    'status', sr.status,
+    'acceptedConformity', sr.accepted_conformity,
+    'expiresAt', sr.expires_at,
+    'documentTitle', d.title,
+    'documentDescription', d.description,
+    'templateId', d.template_id,
+    'templateFields', d.template_fields,
+    'pdfUrl', dv.storage_path,
+    'sha256Hash', dv.sha256_hash,
+    'fileName', dv.file_name
+  )
+  FROM public.signature_requests sr
+  JOIN public.documents d ON d.id = sr.document_id
+  LEFT JOIN public.document_versions dv ON dv.id = d.current_version_id
+  WHERE sr.token = p_token AND sr.expires_at > now()
+  INTO v_result;
+
+  RETURN v_result;
+END; $$;
+
+GRANT EXECUTE ON FUNCTION public.get_signature_request_by_token TO anon, authenticated;
+
+-- Marcar solicitud como vista
+CREATE OR REPLACE FUNCTION public.view_signature_request(p_token TEXT)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.signature_requests
+  SET status = 'VIEWED', viewed_at = COALESCE(viewed_at, now())
+  WHERE token = p_token AND status = 'PENDING';
+
+  INSERT INTO public.audit_logs (action, entity_type, entity_id, metadata)
+  VALUES ('DOCUMENT_VIEWED', 'signature_request',
+    (SELECT id FROM public.signature_requests WHERE token = p_token),
+    json_build_object('token', p_token));
+END; $$;
+
+GRANT EXECUTE ON FUNCTION public.view_signature_request TO anon, authenticated;
+
+-- Aceptar conformidad por token
+CREATE OR REPLACE FUNCTION public.accept_conformity_by_token(
+  p_token TEXT,
+  p_acceptance_text TEXT,
+  p_ip_address TEXT DEFAULT NULL,
+  p_user_agent TEXT DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+  v_sr public.signature_requests;
+BEGIN
+  SELECT * INTO v_sr FROM public.signature_requests WHERE token = p_token;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Solicitud de firma no encontrada';
+  END IF;
+
+  INSERT INTO public.conformity_acceptances
+    (signature_request_id, acceptance_text, ip_address, user_agent)
+  VALUES (v_sr.id, p_acceptance_text, p_ip_address, p_user_agent);
+
+  UPDATE public.signature_requests
+  SET status = 'CONFORMITY_ACCEPTED', accepted_conformity = true
+  WHERE id = v_sr.id;
+
+  INSERT INTO public.audit_logs (action, entity_type, entity_id, metadata)
+  VALUES ('CONFORMITY_ACCEPTED', 'signature_request', v_sr.id,
+    json_build_object('token', p_token, 'email', v_sr.signer_email));
+END; $$;
+
+GRANT EXECUTE ON FUNCTION public.accept_conformity_by_token TO anon, authenticated;
+
+-- Rechazar solicitud por token
+CREATE OR REPLACE FUNCTION public.reject_signature_request(p_token TEXT)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.signature_requests
+  SET status = 'REJECTED'
+  WHERE token = p_token AND status NOT IN ('SIGNED', 'REJECTED');
+
+  INSERT INTO public.audit_logs (action, entity_type, entity_id, metadata)
+  VALUES ('DOCUMENT_REJECTED', 'signature_request',
+    (SELECT id FROM public.signature_requests WHERE token = p_token),
+    json_build_object('token', p_token));
+END; $$;
+
+GRANT EXECUTE ON FUNCTION public.reject_signature_request TO anon, authenticated;
+
+
+-- ────────────────────────────────────────────────────────────
+-- RPC: FUNCIONES DE OTP (solo accesibles via Edge Functions)
+-- ────────────────────────────────────────────────────────────
+
+-- Generar OTP de 6 dígitos
+CREATE OR REPLACE FUNCTION public.generate_otp(p_signature_request_id UUID)
+RETURNS TEXT
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+  v_code TEXT;
+  v_hash TEXT;
+BEGIN
+  v_code := lpad(floor(random() * 1000000)::text, 6, '0');
+  v_hash := crypt(v_code, gen_salt('bf'));
+
+  INSERT INTO public.otp_challenges (signature_request_id, code_hash)
+  VALUES (p_signature_request_id, v_hash);
+
+  RETURN v_code;
+END; $$;
+
+-- Verificar OTP
+CREATE OR REPLACE FUNCTION public.verify_otp(p_signature_request_id UUID, p_code TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+  v_challenge public.otp_challenges;
+BEGIN
+  SELECT * INTO v_challenge FROM public.otp_challenges
+  WHERE signature_request_id = p_signature_request_id
+    AND used = false
+    AND expires_at > now()
+  ORDER BY created_at DESC
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  IF crypt(p_code, v_challenge.code_hash) = v_challenge.code_hash THEN
+    UPDATE public.otp_challenges SET used = true WHERE id = v_challenge.id;
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END; $$;
 
 
 -- ────────────────────────────────────────────────────────────

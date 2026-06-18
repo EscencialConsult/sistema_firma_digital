@@ -1,14 +1,14 @@
-import { ArrowLeft, ArrowRight, Camera, CheckCircle2, RefreshCw, Send, ShieldCheck, Upload } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
-import { FileUpload } from "../../shared/components/ui/FileUpload";
 import { Input } from "../../shared/components/ui/Input";
 import { Stepper } from "../../shared/components/ui/Stepper";
 import { supabase } from "../../shared/lib/supabase";
+import { updateSessionUser } from "../../shared/services/auth.service";
 import * as kycService from "../../shared/services/kyc.service";
-import { KYC_STEP_LABELS, type KycDocument, type KycPersonalData } from "../../shared/types/kyc";
+import { KYC_STEP_LABELS, type KycPersonalData, type KycVerification } from "../../shared/types/kyc";
 
 const EMPTY_PERSONAL: KycPersonalData = {
   fullName: "",
@@ -22,6 +22,49 @@ const EMPTY_PERSONAL: KycPersonalData = {
   province: "",
   country: "Argentina",
 };
+
+function personalDataFromVerification(
+  verification: KycVerification,
+  fallbackFullName: string
+): KycPersonalData | null {
+  if (verification.personalData) return verification.personalData;
+  if (
+    !verification.fullName &&
+    !verification.documentNumber &&
+    !verification.birthDate &&
+    !verification.phone
+  ) {
+    return null;
+  }
+
+  return {
+    fullName: verification.fullName ?? fallbackFullName,
+    documentType: verification.documentType ?? "DNI",
+    documentNumber: verification.documentNumber ?? "",
+    cuilCuit: verification.cuitCuil ?? "",
+    birthDate: verification.birthDate ?? "",
+    phone: verification.phone ?? "",
+    address: verification.address ?? "",
+    city: verification.city ?? "",
+    province: verification.province ?? "",
+    country: verification.country ?? "Argentina",
+  };
+}
+
+async function syncSessionVerificationProfile(
+  verification: KycVerification,
+  verificationStatus: KycVerification["status"]
+) {
+  await updateSessionUser({
+    verificationStatus,
+    fullName: verification.fullName ?? undefined,
+    documentNumber: verification.documentNumber ?? undefined,
+    cuilCuit: verification.cuitCuil ?? undefined,
+    birthDate: verification.birthDate ?? undefined,
+    phone: verification.phone ?? undefined,
+    address: verification.address ?? undefined,
+  });
+}
 
 // ─── Step 0: Personal data ───────────────────────────────────────────────────
 
@@ -83,310 +126,96 @@ function PersonalDataStep({
   );
 }
 
-// ─── Step 1 & 2: Document upload ─────────────────────────────────────────────
+// ─── Step 1: Provider verification (Didit iframe) ─────────────────────────────
 
-function DocumentStep({
-  title,
-  description,
-  document,
-  uploading,
-  onFile,
-  onNext,
+function ProviderVerificationStep({
+  verification,
   onBack,
+  onExpired,
 }: {
-  title: string;
-  description: string;
-  document?: KycDocument;
-  uploading: boolean;
-  onFile: (f: File) => void;
-  onNext: () => void;
+  verification: KycVerification;
   onBack: () => void;
+  onExpired: () => void;
 }) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-zinc-950">{title}</h2>
-        <p className="mt-1 text-sm text-zinc-500">{description}</p>
-      </div>
+  const navigate = useNavigate();
+  const { updateUser } = useAuth();
+  const [status, setStatus] = useState<string>(verification.status);
 
-      <FileUpload
-        label={title}
-        hint="Asegurate de que la imagen sea nítida y legible"
-        onFile={onFile}
-        preview={document?.previewUrl}
-        loading={uploading}
-        disabled={uploading}
-      />
-
-      {document && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
-          <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
-          {document.fileName} cargado correctamente
-        </div>
-      )}
-
-      <div className="flex items-center justify-between">
-        <Button variant="secondary" onClick={onBack} type="button">
-          <ArrowLeft size={15} /> Atrás
-        </Button>
-        <Button onClick={onNext} disabled={!document || uploading} className="h-11 px-8">
-          Continuar <ArrowRight size={15} />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Step 3: Selfie con cámara en vivo ───────────────────────────────────────
-
-function SelfieStep({
-  document,
-  uploading,
-  onFile,
-  onNext,
-  onBack,
-  loading,
-}: {
-  document?: KycDocument;
-  uploading: boolean;
-  onFile: (f: File) => void;
-  onNext: () => void;
-  onBack: () => void;
-  loading: boolean;
-}) {
-  const videoRef  = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const [cameraOn,    setCameraOn]    = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-
-  async function startCamera() {
-    setCameraError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setCameraOn(true);
-    } catch {
-      setCameraError("No se pudo acceder a la cámara. Verificá los permisos del navegador o subí una foto manualmente.");
+  const handleProviderStatus = useCallback(async (currentStatus?: string) => {
+    if (!currentStatus) return;
+    setStatus(currentStatus);
+    if (currentStatus === "VERIFIED") {
+      await syncSessionVerificationProfile(verification, "VERIFIED");
+      updateUser({ verificationStatus: "VERIFIED" });
+      navigate("/dashboard", { replace: true });
+    } else if (currentStatus === "IN_REVIEW") {
+      await syncSessionVerificationProfile(verification, "IN_REVIEW");
+      updateUser({ verificationStatus: "IN_REVIEW" });
+      navigate("/kyc/pending", { replace: true });
+    } else if (currentStatus === "REJECTED") {
+      await syncSessionVerificationProfile(verification, "REJECTED");
+      updateUser({ verificationStatus: "REJECTED" });
+      navigate("/kyc/rejected", { replace: true });
+    } else if (currentStatus === "EXPIRED") {
+      updateUser({ verificationStatus: "EXPIRED" });
+      onExpired();
     }
-  }
+  }, [navigate, onExpired, updateUser, verification]);
 
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setCameraOn(false);
-  }
+  useEffect(() => {
+    void handleProviderStatus(verification.status);
+  }, [verification.status, handleProviderStatus]);
 
-  function capture() {
-    const video  = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      onFile(new File([blob], "selfie.jpg", { type: "image/jpeg" }));
-      stopCamera();
-    }, "image/jpeg", 0.92);
-  }
+  useEffect(() => {
+    if (status !== "PENDING") return;
 
-  function retake() {
-    void startCamera();
-  }
+    const interval = setInterval(async () => {
+      try {
+        const { data: raw } = await supabase.rpc("get_my_kyc_status");
+        const currentStatus = (raw as Record<string, unknown> | null)?.status as string | undefined;
+        if (currentStatus && currentStatus !== status) {
+          void handleProviderStatus(currentStatus);
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000);
 
-  useEffect(() => () => { stopCamera(); }, []);
+    return () => clearInterval(interval);
+  }, [status, handleProviderStatus]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-zinc-950">Selfie de verificación</h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Tomá una foto en vivo mirando directamente a la cámara, en un lugar bien iluminado.
-          No uses anteojos de sol ni ningún elemento que tape tu cara.
-        </p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-xs text-zinc-600 space-y-2">
-          <p className="font-semibold text-zinc-800 text-sm">✅ Correcto</p>
-          <ul className="space-y-1">
-            <li>· Rostro completo visible</li>
-            <li>· Buena iluminación</li>
-            <li>· Fondo neutro</li>
-          </ul>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-xs text-zinc-600 space-y-2">
-          <p className="font-semibold text-zinc-800 text-sm">❌ Evitar</p>
-          <ul className="space-y-1">
-            <li>· Anteojos de sol</li>
-            <li>· Poca luz o contra-luz</li>
-            <li>· Rostro tapado parcialmente</li>
-          </ul>
-        </div>
-      </div>
-
-      {/* Cámara activa */}
-      {cameraOn && (
-        <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-black">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full"
-            style={{ transform: "scaleX(-1)" }}
-          />
-          <div className="absolute inset-0 flex items-end justify-center gap-3 p-4">
-            <Button onClick={capture} className="h-11 px-6 bg-white text-zinc-950 hover:bg-zinc-100 shadow-lg">
-              <Camera size={16} /> Capturar foto
-            </Button>
-            <Button variant="secondary" onClick={stopCamera} className="h-11 px-4 bg-white/80 text-zinc-700">
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Foto capturada */}
-      {document && !cameraOn && (
-        <div className="space-y-3">
-          <img
-            src={document.previewUrl}
-            alt="Selfie capturada"
-            className="w-full rounded-2xl border border-zinc-200 object-cover"
-            style={{ maxHeight: 320, transform: "scaleX(-1)" }}
-          />
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
-              <CheckCircle2 size={16} className="text-emerald-600" />
-              Selfie cargada correctamente
-            </div>
-            <Button variant="secondary" onClick={retake} disabled={uploading} className="h-9 px-4 text-sm">
-              <RefreshCw size={14} /> Repetir
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Sin foto todavía */}
-      {!document && !cameraOn && (
-        <div className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50 p-8">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100">
-            <Camera size={24} className="text-zinc-500" />
-          </div>
-          <div className="text-center">
-            <p className="font-medium text-zinc-800">Usá tu cámara para tomar la selfie</p>
-            <p className="mt-1 text-sm text-zinc-500">O subí una foto si preferís</p>
-          </div>
-          <div className="flex flex-col gap-2 w-full max-w-xs">
-            <Button onClick={startCamera} disabled={uploading} className="h-11 w-full">
-              <Camera size={16} /> Abrir cámara
-            </Button>
-            <label className="flex cursor-pointer items-center justify-center gap-2 h-10 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
-              <Upload size={14} />
-              Subir foto
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
-              />
-            </label>
-          </div>
-        </div>
-      )}
-
-      {cameraError && (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {cameraError}
-        </p>
-      )}
-
-      {uploading && (
-        <p className="text-sm text-zinc-500 text-center animate-pulse">Subiendo selfie...</p>
-      )}
-
-      <canvas ref={canvasRef} className="hidden" />
-
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-zinc-950">Verificación de identidad</h2>
+          <p className="mt-1 text-sm text-zinc-500">
+            Escaneá tu DNI y tomate una selfie para verificar tu identidad.
+          </p>
+        </div>
         <Button variant="secondary" onClick={onBack} type="button">
           <ArrowLeft size={15} /> Atrás
         </Button>
-        <Button
-          onClick={onNext}
-          disabled={!document || uploading || cameraOn}
-          className="h-11 px-8"
-        >
-          Continuar <ArrowRight size={15} />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Step 4: Terms + submit ──────────────────────────────────────────────────
-
-const TERMS_TEXT =
-  "Acepto los Términos y Condiciones de Uso de la plataforma Firma Digital Portal, incluyendo las políticas de privacidad y tratamiento de datos personales conforme a la Ley N° 25.326.";
-
-function TermsStep({
-  accepted,
-  onAcceptedChange,
-  onSubmit,
-  onBack,
-  loading,
-}: {
-  accepted: boolean;
-  onAcceptedChange: (v: boolean) => void;
-  onSubmit: () => void;
-  onBack: () => void;
-  loading: boolean;
-}) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-zinc-950">
-          <ShieldCheck size={20} className="inline-block mr-2 -mt-0.5 text-zinc-500" />
-          Términos y condiciones
-        </h2>
-        <p className="mt-1 text-sm text-zinc-500">
-          Revisá y aceptá los términos para finalizar la verificación.
-        </p>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50/30 p-5 max-h-60 overflow-y-auto text-sm text-zinc-600 leading-relaxed">
-        {TERMS_TEXT}
-      </div>
-
-      <label className="flex cursor-pointer items-start gap-3 select-none">
-        <input
-          type="checkbox"
-          className="mt-0.5 accent-zinc-900 cursor-pointer"
-          checked={accepted}
-          onChange={(e) => onAcceptedChange(e.target.checked)}
-        />
-        <span className="text-sm text-zinc-700 leading-relaxed">
-          <span className="font-semibold">Leí y acepto</span> los Términos y Condiciones
-          de Uso de la plataforma.
-        </span>
-      </label>
-
-      <div className="flex items-center justify-between">
-        <Button variant="secondary" onClick={onBack} type="button">
-          <ArrowLeft size={15} /> Atrás
-        </Button>
-        <Button onClick={onSubmit} disabled={!accepted || loading} className="h-11 px-8">
-          {loading ? "Enviando..." : "Enviar verificación"}
-          <Send size={15} />
-        </Button>
-      </div>
+      {verification.providerSessionUrl ? (
+        <div className="rounded-2xl overflow-hidden border border-zinc-200 bg-white">
+          <iframe
+            src={verification.providerSessionUrl}
+            allow="camera; microphone; fullscreen; autoplay; encrypted-media"
+            className="w-full border-0"
+            style={{ height: "680px" }}
+            title="Verificación Didit"
+          />
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-zinc-200 bg-zinc-50/30 p-6 text-center space-y-4">
+          <Loader2 size={48} className="animate-spin text-blue-500 mx-auto" />
+          <p className="text-sm text-zinc-700 font-medium">
+            Iniciando verificación...
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -396,105 +225,126 @@ function TermsStep({
 export function KycWizardPage() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState<0 | 1 | 2 | 3 | 4>(0);
-  const [verificationId, setVerificationId] = useState<string | null>(null);
+  const [step, setStep] = useState<0 | 1>(0);
+  const [verification, setVerification] = useState<KycVerification | null>(null);
   const [personalData, setPersonalData] = useState<KycPersonalData>({
     ...EMPTY_PERSONAL,
     fullName: user?.fullName ?? "",
   });
-  const [documents, setDocuments] = useState<
-    Partial<Record<"DOCUMENT_FRONT" | "DOCUMENT_BACK" | "SELFIE", KycDocument>>
-  >({});
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState<string | null>(null);
-  const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
       if (!user) return;
       try {
-        const existing = await kycService.getMyVerification(user.id);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          navigate("/login", { replace: true });
+          return;
+        }
+
+        const { data: raw } = await supabase.rpc("get_my_kyc_status");
+        const existing: KycVerification | null = raw as KycVerification | null;
         if (existing) {
-          // Si ya fue enviada, ir a la página de espera
-          if (existing.status !== "PENDING") {
-            navigate("/kyc/pending");
+          if (existing.status === "VERIFIED") {
+            await syncSessionVerificationProfile(existing, "VERIFIED");
+            updateUser({ verificationStatus: "VERIFIED" });
+            navigate("/dashboard", { replace: true });
             return;
           }
-          setVerificationId(existing.id);
-          if (existing.personalData) setPersonalData(existing.personalData);
-
-          // Restaurar documentos ya subidos
-          const docsMap: Partial<Record<"DOCUMENT_FRONT" | "DOCUMENT_BACK" | "SELFIE", KycDocument>> = {};
-          for (const doc of existing.documents) {
-            docsMap[doc.type as "DOCUMENT_FRONT" | "DOCUMENT_BACK" | "SELFIE"] = doc;
+          if (existing.status === "IN_REVIEW") {
+            await syncSessionVerificationProfile(existing, "IN_REVIEW");
+            updateUser({ verificationStatus: "IN_REVIEW" });
+            navigate("/kyc/pending", { replace: true });
+            return;
           }
-          setDocuments(docsMap);
-
-          // Avanzar al primer paso incompleto
-          if (docsMap.SELFIE)          setStep(3);
-          else if (docsMap.DOCUMENT_BACK)  setStep(3);
-          else if (docsMap.DOCUMENT_FRONT) setStep(2);
-          else if (existing.personalData)  setStep(1);
-        } else {
-          const v = await kycService.startVerification(user.id);
-          setVerificationId(v.id);
+          if (existing.status === "REJECTED") {
+            await syncSessionVerificationProfile(existing, "REJECTED");
+            updateUser({ verificationStatus: "REJECTED" });
+            navigate("/kyc/rejected", { replace: true });
+            return;
+          }
+          if (existing.status === "EXPIRED") {
+            updateUser({ verificationStatus: "EXPIRED" });
+            setVerification(null);
+            setStep(0);
+            setError("La sesion de Didit ya no existe o expiro. Carga los datos y genera una nueva verificacion.");
+            return;
+          }
+          setVerification(existing);
+          const normalizedPersonalData = personalDataFromVerification(existing, user.fullName);
+          if (normalizedPersonalData) {
+            setPersonalData(normalizedPersonalData);
+          }
+          if (existing.provider || existing.providerSessionUrl) {
+            setStep(1);
+          }
         }
-      } catch {
-        setError("No se pudo iniciar la verificación. Intentá recargar la página.");
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No se pudo iniciar la verificación. Intentá recargar la página."
+        );
       }
     }
     void init();
-  }, [user]);
+  }, [user, navigate, updateUser]);
 
   async function handlePersonalDataNext() {
-    if (!verificationId) return;
+    if (!user) return;
     setError(null);
     setLoading(true);
+
     try {
-      await kycService.savePersonalData(verificationId, personalData);
+      const { data: verif } = await supabase
+        .from("identity_verifications")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const verificationId = verif?.id ?? (await (async () => {
+        const { data: newVer } = await supabase
+          .from("identity_verifications")
+          .insert({ user_id: user.id, status: "PENDING" })
+          .select("id")
+          .single();
+        return newVer!.id;
+      })());
+
+      await supabase
+        .from("identity_verifications")
+        .update({
+          full_name: personalData.fullName,
+          document_type: personalData.documentType || "DNI",
+          document_number: personalData.documentNumber,
+          cuil_cuit: personalData.cuilCuit || null,
+          birth_date: personalData.birthDate || null,
+          phone: personalData.phone || null,
+          address: personalData.address || null,
+          city: personalData.city || null,
+          province: personalData.province || null,
+          country: personalData.country || "Argentina",
+        })
+        .eq("id", verificationId);
+      await updateSessionUser({
+        fullName: personalData.fullName,
+        documentNumber: personalData.documentNumber,
+        cuilCuit: personalData.cuilCuit || undefined,
+        birthDate: personalData.birthDate,
+        phone: personalData.phone,
+        address: personalData.address || undefined,
+      });
+
+      await kycService.startProviderVerification();
+      const updatedVerification = await kycService.getMyVerification(user.id);
+      setVerification(updatedVerification);
       setStep(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar los datos.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleFileUpload(
-    type: "DOCUMENT_FRONT" | "DOCUMENT_BACK" | "SELFIE",
-    file: File
-  ) {
-    if (!verificationId) return;
-    setError(null);
-    setUploading(type);
-    try {
-      const doc = await kycService.uploadDocument(verificationId, type, file);
-      setDocuments((prev) => ({ ...prev, [type]: doc }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al subir el archivo.");
-    } finally {
-      setUploading(null);
-    }
-  }
-
-  async function handleSubmit() {
-    if (!verificationId || !user) return;
-    setError(null);
-    setLoading(true);
-    try {
-      if (termsAccepted && !user?.termsAcceptedAt) {
-        const { error: termsError } = await supabase
-          .from("users")
-          .update({ terms_accepted_at: new Date().toISOString() })
-          .eq("id", user.id);
-        if (termsError) throw new Error("No se pudieron guardar los términos aceptados.");
-      }
-      await kycService.submitVerification(verificationId);
-      updateUser({ verificationStatus: "IN_REVIEW" });
-      navigate("/kyc/pending");
-    } catch {
-      setError("Error al enviar la verificación. Intentá de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -506,7 +356,7 @@ export function KycWizardPage() {
         <h1 className="text-2xl font-bold text-zinc-950">Verificación de identidad</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Para poder firmar documentos digitalmente necesitamos verificar tu identidad.
-          El proceso toma menos de 5 minutos.
+          El proceso toma menos de 2 minutos.
         </p>
       </div>
 
@@ -527,45 +377,15 @@ export function KycWizardPage() {
             loading={loading}
           />
         )}
-        {step === 1 && (
-          <DocumentStep
-            title="Frente del DNI"
-            description="Fotografiá el frente de tu DNI. Debe verse claramente tu foto, nombre, número y fecha de nacimiento."
-            document={documents["DOCUMENT_FRONT"]}
-            uploading={uploading === "DOCUMENT_FRONT"}
-            onFile={(f) => handleFileUpload("DOCUMENT_FRONT", f)}
-            onNext={() => setStep(2)}
+        {step === 1 && verification && (
+          <ProviderVerificationStep
+            verification={verification}
             onBack={() => setStep(0)}
-          />
-        )}
-        {step === 2 && (
-          <DocumentStep
-            title="Dorso del DNI"
-            description="Fotografiá el dorso de tu DNI. Debe verse el código de barras y el número de trámite."
-            document={documents["DOCUMENT_BACK"]}
-            uploading={uploading === "DOCUMENT_BACK"}
-            onFile={(f) => handleFileUpload("DOCUMENT_BACK", f)}
-            onNext={() => setStep(3)}
-            onBack={() => setStep(1)}
-          />
-        )}
-        {step === 3 && (
-          <SelfieStep
-            document={documents["SELFIE"]}
-            uploading={uploading === "SELFIE"}
-            onFile={(f) => handleFileUpload("SELFIE", f)}
-            onNext={() => setStep(4)}
-            onBack={() => setStep(2)}
-            loading={loading}
-          />
-        )}
-        {step === 4 && (
-          <TermsStep
-            accepted={termsAccepted}
-            onAcceptedChange={setTermsAccepted}
-            onSubmit={handleSubmit}
-            onBack={() => setStep(3)}
-            loading={loading}
+            onExpired={() => {
+              setVerification(null);
+              setStep(0);
+              setError("La sesion de Didit ya no existe o expiro. Carga los datos y genera una nueva verificacion.");
+            }}
           />
         )}
       </div>
