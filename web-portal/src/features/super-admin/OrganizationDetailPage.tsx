@@ -3,6 +3,7 @@ import {
   CheckCircle,
   ClipboardList,
   Clock,
+  Copy,
   Loader2,
   Pencil,
   Save,
@@ -20,11 +21,6 @@ import {
 import type { Organization, OrganizationStats } from "../../shared/types/organization";
 import { OrgLogo } from "../../shared/components/ui/OrgLogo";
 
-const PLAN_COLOR: Record<Organization["plan"], string> = {
-  basic: "bg-zinc-700 text-zinc-300",
-  pro: "bg-violet-900 text-violet-300",
-  enterprise: "bg-amber-900 text-amber-300",
-};
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: number; icon: React.ElementType; color: string }) {
   return (
@@ -46,6 +42,15 @@ export function OrganizationDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState<string | null>(null);
+
+  const [copied, setCopied] = useState(false);
+
+  function copyId() {
+    if (!id) return;
+    navigator.clipboard.writeText(id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   // edit fields
   const [name, setName]               = useState("");
@@ -140,9 +145,6 @@ export function OrganizationDetailPage() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold text-white">{org.name}</h1>
-            <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${PLAN_COLOR[org.plan]}`}>
-              {org.plan}
-            </span>
             {org.isActive ? (
               <span className="flex items-center gap-1 text-xs font-medium text-emerald-400">
                 <CheckCircle size={12} /> Activa
@@ -193,6 +195,22 @@ export function OrganizationDetailPage() {
           <StatCard label="Contratos"         value={stats.totalContracts}icon={ClipboardList} color="text-violet-400 bg-violet-950/60" />
         </div>
       )}
+
+      {/* ID de organización */}
+      <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-3.5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-0.5">ID de organización</p>
+          <p className="text-xs font-mono text-zinc-300 truncate">{id}</p>
+        </div>
+        <button
+          type="button"
+          onClick={copyId}
+          className="ml-4 shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition"
+        >
+          <Copy size={12} />
+          {copied ? "Copiado" : "Copiar"}
+        </button>
+      </div>
 
       {/* Info / Edit form */}
       <form onSubmit={handleSave} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
