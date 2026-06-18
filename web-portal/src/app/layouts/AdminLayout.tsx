@@ -14,6 +14,11 @@ import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../providers/AuthProvider";
 
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Panel de Administración",
+  ORG_ADMIN: "Panel de Organización",
+};
+
 const ADMIN_NAV = [
   { path: "/admin",          label: "Panel general",      icon: ShieldCheck,  end: true },
   { path: "/admin/users",    label: "Usuarios",           icon: Users },
@@ -101,7 +106,9 @@ export function AdminLayout() {
             <button onClick={() => setMobileOpen(true)} className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 text-zinc-500 hover:bg-zinc-100 lg:hidden" type="button">
               <Menu size={16} />
             </button>
-            <p className="text-sm font-semibold text-zinc-600">Panel de Administración</p>
+            <p className="text-sm font-semibold text-zinc-600">
+              {ROLE_LABEL[user?.role ?? ""] ?? "Panel de Administración"}
+            </p>
             <div className="w-9" />
           </div>
         </header>

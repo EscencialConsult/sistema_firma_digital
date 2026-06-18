@@ -60,7 +60,7 @@ export function AppLayout() {
 
   useEffect(() => {
     if (!user?.organizationId) return;
-    getMyOrganization().then(setOrg).catch(() => null);
+    getMyOrganization().then(setOrg).catch(() => setOrg(null));
   }, [user?.organizationId]);
 
   const sidebar = (

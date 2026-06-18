@@ -94,6 +94,11 @@ const OrganizationDetailPage = lazy(() =>
     default: m.OrganizationDetailPage,
   }))
 );
+const SuperAdminSettingsPage = lazy(() =>
+  import("../../features/super-admin/SuperAdminSettingsPage").then((m) => ({
+    default: m.SuperAdminSettingsPage,
+  }))
+);
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 const AdminDashboardPage = lazy(() =>
@@ -116,6 +121,12 @@ const AdminContractsPage = lazy(() =>
 );
 const AdminAuditPage = lazy(() =>
   import("../../features/admin/AdminAuditPage").then((m) => ({ default: m.AdminAuditPage }))
+);
+const AdminTeamPage = lazy(() =>
+  import("../../features/admin/AdminTeamPage").then((m) => ({ default: m.AdminTeamPage }))
+);
+const AdminSettingsPage = lazy(() =>
+  import("../../features/admin/AdminSettingsPage").then((m) => ({ default: m.AdminSettingsPage }))
 );
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -192,21 +203,24 @@ export function AppRouter() {
             {/* ── Solo admins (ADMIN / ORG_ADMIN) ── */}
             <Route element={<AdminGuard />}>
               <Route element={<AdminLayout />}>
-                <Route path="/admin"           element={<AdminDashboardPage />} />
-                <Route path="/admin/users"     element={<AdminUsersPage />} />
-                <Route path="/admin/kyc"       element={<AdminKycReviewPage />} />
-                <Route path="/admin/contracts" element={<AdminContractsPage />} />
-                <Route path="/admin/audit"     element={<AdminAuditPage />} />
+                <Route path="/admin"              element={<AdminDashboardPage />} />
+                <Route path="/admin/users"        element={<AdminUsersPage />} />
+                <Route path="/admin/kyc"          element={<AdminKycReviewPage />} />
+                <Route path="/admin/contracts"    element={<AdminContractsPage />} />
+                <Route path="/admin/audit"        element={<AdminAuditPage />} />
+                <Route path="/admin/team"         element={<AdminTeamPage />} />
+                <Route path="/admin/settings"     element={<AdminSettingsPage />} />
               </Route>
             </Route>
 
             {/* ── Solo SUPER_ADMIN (Escencial) ── */}
             <Route element={<SuperAdminGuard />}>
               <Route element={<SuperAdminLayout />}>
-                <Route path="/super-admin"                          element={<SuperAdminDashboardPage />} />
-                <Route path="/super-admin/organizations"            element={<OrganizationsPage />} />
-                <Route path="/super-admin/organizations/new"        element={<OrganizationNewPage />} />
-                <Route path="/super-admin/organizations/:id"        element={<OrganizationDetailPage />} />
+                <Route path="/super-admin"                       element={<SuperAdminDashboardPage />} />
+                <Route path="/super-admin/organizations"         element={<OrganizationsPage />} />
+                <Route path="/super-admin/organizations/new"     element={<OrganizationNewPage />} />
+                <Route path="/super-admin/organizations/:id"     element={<OrganizationDetailPage />} />
+                <Route path="/super-admin/settings"              element={<SuperAdminSettingsPage />} />
               </Route>
             </Route>
 
