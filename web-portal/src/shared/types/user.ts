@@ -1,4 +1,4 @@
-export type UserRole = "USER" | "ADMIN" | "ORGANIZATION_ADMIN";
+export type UserRole = "USER" | "ADMIN" | "ORG_ADMIN" | "SUPER_ADMIN" | "ORGANIZATION_ADMIN";
 
 export type VerificationStatus =
   | "PENDING"

@@ -1,0 +1,280 @@
+================================================================================
+  PLAN DE TRABAJO — MULTITENANT
+  Facundo + Santi — Trabajo en vivo y simultáneo
+================================================================================
+
+Estamos trabajando los dos AL MISMO TIEMPO en ramas separadas.
+Cuando terminás un bloque, avisás y el otro puede arrancar lo que depende de él.
+
+BRANCHES:
+  Santi:   feature/mt-backend   (crear desde Facundo)
+  Facundo: feature/mt-frontend  (crear desde Facundo)
+
+
+================================================================================
+  QUÉ HACE CADA UNO — RESUMEN
+================================================================================
+
+  SANTI → Todo lo de Supabase: migraciones SQL + Edge Functions + tipos compartidos
+  FACUNDO → Todo el frontend: páginas, layouts, guards, componentes
+
+  REGLA: Nadie toca el archivo del otro. Si necesitás algo del otro, avisás.
+
+
+================================================================================
+  ARCHIVOS EXCLUSIVOS DE SANTI (Facundo no toca)
+================================================================================
+
+  supabase/migrations/       → todos los .sql nuevos
+  supabase/functions/kyc-create-session/index.ts
+  supabase/functions/admin-create-user/index.ts
+  web-portal/src/shared/services/kyc.service.ts  (solo el storage path)
+
+
+================================================================================
+  ARCHIVOS EXCLUSIVOS DE FACUNDO (Santi no toca)
+================================================================================
+
+  web-portal/src/features/super-admin/     (carpeta nueva)
+  web-portal/src/features/join/            (carpeta nueva)
+  web-portal/src/features/admin/AdminTeamPage.tsx      (nuevo)
+  web-portal/src/features/admin/AdminSettingsPage.tsx  (nuevo)
+  web-portal/src/features/kyc/KycPendingPage.tsx
+  web-portal/src/app/layouts/SuperAdminLayout.tsx      (nuevo)
+  web-portal/src/app/layouts/AdminLayout.tsx
+  web-portal/src/app/layouts/AppLayout.tsx
+  web-portal/src/app/guards/SuperAdminGuard.tsx        (nuevo)
+  web-portal/src/app/router/AppRouter.tsx
+  web-portal/src/shared/components/ui/OrgLogo.tsx      (nuevo)
+
+
+================================================================================
+  ARCHIVOS YA HECHOS POR FACUNDO (Santi puede leer, no tocar)
+================================================================================
+
+  web-portal/src/shared/types/user.ts          → roles actualizados
+  web-portal/src/shared/types/organization.ts  → tipo Organization
+  web-portal/src/shared/services/organizations.service.ts → service completo
+  web-portal/src/app/guards/SuperAdminGuard.tsx → guard listo
+  web-portal/src/app/guards/AdminGuard.tsx      → actualizado para ORG_ADMIN
+
+
+================================================================================
+  BLOQUES DE SANTI — EN ORDEN
+================================================================================
+
+─────────────────────────────────────────────────────
+B1 — SQL: tabla organizations + logos + roles
+Archivo a crear: supabase/migrations/20260619001_organizations.sql
+Tiempo: ~2hs
+Depende de: nada → ARRANCAR YA
+─────────────────────────────────────────────────────
+
+  Qué debe incluir:
+    - CREATE TABLE organizations (id, name, slug, logo_dark_url, logo_light_url,
+      primary_color, plan, is_active, didit_workflow_id, max_users,
+      contact_email, created_at, updated_at)
+    - RLS en organizations (SUPER_ADMIN ve todo, ORG_ADMIN ve la suya)
+    - FK en users.organization_id → organizations.id
+    - CHECK constraint en users.role:
+      ('SUPER_ADMIN', 'ORG_ADMIN', 'USER', 'ADMIN')
+    - Bucket de storage: org-logos (público para lectura)
+
+  Cómo aplicar (comando CLI):
+    supabase db push --project-ref faquqlnwniinqqfmonbv
+
+  Cuando termines: avisar "✅ B1 listo"
+  Facundo puede arrancar F5, F9 cuando B1 esté.
+
+
+─────────────────────────────────────────────────────
+B2 — SQL: organization_id en todas las tablas + índices + trigger
+Archivo a crear: supabase/migrations/20260619002_org_columns.sql
+Tiempo: ~1hs
+Depende de: B1 aplicado
+─────────────────────────────────────────────────────
+
+  Qué debe incluir:
+    - ADD COLUMN organization_id UUID REFERENCES organizations(id) en:
+        documents, signature_requests, identity_verifications,
+        audit_logs, certificates
+    - Índices compuestos (organization_id, created_at DESC) en cada tabla
+    - Trigger fn_propagate_org: cuando se inserta en documents o
+      identity_verifications sin organization_id, lo toma del user
+
+  Cómo aplicar:
+    supabase db push --project-ref faquqlnwniinqqfmonbv
+
+  Cuando termines: avisar "✅ B2 listo"
+
+
+─────────────────────────────────────────────────────
+B3 — SQL: JWT hook + RLS policies por organización
+Archivo a crear: supabase/migrations/20260619003_jwt_rls.sql
+Tiempo: ~2hs
+Depende de: B1 + B2 aplicados
+─────────────────────────────────────────────────────
+
+  Qué debe incluir:
+    - Función custom_access_token_hook que inyecta en el JWT:
+        user_role y organization_id (leídos de public.users)
+    - GRANT EXECUTE a supabase_auth_admin
+    - Nuevas RLS policies en documents, identity_verifications,
+      signature_requests, audit_logs usando auth.jwt() ->> 'organization_id'
+      (no subqueries, directo del JWT)
+    - SUPER_ADMIN bypassa todo con (auth.jwt() ->> 'user_role') = 'SUPER_ADMIN'
+
+  Cómo aplicar:
+    supabase db push --project-ref faquqlnwniinqqfmonbv
+
+  Después de correr la migración, activar el hook manualmente:
+    Supabase Dashboard → Authentication → Hooks
+    → Custom Access Token → seleccionar custom_access_token_hook
+
+  Verificar: hacer login con un usuario existente y que no se rompa.
+
+  Cuando termines: avisar "✅ B3 listo"
+
+
+─────────────────────────────────────────────────────
+B4 — Edge Function: kyc-create-session (workflow dinámico por org)
+Archivo: supabase/functions/kyc-create-session/index.ts
+Tiempo: ~1.5hs
+Depende de: B1 (para tener organizations en la DB)
+─────────────────────────────────────────────────────
+
+  Cambio puntual:
+    En vez de leer DIDIT_WORKFLOW_ID del env var global,
+    leer el organization_id del JWT del usuario,
+    buscar organizations.didit_workflow_id WHERE id = esa org,
+    y usar ese workflow_id para crear la sesión en DIDIT.
+
+  Si la org no tiene workflow configurado → error 500 descriptivo.
+  Asegurarse que el INSERT a identity_verifications incluye organization_id.
+
+  Deploy:
+    supabase functions deploy kyc-create-session --project-ref faquqlnwniinqqfmonbv
+
+  Cuando termines: avisar "✅ B4 listo"
+
+
+─────────────────────────────────────────────────────
+B5 — Edge Function: admin-create-user (org-aware)
+Archivo: supabase/functions/admin-create-user/index.ts
+Tiempo: ~1hs
+Depende de: B1 (para tener organizations)
+─────────────────────────────────────────────────────
+
+  Lógica por rol del que llama:
+    SUPER_ADMIN → puede crear usuario en cualquier org
+                  (usa organization_id que viene en el body)
+    ORG_ADMIN   → solo puede crear en SU organización
+                  (ignora organization_id del body, usa la del JWT)
+    USER        → rechazar 403
+
+  Body actualizado acepta: { fullName, email, password, role, organization_id? }
+  Al crear el usuario en auth.admin.createUser(), pasar organization_id
+  en user_metadata para que el trigger fn_handle_new_user lo asigne.
+
+  Deploy:
+    supabase functions deploy admin-create-user --project-ref faquqlnwniinqqfmonbv
+
+  Cuando termines: avisar "✅ B5 listo"
+
+
+─────────────────────────────────────────────────────
+B6 — kyc.service.ts: storage path con orgId
+Archivo: web-portal/src/shared/services/kyc.service.ts
+Tiempo: ~30min
+Depende de: B1 (para tener organization_id en los usuarios)
+─────────────────────────────────────────────────────
+
+  En la función uploadDocument(), cambiar el path:
+    ANTES:  `${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`
+    DESPUÉS: `${orgId}/${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`
+
+  orgId: leerlo del JWT via supabase.auth.getSession() → session.user.user_metadata
+
+  Cuando termines: avisar "✅ B6 listo"
+
+
+================================================================================
+  BLOQUES DE FACUNDO — EN ORDEN
+================================================================================
+
+─────────────────────────────────────────────────────
+F1 — OrgLogo component + SuperAdminLayout
+Archivos:
+  web-portal/src/shared/components/ui/OrgLogo.tsx  (nuevo)
+  web-portal/src/app/layouts/SuperAdminLayout.tsx  (nuevo)
+Depende de: nada → ARRANCAR YA (en paralelo con Santi en B1)
+─────────────────────────────────────────────────────
+
+F2 — Temas en AppLayout y AdminLayout
+Archivos:
+  web-portal/src/app/layouts/AdminLayout.tsx  → cambiar a gris claro
+  web-portal/src/app/layouts/AppLayout.tsx    → agregar OrgLogo en header
+Depende de: F1 listo
+
+F3 — KycPendingPage: Realtime
+Archivo: web-portal/src/features/kyc/KycPendingPage.tsx
+Depende de: nada → ARRANCAR YA
+
+F4 — AppRouter: rutas SUPER_ADMIN + join + admin team
+Archivo: web-portal/src/app/router/AppRouter.tsx
+Depende de: F1 listo (para tener SuperAdminLayout importable)
+
+F5 — Páginas SUPER_ADMIN
+Archivos:
+  web-portal/src/features/super-admin/OrganizationsPage.tsx
+  web-portal/src/features/super-admin/OrganizationNewPage.tsx  (con logo upload)
+  web-portal/src/features/super-admin/OrganizationDetailPage.tsx
+Depende de: F4 listo + avisar a Santi que B1 esté aplicado en DB
+
+F6 — Panel ORG_ADMIN: equipo + settings
+Archivos:
+  web-portal/src/features/admin/AdminTeamPage.tsx
+  web-portal/src/features/admin/AdminSettingsPage.tsx  (sube logos)
+Depende de: B5 de Santi listo
+
+F7 — JoinOrgPage (/join/:slug)
+Archivo: web-portal/src/features/join/JoinOrgPage.tsx
+Depende de: B1 de Santi listo
+
+
+================================================================================
+  ORDEN DE ARRANQUE (PARA HOY)
+================================================================================
+
+  SANTI arranca:   B1 (no depende de nada)
+  FACUNDO arranca: F1 + F3 (no dependen de nada)
+
+  Cuando Santi termina B1 → Facundo puede arrancar F7
+  Cuando Facundo termina F1 → puede arrancar F2, F4
+  Cuando Santi termina B1+B2 → arranca B3
+  Cuando Santi termina B3 → avisar, los dos verifican que el login funcione
+  Cuando Santi termina B5 → Facundo arranca F6
+  Cuando Facundo termina F4 → arranca F5
+
+
+================================================================================
+  MERGE FINAL
+================================================================================
+
+  1. Santi termina todos sus bloques → push a feature/mt-backend → avisa
+  2. Santi crea PR de feature/mt-backend → Facundo
+  3. Facundo mergea la PR de Santi
+  4. Facundo termina sus bloques → push a feature/mt-frontend → push a Facundo
+  5. Deploy a producción juntos
+
+
+================================================================================
+  SEÑALES DE COMUNICACIÓN
+================================================================================
+
+  Cuando terminás un bloque: push + mandar mensaje "✅ Bx listo" o "✅ Fx listo"
+  Si algo falla o rompe algo del otro: avisar inmediatamente antes de pushear
+  NUNCA pushear directo a Facundo (main de trabajo) sin avisar
+
+
+================================================================================

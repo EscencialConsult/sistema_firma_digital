@@ -1,8 +1,8 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../providers/AuthProvider";
 
-export function AdminGuard() {
+export function SuperAdminGuard() {
   const { user } = useAuth();
-  if (!user || !["ADMIN", "ORG_ADMIN", "SUPER_ADMIN"].includes(user.role)) return <Navigate to="/dashboard" replace />;
+  if (!user || user.role !== "SUPER_ADMIN") return <Navigate to="/dashboard" replace />;
   return <Outlet />;
 }
