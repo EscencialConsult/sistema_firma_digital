@@ -36,27 +36,30 @@ serve(async (req) => {
       );
     }
 
-    // Verificar rol ADMIN con service role (bypassea RLS)
+    // Leer perfil del caller para obtener su rol y organization_id
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const { data: callerProfile } = await adminClient
       .from("users")
-      .select("role")
+      .select("role, organization_id")
       .eq("id", caller.id)
       .single();
 
-    if (callerProfile?.role !== "ADMIN") {
+    if (!callerProfile || !["SUPER_ADMIN", "ORG_ADMIN"].includes(callerProfile.role)) {
       return new Response(
-        JSON.stringify({ error: "Se requiere rol ADMIN" }),
+        JSON.stringify({ error: "Se requiere rol SUPER_ADMIN u ORG_ADMIN" }),
         { status: 403, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
 
-    const { fullName, email, password, role } = await req.json() as {
+    const body = await req.json() as {
       fullName: string;
       email:    string;
       password: string;
-      role:     "USER" | "ADMIN";
+      role?:    "USER" | "ADMIN" | "ORG_ADMIN" | "SUPER_ADMIN";
+      organization_id?: string;
     };
+
+    const { fullName, email, password, role } = body;
 
     if (!fullName || !email || !password) {
       return new Response(
@@ -65,20 +68,35 @@ serve(async (req) => {
       );
     }
 
+    let targetOrgId: string | null = null;
+    if (callerProfile.role === "SUPER_ADMIN") {
+      targetOrgId = body.organization_id || null;
+    } else if (callerProfile.role === "ORG_ADMIN") {
+      targetOrgId = callerProfile.organization_id;
+    }
+
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName },
+      user_metadata: { 
+        full_name: fullName,
+        organization_id: targetOrgId
+      },
     });
 
     if (createError || !newUser.user) {
       throw new Error(createError?.message ?? "No se pudo crear el usuario");
     }
 
+    // Actualizamos el rol (ya que el trigger base asigna USER por defecto)
     await adminClient
       .from("users")
-      .update({ full_name: fullName, role: role ?? "USER" })
+      .update({ 
+        full_name: fullName, 
+        role: role ?? "USER",
+        organization_id: targetOrgId 
+      })
       .eq("id", newUser.user.id);
 
     const { data: profile } = await adminClient
