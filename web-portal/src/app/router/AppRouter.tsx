@@ -4,10 +4,12 @@ import { useAuth } from "../providers/AuthProvider";
 import { AuthGuard } from "../guards/AuthGuard";
 import { VerifiedGuard } from "../guards/VerifiedGuard";
 import { AdminGuard } from "../guards/AdminGuard";
+import { SuperAdminGuard } from "../guards/SuperAdminGuard";
 import { AuthLayout } from "../layouts/AuthLayout";
 import { KycLayout } from "../layouts/KycLayout";
 import { AppLayout } from "../layouts/AppLayout";
 import { AdminLayout } from "../layouts/AdminLayout";
+import { SuperAdminLayout } from "../layouts/SuperAdminLayout";
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 const LoginPage = lazy(() =>
@@ -71,6 +73,28 @@ const PublicSigningPage = lazy(() =>
   }))
 );
 
+// ─── Super Admin ──────────────────────────────────────────────────────────────
+const SuperAdminDashboardPage = lazy(() =>
+  import("../../features/super-admin/SuperAdminDashboardPage").then((m) => ({
+    default: m.SuperAdminDashboardPage,
+  }))
+);
+const OrganizationsPage = lazy(() =>
+  import("../../features/super-admin/OrganizationsPage").then((m) => ({
+    default: m.OrganizationsPage,
+  }))
+);
+const OrganizationNewPage = lazy(() =>
+  import("../../features/super-admin/OrganizationNewPage").then((m) => ({
+    default: m.OrganizationNewPage,
+  }))
+);
+const OrganizationDetailPage = lazy(() =>
+  import("../../features/super-admin/OrganizationDetailPage").then((m) => ({
+    default: m.OrganizationDetailPage,
+  }))
+);
+
 // ─── Admin ────────────────────────────────────────────────────────────────────
 const AdminDashboardPage = lazy(() =>
   import("../../features/admin/AdminDashboardPage").then((m) => ({
@@ -98,7 +122,8 @@ const AdminAuditPage = lazy(() =>
 function DefaultRedirect() {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === "ADMIN") return <Navigate to="/admin" replace />;
+  if (user.role === "SUPER_ADMIN") return <Navigate to="/super-admin" replace />;
+  if (user.role === "ADMIN" || user.role === "ORG_ADMIN") return <Navigate to="/admin" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -164,7 +189,7 @@ export function AppRouter() {
               <Route path="/profile"          element={<ProfilePage />} />
             </Route>
 
-            {/* ── Solo admins ── */}
+            {/* ── Solo admins (ADMIN / ORG_ADMIN) ── */}
             <Route element={<AdminGuard />}>
               <Route element={<AdminLayout />}>
                 <Route path="/admin"           element={<AdminDashboardPage />} />
@@ -172,6 +197,16 @@ export function AppRouter() {
                 <Route path="/admin/kyc"       element={<AdminKycReviewPage />} />
                 <Route path="/admin/contracts" element={<AdminContractsPage />} />
                 <Route path="/admin/audit"     element={<AdminAuditPage />} />
+              </Route>
+            </Route>
+
+            {/* ── Solo SUPER_ADMIN (Escencial) ── */}
+            <Route element={<SuperAdminGuard />}>
+              <Route element={<SuperAdminLayout />}>
+                <Route path="/super-admin"                          element={<SuperAdminDashboardPage />} />
+                <Route path="/super-admin/organizations"            element={<OrganizationsPage />} />
+                <Route path="/super-admin/organizations/new"        element={<OrganizationNewPage />} />
+                <Route path="/super-admin/organizations/:id"        element={<OrganizationDetailPage />} />
               </Route>
             </Route>
 

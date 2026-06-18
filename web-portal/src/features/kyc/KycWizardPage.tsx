@@ -250,6 +250,7 @@ function ProviderVerificationStep({
   onBack,
   onVerified,
   onExpired,
+  onReload,
 }: {
   verification: KycVerification;
   onBack: () => void;

@@ -1,6 +1,43 @@
 import { Clock } from "lucide-react";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../../shared/lib/supabase";
+import { useAuth } from "../../app/providers/AuthProvider";
 
 export function KycPendingPage() {
+  const { user, reloadUser } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`kyc-pending-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "identity_verifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const status = (payload.new as { status: string }).status;
+          if (status === "VERIFIED") {
+            await reloadUser();
+            navigate("/dashboard", { replace: true });
+          } else if (status === "REJECTED") {
+            navigate("/kyc/rejected", { replace: true });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, navigate, reloadUser]);
+
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="mb-6 grid h-20 w-20 place-items-center rounded-full bg-amber-100">
@@ -34,6 +71,10 @@ export function KycPendingPage() {
       </div>
 
       <p className="mt-6 text-xs text-zinc-400">
+        Esta página se actualiza automáticamente cuando tu verificación es aprobada.
+      </p>
+
+      <p className="mt-2 text-xs text-zinc-400">
         ¿Tenés dudas?{" "}
         <a href="mailto:soporte@escencial.com" className="font-semibold text-zinc-700 hover:underline">
           Contactanos

@@ -7,15 +7,17 @@ import {
   LogOut,
   Menu,
   PenLine,
-  ShieldCheck,
   UserCircle,
   UsersRound,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../providers/AuthProvider";
 import { TERMS_TEXT } from "../../shared/legal/terms";
+import { OrgLogo } from "../../shared/components/ui/OrgLogo";
+import { getMyOrganization } from "../../shared/services/organizations.service";
+import type { Organization } from "../../shared/types/organization";
 
 const USER_NAV = [
   { path: "/dashboard",  label: "Dashboard",      icon: Gauge,  end: true },
@@ -50,18 +52,30 @@ export function AppLayout() {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const isAdmin = user?.role === "ADMIN";
+  const [org, setOrg] = useState<Organization | null>(null);
+
+  const isAdmin = user?.role === "ADMIN" || user?.role === "ORG_ADMIN";
   const navItems = isAdmin ? [...USER_NAV, ...ADMIN_EXTRA] : USER_NAV;
   const verificationLabel = user?.verificationStatus === "VERIFIED" ? "Verificado" : "KYC pendiente";
+
+  useEffect(() => {
+    if (!user?.organizationId) return;
+    getMyOrganization().then(setOrg).catch(() => null);
+  }, [user?.organizationId]);
 
   const sidebar = (
     <>
       <div className="mb-8 flex items-center gap-3 px-2">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-zinc-950 text-white shadow-sm">
-          <ShieldCheck size={20} />
-        </div>
+        <OrgLogo
+          logoDarkUrl={org?.logoDarkUrl}
+          logoLightUrl={org?.logoLightUrl}
+          variant="light"
+          size={40}
+        />
         <div className="min-w-0">
-          <p className="text-sm font-bold leading-none">Firma Digital</p>
+          <p className="text-sm font-bold leading-none truncate">
+            {org?.name ?? "Firma Digital"}
+          </p>
           <p className="mt-0.5 truncate text-[11px] text-zinc-500">{user?.email}</p>
         </div>
       </div>
