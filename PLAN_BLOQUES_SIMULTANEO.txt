@@ -1,0 +1,745 @@
+================================================================================
+  PLAN DE TRABAJO EN BLOQUES — SIMULTANEO SIN CONFLICTOS
+  Facundo + Santi — Sistema Firma Digital Multi-Tenant
+  Fecha: Junio 2026 — v3 (iterado 3 veces)
+================================================================================
+
+ESTADO ACTUAL DEL PROYECTO
+---------------------------
+El core ya está construido y funciona:
+  ✅ Auth (login, registro, sesión)
+  ✅ KYC con DIDIT (wizard completo)
+  ✅ Firma digital (conformidad → selfie → firma → PDF)
+  ✅ Panel admin (KYC review, contratos, usuarios, auditoría)
+  ✅ Certificados digitales
+  ✅ Edge Functions deployadas
+  ✅ Terms & Conditions nivel bancario
+
+LO QUE FALTA (todo multi-tenant + logos + temas):
+  ❌ Tabla organizations + columnas en todas las tablas
+  ❌ JWT hook + RLS policies por organización
+  ❌ Sistema de logos por empresa (2 logos: fondo oscuro / fondo claro)
+  ❌ Tema visual por rol (SUPER_ADMIN=negro / ORG_ADMIN=gris / USER=blanco)
+  ❌ Panel SUPER_ADMIN (crear empresas, ver todo)
+  ❌ Panel ORG_ADMIN (gestionar su equipo, subir logos)
+  ❌ kyc-create-session dinámico por organización
+  ❌ admin-create-user org-aware
+  ❌ Página de unión por slug (/join/:slug)
+  ❌ Realtime en KycPendingPage (migración ya hecha, falta la UI)
+
+
+================================================================================
+  SISTEMA DE TEMAS Y LOGOS (DISEÑO DECIDIDO)
+================================================================================
+
+TEMAS POR ROL:
+  SUPER_ADMIN → fondo negro (#09090b) / texto blanco   → uso interno Escencial
+  ORG_ADMIN   → fondo gris claro (#f4f4f5) / texto oscuro → uso de la empresa
+  USER        → fondo blanco (#ffffff) / texto oscuro  → uso del empleado/firmante
+
+LOGOS POR EMPRESA:
+  Cada organización sube 2 logos:
+    logo_dark_url  → logo para usar sobre fondos OSCUROS (ej: blanco o claro s/negro)
+    logo_light_url → logo para usar sobre fondos CLAROS (ej: color o versión principal)
+
+  Regla de uso:
+    SUPER_ADMIN (fondo negro)   → muestra logo_dark_url  de Escencial
+    ORG_ADMIN  (fondo gris)     → muestra logo_light_url de la empresa
+    USER       (fondo blanco)   → muestra logo_light_url de la empresa
+    Registro (/join/:slug)      → muestra logo_light_url de la empresa del slug
+
+  Si falta un logo: mostrar nombre de la empresa en texto.
+
+
+================================================================================
+  PROTOCOLO DE COMUNICACIÓN ENTRE SANTI Y FACUNDO
+================================================================================
+
+Cuando un bloque está terminado:
+  1. Hacer push de la rama propia
+  2. Mandar mensaje: "✅ B3 listo" o "✅ F2 listo"
+  3. El otro puede arrancar los bloques que dependen de ese
+
+Branches:
+  Santi:   feature/mt-backend    (se crea desde Facundo)
+  Facundo: feature/mt-frontend   (se crea desde Facundo)
+
+Merge final:
+  1. Santi termina todos sus bloques → mergea a Facundo → avisa
+  2. Facundo hace rebase de mt-frontend sobre el merge → termina → mergea
+  3. Push a producción juntos
+
+
+================================================================================
+  BLOQUES DE SANTI — BACKEND
+================================================================================
+
+Santi trabaja EXCLUSIVAMENTE en:
+  supabase/functions/
+  supabase/migrations/
+  web-portal/src/shared/services/kyc.service.ts
+  web-portal/src/shared/services/admin.service.ts
+  web-portal/src/shared/types/user.ts
+  web-portal/src/shared/types/kyc.ts
+  (nuevo) web-portal/src/shared/services/organizations.service.ts
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B1 — TABLA ORGANIZATIONS + LOGOS
+Archivo: supabase/migrations/20260619001_organizations.sql
+Tiempo estimado: 2 horas
+Depende de: nada (arrancar YA)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CREATE TABLE public.organizations (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name              TEXT NOT NULL,
+    slug              TEXT UNIQUE NOT NULL,
+    logo_dark_url     TEXT,
+    logo_light_url    TEXT,
+    primary_color     TEXT DEFAULT '#6366f1',
+    plan              TEXT NOT NULL DEFAULT 'basic',
+    is_active         BOOLEAN NOT NULL DEFAULT true,
+    didit_workflow_id TEXT,
+    max_users         INTEGER DEFAULT 50,
+    contact_email     TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
+
+  CREATE POLICY "super_admin_full" ON public.organizations
+    USING ((auth.jwt() ->> 'user_role') = 'SUPER_ADMIN');
+
+  CREATE POLICY "org_admin_read_own" ON public.organizations
+    FOR SELECT USING (
+      id = (auth.jwt() ->> 'organization_id')::UUID
+    );
+
+  CREATE POLICY "org_admin_update_own" ON public.organizations
+    FOR UPDATE USING (
+      id = (auth.jwt() ->> 'organization_id')::UUID
+      AND (auth.jwt() ->> 'user_role') = 'ORG_ADMIN'
+    );
+
+  -- FK en users
+  ALTER TABLE public.users
+    ADD CONSTRAINT fk_users_org
+    FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+    ON DELETE SET NULL;
+
+  -- Roles actualizados
+  ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+  ALTER TABLE public.users ADD CONSTRAINT users_role_check
+    CHECK (role IN ('SUPER_ADMIN', 'ORG_ADMIN', 'USER', 'ADMIN'));
+
+  -- Aplicar en Supabase SQL Editor y avisar: "✅ B1 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B2 — ORGANIZATION_ID EN TODAS LAS TABLAS + ÍNDICES
+Archivo: supabase/migrations/20260619002_org_columns.sql
+Tiempo estimado: 1 hora
+Depende de: B1 aplicado
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ALTER TABLE public.documents
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+  ALTER TABLE public.signature_requests
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+  ALTER TABLE public.identity_verifications
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+  ALTER TABLE public.audit_logs
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+  ALTER TABLE public.certificates
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+  CREATE INDEX idx_docs_org     ON public.documents (organization_id, created_at DESC);
+  CREATE INDEX idx_sigreq_org   ON public.signature_requests (organization_id, created_at DESC);
+  CREATE INDEX idx_kyc_org      ON public.identity_verifications (organization_id, status);
+  CREATE INDEX idx_users_org    ON public.users (organization_id, role);
+  CREATE INDEX idx_audit_org    ON public.audit_logs (organization_id, created_at DESC);
+  CREATE INDEX idx_certs_org    ON public.certificates (organization_id);
+
+  -- Triggers para propagar organization_id automáticamente
+  CREATE OR REPLACE FUNCTION public.fn_propagate_org()
+  RETURNS TRIGGER LANGUAGE plpgsql AS $$
+  DECLARE v_org UUID;
+  BEGIN
+    IF NEW.organization_id IS NULL THEN
+      SELECT organization_id INTO v_org FROM public.users
+      WHERE id = COALESCE(NEW.owner_id, NEW.user_id);
+      NEW.organization_id := v_org;
+    END IF;
+    RETURN NEW;
+  END;
+  $$;
+
+  CREATE TRIGGER trg_docs_org BEFORE INSERT ON public.documents
+    FOR EACH ROW EXECUTE FUNCTION public.fn_propagate_org();
+
+  CREATE TRIGGER trg_kyc_org BEFORE INSERT ON public.identity_verifications
+    FOR EACH ROW EXECUTE FUNCTION public.fn_propagate_org();
+
+  -- Avisar: "✅ B2 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B3 — JWT HOOK + RLS POLICIES
+Archivo: supabase/migrations/20260619003_jwt_rls.sql
+Tiempo estimado: 2 horas
+Depende de: B1 + B2 aplicados
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  -- Hook que inyecta organization_id y role en el JWT al hacer login
+  CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event JSONB)
+  RETURNS JSONB LANGUAGE plpgsql STABLE AS $$
+  DECLARE claims JSONB; ud RECORD;
+  BEGIN
+    SELECT role, organization_id INTO ud FROM public.users
+    WHERE id = (event->>'user_id')::UUID;
+    claims := event->'claims';
+    claims := jsonb_set(claims, '{user_role}', to_jsonb(COALESCE(ud.role, 'USER')));
+    claims := jsonb_set(claims, '{organization_id}', to_jsonb(ud.organization_id));
+    RETURN jsonb_set(event, '{claims}', claims);
+  END;
+  $$;
+  GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
+
+  -- RLS para documents
+  DROP POLICY IF EXISTS "users can read own documents" ON public.documents;
+  CREATE POLICY "org read docs" ON public.documents FOR SELECT USING (
+    organization_id = (auth.jwt() ->> 'organization_id')::UUID
+    OR (auth.jwt() ->> 'user_role') = 'SUPER_ADMIN'
+  );
+  CREATE POLICY "org write docs" ON public.documents FOR INSERT WITH CHECK (
+    organization_id = (auth.jwt() ->> 'organization_id')::UUID
+  );
+
+  -- RLS para identity_verifications (mismo patrón)
+  -- RLS para signature_requests (mismo patrón)
+  -- RLS para audit_logs (solo lectura de su org)
+
+  -- Aplicar en Supabase SQL Editor
+  -- Activar hook: Authentication → Hooks → Custom Access Token
+  -- Seleccionar: custom_access_token_hook
+  -- Verificar que el login sigue funcionando
+  -- Avisar: "✅ B3 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B4 — BUCKET DE LOGOS EN STORAGE
+Tiempo estimado: 30 minutos
+Depende de: B1 listo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  En Supabase Dashboard → Storage:
+    Crear bucket: org-logos (público, sin autenticación para lectura)
+    Política de escritura: solo ORG_ADMIN y SUPER_ADMIN pueden subir
+
+  En SQL Editor:
+  CREATE POLICY "org_admin_upload_logo" ON storage.objects
+    FOR INSERT WITH CHECK (
+      bucket_id = 'org-logos'
+      AND (auth.jwt() ->> 'user_role') IN ('ORG_ADMIN', 'SUPER_ADMIN')
+      AND (string_to_array(name, '/'))[1] = (auth.jwt() ->> 'organization_id')
+    );
+
+  -- Avisar: "✅ B4 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B5 — EDGE FUNCTION: kyc-create-session DINÁMICO
+Archivo: supabase/functions/kyc-create-session/index.ts
+Tiempo estimado: 1.5 horas
+Depende de: B1 aplicado en DB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Cambio: leer didit_workflow_id de la tabla organizations
+  según la organización del usuario que hace el request.
+
+  Lógica nueva:
+    1. Autenticar usuario (igual que antes)
+    2. Leer organization_id del JWT claims
+    3. Buscar organizations WHERE id = organization_id → obtener didit_workflow_id
+    4. Si org no tiene workflow_id → error 500 descriptivo
+    5. Crear sesión DIDIT con ese workflow_id
+    6. Guardar en identity_verifications con organization_id
+
+  Deploy: supabase functions deploy kyc-create-session --project-ref faquqlnwniinqqfmonbv
+  Avisar: "✅ B5 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B6 — EDGE FUNCTION: admin-create-user ORG-AWARE
+Archivo: supabase/functions/admin-create-user/index.ts
+Tiempo estimado: 1 hora
+Depende de: B1 aplicado
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Lógica por rol del que llama:
+    SUPER_ADMIN → puede crear usuario en CUALQUIER org (usa organization_id del body)
+    ORG_ADMIN   → solo puede crear en SU organización (ignora organization_id del body)
+    USER        → rechazar 403
+
+  Body nuevo acepta:
+    { fullName, email, password, role, organization_id? }
+
+  Deploy: supabase functions deploy admin-create-user --project-ref faquqlnwniinqqfmonbv
+  Avisar: "✅ B6 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+B7 — TIPOS + SERVICES ACTUALIZADOS
+Archivos:
+  web-portal/src/shared/types/user.ts
+  web-portal/src/shared/services/kyc.service.ts   (storage path con orgId)
+  web-portal/src/shared/services/admin.service.ts  (createUser con org)
+  (nuevo) web-portal/src/shared/services/organizations.service.ts
+Tiempo estimado: 2 horas
+Depende de: B1 listo (para tener los tipos correctos)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  types/user.ts — agregar:
+    export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'USER' | 'ADMIN';
+
+  kyc.service.ts — cambiar uploadDocument():
+    ANTES:  `${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`
+    DESPUÉS: `${orgId}/${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`
+    orgId se lee del perfil del usuario o del JWT
+
+  organizations.service.ts — crear con:
+    listOrganizations()         → SELECT * FROM organizations (SUPER_ADMIN)
+    getOrganization(id)         → SELECT WHERE id
+    createOrganization(data)    → INSERT
+    updateOrganization(id,data) → UPDATE (logos, workflow_id, etc)
+    deactivateOrganization(id)  → UPDATE is_active=false
+    uploadOrgLogo(orgId, file, type: 'dark'|'light') → subir a org-logos bucket
+
+  Avisar: "✅ B7 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ORDEN RECOMENDADO PARA SANTI:
+  Semana 1: B1 → B2 → B4 (en paralelo con B1-B2)
+  Semana 1: B3 (después de B1+B2)
+  Semana 1-2: B5 + B6 (en paralelo, independientes entre sí)
+  Semana 2: B7 (después de B1 para tener los tipos)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+================================================================================
+  BLOQUES DE FACUNDO — FRONTEND
+================================================================================
+
+Facundo trabaja EXCLUSIVAMENTE en:
+  web-portal/src/features/super-admin/    (carpeta NUEVA)
+  web-portal/src/features/admin/AdminTeamPage.tsx   (NUEVA)
+  web-portal/src/features/admin/AdminSettingsPage.tsx (NUEVA)
+  web-portal/src/features/auth/RegisterPage.tsx     (modificar)
+  web-portal/src/features/kyc/KycPendingPage.tsx    (agregar Realtime)
+  web-portal/src/app/guards/SuperAdminGuard.tsx     (NUEVO)
+  web-portal/src/app/router/routes.ts               (agregar rutas)
+  web-portal/src/app/router/AppRouter.tsx           (agregar rutas)
+  web-portal/src/app/providers/ThemeProvider.tsx    (NUEVO)
+  web-portal/src/app/providers/AuthProvider.tsx     (agregar redirect por rol)
+  web-portal/src/shared/components/ui/OrgLogo.tsx   (NUEVO)
+  web-portal/src/features/join/JoinOrgPage.tsx      (NUEVO)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F1 — THEME PROVIDER (sistema de temas por rol)
+Archivo: web-portal/src/app/providers/ThemeProvider.tsx
+Tiempo estimado: 2 horas
+Depende de: NADA — arrancar YA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Crear ThemeProvider que envuelve la app y aplica clases según el rol:
+
+  const THEMES = {
+    SUPER_ADMIN: {
+      shell:   'bg-zinc-950 text-zinc-100',   // negro
+      sidebar: 'bg-black border-zinc-800',
+      header:  'bg-zinc-950 border-zinc-800',
+      card:    'bg-zinc-900 border-zinc-800',
+    },
+    ORG_ADMIN: {
+      shell:   'bg-zinc-100 text-zinc-900',   // gris claro
+      sidebar: 'bg-zinc-200 border-zinc-300',
+      header:  'bg-white border-zinc-200',
+      card:    'bg-white border-zinc-200 shadow-sm',
+    },
+    USER: {
+      shell:   'bg-white text-zinc-900',       // blanco
+      sidebar: 'bg-gray-50 border-gray-200',
+      header:  'bg-white border-gray-200',
+      card:    'bg-white border-gray-100 shadow-sm',
+    },
+  }
+
+  Exportar:
+    useTheme() → { shell, sidebar, header, card, role }
+    ThemeProvider ({ children }) → provee el contexto
+
+  En AppLayout.tsx, PortalShell.tsx, AdminLayout.tsx:
+    consumir useTheme() para aplicar las clases correctas
+
+  Avisar: "✅ F1 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F2 — ORG LOGO COMPONENT
+Archivo: web-portal/src/shared/components/ui/OrgLogo.tsx
+Tiempo estimado: 1 hora
+Depende de: NADA — arrancar YA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Props: { orgName: string, logoDarkUrl?: string, logoLightUrl?: string,
+           background: 'dark' | 'light', size?: 'sm' | 'md' | 'lg' }
+
+  Lógica:
+    - Si background === 'dark' → usar logoDarkUrl
+    - Si background === 'light' → usar logoLightUrl
+    - Si no hay logo → mostrar orgName en texto (con font-semibold)
+
+  Uso en:
+    - Header de todas las vistas (muestra el logo de la org del usuario)
+    - JoinOrgPage (muestra logo de la empresa al registrarse)
+    - AdminSettingsPage (preview del logo subido)
+    - SuperAdmin panel (logo de cada empresa en la lista)
+
+  Integración con ThemeProvider:
+    background se deriva automáticamente del rol:
+      SUPER_ADMIN → 'dark'
+      ORG_ADMIN, USER → 'light'
+
+  Avisar: "✅ F2 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F3 — GUARD + RUTAS SUPER_ADMIN
+Archivos:
+  web-portal/src/app/guards/SuperAdminGuard.tsx
+  web-portal/src/app/router/routes.ts
+  web-portal/src/app/router/AppRouter.tsx
+Tiempo estimado: 1 hora
+Depende de: NADA — arrancar YA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  SuperAdminGuard.tsx:
+    if (user.role !== 'SUPER_ADMIN') navigate('/dashboard')
+    else <Outlet />
+
+  Rutas nuevas en routes.ts:
+    SUPER_ADMIN_ROOT:      '/super-admin'
+    SUPER_ADMIN_ORGS:      '/super-admin/organizations'
+    SUPER_ADMIN_ORG_NEW:   '/super-admin/organizations/new'
+    SUPER_ADMIN_ORG_ID:    '/super-admin/organizations/:id'
+    ADMIN_TEAM:            '/admin/team'
+    ADMIN_TEAM_NEW:        '/admin/team/new'
+    ADMIN_SETTINGS:        '/admin/settings'
+    JOIN_ORG:              '/join/:slug'
+
+  AppRouter.tsx:
+    Agregar bloque SuperAdminGuard con las rutas de arriba
+
+  Avisar: "✅ F3 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F4 — THEME APLICADO EN SHELLS/LAYOUTS
+Archivos:
+  web-portal/src/layouts/AppLayout.tsx
+  web-portal/src/layouts/AdminLayout.tsx
+  web-portal/src/layouts/PortalShell.tsx (si existe)
+Tiempo estimado: 1.5 horas
+Depende de: F1 listo + F2 listo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  En cada layout, reemplazar clases hardcodeadas por:
+    const { shell, sidebar, header, card } = useTheme()
+    const { org } = useAuth()
+    <div className={shell}>
+      <aside className={sidebar}>
+        <OrgLogo ... />
+        ...
+      </aside>
+    </div>
+
+  El header de cada layout muestra:
+    - OrgLogo (logo de la empresa del usuario logueado)
+    - Nombre del usuario
+    - Rol badge (SUPER_ADMIN | ORG_ADMIN | USER)
+
+  Avisar: "✅ F4 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F5 — PANEL SUPER_ADMIN: LISTA DE EMPRESAS
+Archivo: web-portal/src/features/super-admin/OrganizationsPage.tsx
+Tiempo estimado: 2 horas
+Depende de: F3 listo + B7 listo (organizations.service.ts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  UI: tabla con filas por empresa
+  Columnas:
+    - Logo (OrgLogo component, size sm)
+    - Nombre + slug
+    - Plan (badge: basic/pro/enterprise)
+    - Usuarios activos / máx
+    - Estado (activo/inactivo)
+    - Botón "Ver detalle"
+
+  Acciones globales:
+    - Botón "+ Nueva empresa" → /super-admin/organizations/new
+    - Filtro por plan / estado
+
+  Datos: llama a organizations.service.listOrganizations()
+
+  Avisar: "✅ F5 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F6 — PANEL SUPER_ADMIN: CREAR EMPRESA
+Archivo: web-portal/src/features/super-admin/OrganizationNewPage.tsx
+Tiempo estimado: 3 horas
+Depende de: F3 + B6 + B7 listos
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Formulario en 2 secciones:
+
+  SECCIÓN 1 — Datos de la empresa:
+    Nombre de la empresa *
+    Slug (auto-generado desde el nombre, editable) *
+    Plan (select: basic/pro/enterprise) *
+    Máx. usuarios
+    Email de contacto
+    DIDIT Workflow ID (instrucción: ir a DIDIT Console, crear workflow, copiar el ID)
+    Color primario (color picker, default #6366f1)
+
+  SECCIÓN 2 — Logos:
+    Logo para fondos OSCUROS:
+      - Dropzone de imagen (PNG/SVG, máx 2MB)
+      - Preview sobre fondo negro
+      - Se sube a: org-logos/{orgId}/dark.png
+
+    Logo para fondos CLAROS:
+      - Dropzone de imagen (PNG/SVG, máx 2MB)
+      - Preview sobre fondo blanco
+      - Se sube a: org-logos/{orgId}/light.png
+
+  SECCIÓN 3 — ORG_ADMIN inicial:
+    Nombre completo *
+    Email *
+    Contraseña temporal *
+    (La cuenta se crea automáticamente al guardar la empresa)
+
+  Flujo al guardar:
+    1. createOrganization(datos)         → genera el ID de la org
+    2. uploadOrgLogo(orgId, file, 'dark')
+    3. uploadOrgLogo(orgId, file, 'light')
+    4. updateOrganization(orgId, { logo_dark_url, logo_light_url })
+    5. createUser({ email, password, fullName, role: 'ORG_ADMIN', organization_id: orgId })
+    6. Redirigir a /super-admin/organizations/:id
+
+  Avisar: "✅ F6 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F7 — PANEL SUPER_ADMIN: DETALLE DE EMPRESA
+Archivo: web-portal/src/features/super-admin/OrganizationDetailPage.tsx
+Tiempo estimado: 2 horas
+Depende de: F5 + B7 listos
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Secciones:
+    Header: logo (dark) + nombre + estado + plan
+    Métricas: usuarios totales / activos, KYCs pendientes, contratos firmados
+    Tabs:
+      [Usuarios]     → lista de users de esa org (con estado KYC)
+      [KYCs]         → verificaciones de esa org
+      [Configuración] → editar nombre, plan, workflow_id, logos, desactivar
+
+  Avisar: "✅ F7 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F8 — PANEL ORG_ADMIN: GESTIÓN DE EQUIPO
+Archivos:
+  web-portal/src/features/admin/AdminTeamPage.tsx
+  web-portal/src/features/admin/AdminSettingsPage.tsx
+Tiempo estimado: 2.5 horas
+Depende de: B6 + B7 listos
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  AdminTeamPage:
+    Tabla de usuarios de la organización:
+      - Nombre + email
+      - Rol (USER / ORG_ADMIN)
+      - Estado KYC (badge)
+      - Fecha de alta
+      - Acciones: editar rol, desactivar
+    Botón "+ Agregar usuario" → modal con:
+      nombre, email, contraseña temporal
+      rol (USER o ORG_ADMIN)
+      llama a admin.service.createUser()
+
+  AdminSettingsPage:
+    Datos de la empresa (nombre, email de contacto)
+    Sección de logos:
+      - Logo oscuro: preview + dropzone de reemplazo
+      - Logo claro: preview + dropzone de reemplazo
+      - Botón guardar logos → sube a org-logos y actualiza organizations
+    DIDIT Workflow ID (solo lectura para ORG_ADMIN, editable por SUPER_ADMIN)
+
+  Avisar: "✅ F8 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F9 — JOIN PAGE (registro por slug de empresa)
+Archivo: web-portal/src/features/join/JoinOrgPage.tsx
+Tiempo estimado: 2 horas
+Depende de: B1 + B7 listos (para leer la org por slug)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  URL: /join/:slug
+  No requiere autenticación
+
+  Al cargar:
+    1. Buscar organizations WHERE slug = :slug AND is_active = true
+    2. Si no existe → mostrar "Empresa no encontrada"
+    3. Si existe → mostrar el formulario de registro con la marca de la empresa
+
+  UI:
+    - Header con logo_light_url de la empresa (o nombre si no hay logo)
+    - Nombre de la empresa ("Estás por unirte a [Empresa X]")
+    - Formulario: nombre completo, email, contraseña, confirmar contraseña
+    - Al registrar: supabase.auth.signUp() + asignar organization_id en el trigger
+    - Éxito: "Verificá tu email para continuar"
+
+  Trigger en Supabase (Santi lo agrega en B3):
+    fn_handle_new_user debe leer organization_id del metadata si viene en signUp options
+    Facundo pasa el organization_id en: options.data.organization_id
+
+  Avisar: "✅ F9 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F10 — REALTIME EN KYC PENDING
+Archivo: web-portal/src/features/kyc/KycPendingPage.tsx
+Tiempo estimado: 45 minutos
+Depende de: NADA (la migración de Realtime ya la hizo Santi)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Agregar en el componente:
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('kyc-status-' + userId)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'identity_verifications',
+        filter: `user_id=eq.${userId}`,
+      }, (payload) => {
+        const newStatus = payload.new.status;
+        if (newStatus === 'VERIFIED')   navigate('/dashboard');
+        if (newStatus === 'REJECTED')   navigate('/kyc/rejected');
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId]);
+
+  Avisar: "✅ F10 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+F11 — AUTH REDIRECT POR ROL
+Archivo: web-portal/src/app/providers/AuthProvider.tsx
+Tiempo estimado: 30 minutos
+Depende de: F3 listo (para tener las rutas SUPER_ADMIN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Al hacer login exitoso, redirigir según rol:
+    SUPER_ADMIN → /super-admin
+    ORG_ADMIN   → /admin
+    USER        → /dashboard
+
+  En el componente DefaultRedirect (AppRouter.tsx):
+    const { user } = useAuth();
+    if (user?.role === 'SUPER_ADMIN') return <Navigate to="/super-admin" />;
+    if (user?.role === 'ORG_ADMIN')   return <Navigate to="/admin" />;
+    return <Navigate to="/dashboard" />;
+
+  Avisar: "✅ F11 listo"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ORDEN RECOMENDADO PARA FACUNDO:
+  Semana 1: F1 + F2 + F3 (en paralelo, ninguno depende del otro)
+  Semana 1: F10 (30 min, completamente independiente)
+  Semana 1: F4 (después de F1+F2)
+  Semana 1: F11 (después de F3)
+  Semana 2: F5 + F9 (después de B7 de Santi)
+  Semana 2: F6 + F7 + F8 (después de B6+B7 de Santi)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+================================================================================
+  MAPA DE DEPENDENCIAS
+================================================================================
+
+  [B1] ──────────┬──────────────────────────────────────┐
+                 ↓                                      ↓
+  [B2] ←── B1    [B4] ←── B1                       [B5] ←── B1
+  [B3] ←── B1+B2 [B6] ←── B1                       [B7] ←── B1
+                                                     ↓
+  [F1] ─────────────────────────── independiente     [F5] ←── F3+B7
+  [F2] ─────────────────────────── independiente     [F6] ←── F3+B6+B7
+  [F3] ─────────────────────────── independiente     [F7] ←── F5+B7
+  [F4] ←── F1+F2                                     [F8] ←── B6+B7
+  [F9] ←── B1+B7                                     [F10] ── independiente
+  [F11] ←── F3                                       [F4] ←── F1+F2
+
+
+================================================================================
+  ARCHIVOS CONGELADOS (NADIE TOCA)
+================================================================================
+
+  web-portal/src/shared/legal/terms.ts         ← T&C definitivos
+  web-portal/src/features/kyc/KycWizardPage.tsx ← no tocar durante este sprint
+  supabase/functions/sign-document/index.ts     ← no tocar
+  supabase/functions/generate-certificate/      ← no tocar
+  supabase/functions/face-verify/               ← no tocar
+  netlify.toml                                  ← no tocar
+
+
+================================================================================
+  QA CHECKLIST — CUANDO ESTÉN TODOS LOS BLOQUES
+================================================================================
+
+  Con 2 empresas de prueba (Empresa A y Empresa B):
+
+  [ ] SUPER_ADMIN crea Empresa A con logos + workflow DIDIT
+  [ ] SUPER_ADMIN crea Empresa B con logos diferentes + workflow DIDIT diferente
+  [ ] Un usuario entra a /join/empresa-a → ve el logo de Empresa A
+  [ ] El usuario se registra y queda en Empresa A
+  [ ] El usuario hace KYC → se crea sesión DIDIT con el workflow de Empresa A
+  [ ] ORG_ADMIN de Empresa A aprueba el KYC
+  [ ] El usuario recibe notificación Realtime en KycPendingPage
+  [ ] El usuario ve el tema blanco, ORG_ADMIN el gris, SUPER_ADMIN el negro
+  [ ] SUPER_ADMIN ve ambas empresas, ORG_ADMIN de A no ve nada de B
+  [ ] Un usuario de Empresa B NO puede ver documentos de Empresa A
+  [ ] ORG_ADMIN de A puede cambiar los logos desde /admin/settings
+
+
+================================================================================
+  SEMANA A SEMANA
+================================================================================
+
+  SEMANA 1 (ambos en paralelo):
+    Santi:   B1 → B2 → B4 → B3 (en ese orden estricto)
+    Facundo: F1 + F2 + F3 + F10 (todos independientes, en cualquier orden)
+    Punto de sync al final de la semana: Santi avisa "B3 listo" y "B4 listo"
+
+  SEMANA 2 (ambos en paralelo):
+    Santi:   B5 + B6 (en paralelo entre sí) → B7
+    Facundo: F4 + F11 → espera "B7 listo" de Santi → arranca F5, F9
+    Punto de sync: Santi avisa "B7 listo"
+
+  SEMANA 3:
+    Santi:   QA backend + hotfixes
+    Facundo: F6 + F7 + F8 (después de B6+B7)
+    Punto de sync al final: los dos hacen QA juntos con el checklist de arriba
+
+  SEMANA 4:
+    Ambos: QA final + fixes + deploy a producción
+
+================================================================================
+  FIN DEL PLAN — v3
+================================================================================
