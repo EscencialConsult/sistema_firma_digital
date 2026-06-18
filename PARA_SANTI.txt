@@ -7,8 +7,9 @@ Estamos trabajando los dos AL MISMO TIEMPO en ramas separadas.
 Cuando terminás un bloque, avisás y el otro puede arrancar lo que depende de él.
 
 BRANCHES:
-  Santi:   feature/mt-backend   (crear desde Facundo)
-  Facundo: feature/mt-frontend  (crear desde Facundo)
+  Santi:   santi    (ya existe, la tuya)
+  Facundo: Facundo  (ya existe, la mía)
+  Main:    main     (destino final de los dos — NO tocar mientras trabajamos)
 
 
 ================================================================================
@@ -258,23 +259,38 @@ Depende de: B1 de Santi listo
 
 
 ================================================================================
-  MERGE FINAL
+  MERGE FINAL (cuando cada uno termina sus bloques)
 ================================================================================
 
-  1. Santi termina todos sus bloques → push a feature/mt-backend → avisa
-  2. Santi crea PR de feature/mt-backend → Facundo
-  3. Facundo mergea la PR de Santi
-  4. Facundo termina sus bloques → push a feature/mt-frontend → push a Facundo
-  5. Deploy a producción juntos
+  PROTOCOLO:
+    Cada uno pushea a SU rama durante el desarrollo (santi / Facundo).
+    Cuando terminás todos tus bloques, pusheas a main.
+
+  ORDEN DE MERGE A MAIN:
+    1. El que termina primero → push a main
+         git checkout main
+         git merge santi   (o Facundo, según quien sea)
+         git push origin main
+
+    2. El segundo que termina → primero pull de main, después push
+         git checkout main
+         git pull origin main
+         git merge Facundo  (o santi)
+         → si hay conflictos, resolver y commitear
+         git push origin main
+
+    3. Los dos verifican en producción que todo funcione juntos.
 
 
 ================================================================================
   SEÑALES DE COMUNICACIÓN
 ================================================================================
 
-  Cuando terminás un bloque: push + mandar mensaje "✅ Bx listo" o "✅ Fx listo"
+  Cuando terminás un bloque: push a TU rama + mandar mensaje "✅ Bx listo"
   Si algo falla o rompe algo del otro: avisar inmediatamente antes de pushear
-  NUNCA pushear directo a Facundo (main de trabajo) sin avisar
+  NUNCA pushear a main mientras el otro está trabajando sin avisar antes
+  Santi pushea a: origin/santi
+  Facundo pushea a: origin/Facundo
 
 
 ================================================================================
