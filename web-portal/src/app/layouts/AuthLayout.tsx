@@ -10,6 +10,7 @@ export function AuthLayout() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 flex items-center justify-center px-4 py-12">
+      <p className="fixed bottom-3 right-4 text-[11px] font-mono text-zinc-700 select-none">v0.0.1</p>
       <div className="w-full max-w-md">
         <div className="flex items-center justify-center gap-3 mb-8">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10 backdrop-blur-sm border border-white/10">
