@@ -14,11 +14,27 @@ async function mapRowToVerification(
   const documents: KycDocument[] = await Promise.all(
     docRows.map(async (d) => {
       let previewUrl: string | undefined;
-      if (d.storage_path) {
-        const { data } = await supabase.storage
+      const storagePath = d.storage_path as string | undefined;
+      if (storagePath) {
+        const { data: signedData, error: signedError } = await supabase.storage
           .from(BUCKET)
-          .createSignedUrl(d.storage_path as string, 3600);
-        previewUrl = data?.signedUrl;
+          .createSignedUrl(storagePath, 3600);
+        if (signedData?.signedUrl) {
+          previewUrl = signedData.signedUrl;
+        } else {
+          console.error("[kyc] createSignedUrl failed", { storagePath, error: signedError });
+          // Fallback: download and create object URL
+          try {
+            const { data: blobData } = await supabase.storage
+              .from(BUCKET)
+              .download(storagePath);
+            if (blobData) {
+              previewUrl = URL.createObjectURL(blobData);
+            }
+          } catch (downloadErr) {
+            console.error("[kyc] download fallback also failed", { storagePath, error: downloadErr });
+          }
+        }
       }
       return {
         id:          d.id as string,
@@ -51,6 +67,9 @@ async function mapRowToVerification(
     id:              row.id as string,
     userId:          row.user_id as string,
     status:          row.status as KycStatus,
+    provider:        row.provider as string | undefined,
+    providerSessionUrl: row.provider_session_url as string | undefined,
+    providerSessionToken: row.provider_session_token as string | undefined,
     personalData,
     documents,
     submittedAt:     (row.submitted_at as string) ?? null,
@@ -78,7 +97,6 @@ export async function getMyVerification(userId: string): Promise<KycVerification
 }
 
 export async function startVerification(userId: string): Promise<KycVerification> {
-  // Return existing PENDING verification if one already exists
   const existing = await getMyVerification(userId);
   if (existing && existing.status === "PENDING") return existing;
 
@@ -90,6 +108,16 @@ export async function startVerification(userId: string): Promise<KycVerification
 
   if (error || !data) throw new Error(error?.message ?? "Error al iniciar verificación");
   return mapRowToVerification(data as Record<string, unknown>);
+}
+
+export async function startProviderVerification(): Promise<{
+  sessionId: string;
+  url: string;
+  token: string;
+}> {
+  const { data, error } = await supabase.functions.invoke("kyc-create-session");
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function savePersonalData(

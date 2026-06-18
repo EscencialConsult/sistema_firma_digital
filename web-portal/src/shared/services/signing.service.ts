@@ -46,7 +46,7 @@ function mapRowToSigningRequest(
 export async function getMySigningRequests(email: string): Promise<SigningRequest[]> {
   const { data, error } = await supabase
     .from("signature_requests")
-    .select("*, documents(*, document_versions(*))")
+    .select("*, documents(*, document_versions:document_versions!document_versions_document_id_fkey(*))")
     .eq("signer_email", email)
     .order("created_at", { ascending: false });
 
@@ -58,7 +58,7 @@ export async function getMySigningRequests(email: string): Promise<SigningReques
 export async function getSigningRequest(id: string): Promise<SigningRequest | null> {
   const { data, error } = await supabase
     .from("signature_requests")
-    .select("*, documents(*, document_versions(*))")
+    .select("*, documents(*, document_versions:document_versions!document_versions_document_id_fkey(*))")
     .eq("id", id)
     .maybeSingle();
 

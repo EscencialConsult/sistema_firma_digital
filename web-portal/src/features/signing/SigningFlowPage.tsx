@@ -58,7 +58,7 @@ function ConformityStep({
 
       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-3">
+        <div className="no-print flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-3">
           <div className="flex items-center gap-2">
             <FileSignature size={16} className="text-zinc-500" />
             <p className="text-sm font-semibold text-zinc-900">{request.documentTitle}</p>
@@ -106,7 +106,7 @@ function ConformityStep({
         )}
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
+      <div className="no-print rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
         <div className="flex items-center gap-2 text-sm font-bold text-zinc-900">
           <Shield size={16} className="text-zinc-700" />
           Declaración de conformidad legal
@@ -141,7 +141,7 @@ function ConformityStep({
         </label>
       </div>
 
-      <Button onClick={onAccept} disabled={!checked || loading} className="h-12 w-full text-base">
+      <Button onClick={onAccept} disabled={!checked || loading} className="no-print h-12 w-full text-base">
         <Shield size={16} />
         {loading ? "Registrando conformidad..." : "Aceptar y continuar"}
       </Button>
@@ -664,6 +664,33 @@ export function SigningFlowPage() {
     );
   }
 
+  if (
+    new Date(request.expiresAt) < new Date() &&
+    request.status !== "REJECTED"
+  ) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-zinc-50 p-4">
+        <div className="w-full max-w-md text-center space-y-5">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-red-100">
+            <XCircle size={40} className="text-red-400" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-zinc-950">Este enlace venció</h1>
+            <p className="text-sm text-zinc-500 leading-relaxed">
+              El plazo para firmar este documento ha expirado. Contactá al remitente
+              para solicitar un nuevo enlace de firma.
+            </p>
+          </div>
+          <Link to="/dashboard">
+            <Button variant="secondary">
+              <ArrowLeft size={15} /> Volver al dashboard
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   function goBack() {
     if (step > 0) setStep((s) => (s - 1) as StepIndex);
     else navigate(-1);
@@ -671,7 +698,7 @@ export function SigningFlowPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white px-4 py-4">
+      <header className="no-print border-b border-zinc-200 bg-white px-4 py-4">
         <div className="mx-auto flex max-w-2xl items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -696,12 +723,12 @@ export function SigningFlowPage() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-8">
-        <div className="mb-8">
+        <div className="no-print mb-8">
           <Stepper steps={STEPS} current={step} />
         </div>
 
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+          <div className="no-print mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
             {error}
           </div>
         )}

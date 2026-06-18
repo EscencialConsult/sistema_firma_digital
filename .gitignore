@@ -23,6 +23,9 @@ web-backend/*.db
 web-backend/*.db-shm
 web-backend/*.db-wal
 
+# Root env (secrets)
+.env
+
 # Logs
 *.log
 tmp-backend-*

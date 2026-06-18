@@ -6,7 +6,7 @@ export interface SigningRequest {
   documentTitle: string;
   signerEmail: string;
   signerName: string;
-  status: "PENDING" | "VIEWED" | "CONFORMITY_ACCEPTED" | "SIGNED" | "REJECTED";
+  status: "PENDING" | "VIEWED" | "CONFORMITY_ACCEPTED" | "SIGNED" | "REJECTED" | "EXPIRED";
   acceptedConformity: boolean;
   sha256Hash: string;
   fileName: string;

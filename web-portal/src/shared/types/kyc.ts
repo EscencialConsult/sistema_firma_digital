@@ -30,7 +30,23 @@ export interface KycVerification {
   id: string;
   userId: string;
   status: KycStatus;
-  personalData: KycPersonalData | null;
+  provider?: string;
+  providerSessionId?: string;
+  providerSessionUrl?: string;
+  providerSessionToken?: string;
+  personalData?: KycPersonalData | null;
+  fullName?: string | null;
+  documentType?: string | null;
+  documentNumber?: string | null;
+  birthDate?: string | null;
+  nationality?: string | null;
+  country?: string | null;
+  province?: string | null;
+  city?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  cuitCuil?: string | null;
   documents: KycDocument[];
   submittedAt: string | null;
   reviewedAt: string | null;
@@ -44,7 +60,7 @@ export type KycStep = 0 | 1 | 2 | 3;
 
 export const KYC_STEP_LABELS = [
   "Datos personales",
-  "Frente del DNI",
-  "Dorso del DNI",
-  "Selfie",
+  "Verificación de identidad",
+  "Términos",
+  "Revisión final",
 ] as const;

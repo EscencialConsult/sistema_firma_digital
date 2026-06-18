@@ -1,21 +1,20 @@
 param(
   [switch]$SkipInstall,
+  [switch]$SkipAgent,
   [switch]$SkipStop
 )
 
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$backend = Join-Path $root "web-backend"
 $portal = Join-Path $root "web-portal"
-$backendEnv = Join-Path $backend ".env"
+$agent = Join-Path $root "local-agent"
 $portalEnv = Join-Path $portal ".env"
-$backendEnvExample = Join-Path $backend ".env.example"
 $portalEnvExample = Join-Path $portal ".env.example"
-$backendOut = Join-Path $root "tmp-backend-out.log"
-$backendErr = Join-Path $root "tmp-backend-err.log"
 $portalOut = Join-Path $root "tmp-portal-out.log"
 $portalErr = Join-Path $root "tmp-portal-err.log"
+$agentOut = Join-Path $root "tmp-agent-out.log"
+$agentErr = Join-Path $root "tmp-agent-err.log"
 
 function Wait-ForUrl($url, $name) {
   for ($i = 0; $i -lt 40; $i++) {
@@ -50,37 +49,34 @@ if (-not $SkipStop) {
   & (Join-Path $PSScriptRoot "stop-dev.ps1")
 }
 
-Ensure-Env $backendEnv $backendEnvExample
 Ensure-Env $portalEnv $portalEnvExample
 
 if (-not $SkipInstall) {
-  Ensure-NodeModules $backend
   Ensure-NodeModules $portal
+  if (-not $SkipAgent -and (Test-Path $agent)) {
+    Ensure-NodeModules $agent
+  }
 }
 
-Write-Host "Levantando PostgreSQL..."
-docker compose -f (Join-Path $root "docker-compose.yml") up -d postgres
-
-Write-Host "Ejecutando migraciones y seed..."
-npm --prefix $backend run db:migrate
-npm --prefix $backend run db:seed
-
-Remove-Item -LiteralPath $backendOut, $backendErr, $portalOut, $portalErr -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $portalOut, $portalErr, $agentOut, $agentErr -ErrorAction SilentlyContinue
 
 $npm = (Get-Command npm.cmd -ErrorAction SilentlyContinue)
 if (-not $npm) {
   $npm = Get-Command npm
 }
 
-Write-Host "Iniciando backend..."
-Start-Process -FilePath $npm.Source `
-  -ArgumentList @("run", "dev") `
-  -WorkingDirectory $backend `
-  -RedirectStandardOutput $backendOut `
-  -RedirectStandardError $backendErr `
-  -WindowStyle Hidden | Out-Null
+# Start local-agent (optional, for PKCS#11 / Windows cert signing)
+if (-not $SkipAgent -and (Test-Path (Join-Path $agent "dist/server.js"))) {
+  Write-Host "Iniciando local-agent..."
+  Start-Process -FilePath $npm.Source `
+    -ArgumentList @("run", "start") `
+    -WorkingDirectory $agent `
+    -RedirectStandardOutput $agentOut `
+    -RedirectStandardError $agentErr `
+    -WindowStyle Hidden | Out-Null
 
-Wait-ForUrl "http://127.0.0.1:4000/health" "Backend"
+  Wait-ForUrl "http://127.0.0.1:4001/api/agent/pkcs11/tokens" "local-agent"
+}
 
 Write-Host "Iniciando portal..."
 Start-Process -FilePath $npm.Source `
@@ -95,12 +91,16 @@ Wait-ForUrl "http://127.0.0.1:5173" "Portal"
 Write-Host ""
 Write-Host "App lista." -ForegroundColor Green
 Write-Host "Portal:  http://127.0.0.1:5173"
-Write-Host "Backend: http://127.0.0.1:4000"
+if (-not $SkipAgent -and (Test-Path $agent)) {
+  Write-Host "Agent:   http://127.0.0.1:4001"
+}
 Write-Host "Admin:   admin@example.com / Admin123456"
 Write-Host ""
 Write-Host "Logs:"
-Write-Host "  Backend: $backendOut"
 Write-Host "  Portal:  $portalOut"
+if (-not $SkipAgent -and (Test-Path $agent)) {
+  Write-Host "  Agent:   $agentOut"
+}
 Write-Host ""
 Write-Host "Para verificar: npm run check"
 Write-Host "Para apagar:    npm run stop"

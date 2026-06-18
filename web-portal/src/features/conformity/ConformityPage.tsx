@@ -1,89 +1,154 @@
-import { AlertCircle, Files } from "lucide-react";
-import { Card, CardHeader } from "../../shared/components/ui/Card";
-import { PageHeader } from "../../shared/components/ui/PageHeader";
-import { EmptyState } from "../../shared/components/ui/EmptyState";
-import { useApiResource } from "../../shared/hooks/useApiResource";
-import { conformityApi } from "./services/conformity.api";
+import { CheckCircle, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
+import { useAuth } from "../../app/providers/AuthProvider";
+import { Button } from "../../shared/components/ui/Button";
+import { supabase } from "../../shared/lib/supabase";
 
-function shortHash(value?: string) {
-  return value ? value.slice(0, 16) : "sin hash";
-}
+const TERMS_TEXT = `
+TÉRMINOS Y CONDICIONES DE USO
 
-function formatDate(value?: string) {
-  return value ? new Date(value).toLocaleString() : "sin fecha";
-}
+1. Aceptación de los Términos
+Al acceder y utilizar la plataforma Firma Digital Portal (en adelante, "la Plataforma"), el usuario acepta los presentes Términos y Condiciones de Uso. Si no estuviese de acuerdo con alguno de ellos, deberá abstenerse de utilizar la Plataforma.
+
+2. Objeto
+La Plataforma permite la creación, envío, gestión y firma electrónica de documentos con validez legal, así como la verificación de identidad (KYC) y la emisión de certificados digitales.
+
+3. Registro y Seguridad
+Para utilizar la Plataforma, el usuario deberá registrarse proporcionando datos exactos y verdaderos. Es responsable de mantener la confidencialidad de sus credenciales de acceso y de todas las actividades realizadas bajo su cuenta.
+
+4. Firma Electrónica
+Las firmas realizadas a través de la Plataforma tienen validez legal conforme a la Ley N° 25.506 de Firma Digital de la República Argentina y normativa complementaria.
+
+5. Verificación de Identidad
+El usuario se compromete a proporcionar documentación válida y actualizada para el proceso de verificación de identidad (KYC). La Plataforma se reserva el derecho de solicitar información adicional.
+
+6. Privacidad y Datos Personales
+Los datos personales serán tratados conforme a la Ley N° 25.326 de Protección de Datos Personales. El usuario autoriza el almacenamiento y procesamiento de sus datos para los fines de la Plataforma.
+
+7. Propiedad Intelectual
+Todos los derechos de propiedad intelectual sobre la Plataforma, su diseño, código fuente, marcas y contenidos pertenecen a Escencial Consultora S.A.S.
+
+8. Limitación de Responsabilidad
+La Plataforma no será responsable por daños derivados del uso indebido, fallas técnicas ajenas a su control, o incumplimientos del usuario.
+
+9. Vigencia y Modificaciones
+Estos términos rigen a partir de su aceptación. La Plataforma podrá modificarlos, notificando al usuario con antelación.
+
+10. Jurisdicción
+Cualquier controversia se someterá a los tribunales ordinarios de la Ciudad Autónoma de Buenos Aires, República Argentina.
+`;
 
 export function ConformityPage() {
-  const { data, loading, error } = useApiResource(conformityApi.listMine, []);
+  const { user, reloadUser } = useAuth();
+  const navigate = useNavigate();
+  const [checked, setChecked] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (user?.termsAcceptedAt) {
+    return <Navigate to="/" replace />;
+  }
+
+  async function handleAccept() {
+    if (!user) return;
+    setAccepting(true);
+    setError(null);
+    try {
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({ terms_accepted_at: new Date().toISOString() })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      await reloadUser();
+      navigate("/");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ocurrió un error al aceptar los términos."
+      );
+    } finally {
+      setAccepting(false);
+    }
+  }
 
   return (
-    <>
-      <PageHeader
-        eyebrow="Aceptación expresa"
-        title="Declaración de conformidad"
-        description="Historial y configuración de conformidades prestadas para la firma digital de documentos."
-      />
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px] items-start">
-        {/* Conformity list */}
-        <Card>
-          <CardHeader title="Conformidades registradas" subtitle="Historial de aceptaciones explícitas firmadas en el sistema." />
-          
-          {loading ? <p className="p-5 text-sm text-slate-500">Cargando conformidades...</p> : null}
-          {error ? <div className="p-5"><EmptyState icon={AlertCircle} title="No se pudieron cargar conformidades" description={error} /></div> : null}
-          {!loading && !error && !data?.length ? (
-            <div className="p-5">
-              <EmptyState icon={Files} title="Sin registros" description="Aquí aparecerán las declaraciones de conformidad cuando firmes documentos." />
+    <div className="min-h-screen bg-zinc-50">
+      <header className="border-b border-zinc-200 bg-white px-4 py-4">
+        <div className="mx-auto flex max-w-4xl items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-zinc-950">
+              <ShieldCheck size={18} className="text-white" />
             </div>
-          ) : null}
-
-          {data?.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-zinc-100 bg-zinc-50/30 text-xs font-semibold text-zinc-500">
-                  <tr>
-                    <th className="px-5 py-3">Documento</th>
-                    <th className="px-5 py-3">Declaración</th>
-                    <th className="px-5 py-3">IP Origen</th>
-                    <th className="px-5 py-3">Fecha</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100/70">
-                  {data.map((record) => (
-                    <tr key={record.id} className="group hover:bg-zinc-50/30 transition duration-150">
-                      <td className="px-5 py-4">
-                        <p className="font-semibold text-zinc-950">{record.document_title}</p>
-                        <p className="mt-1 text-xs text-zinc-400">Ver. {record.document_version} · Hash {shortHash(record.document_hash)}</p>
-                      </td>
-                      <td className="px-5 py-4 text-xs text-zinc-600 max-w-[240px] truncate" title={record.acceptance_text}>
-                        {record.acceptance_text}
-                      </td>
-                      <td className="px-5 py-4 text-zinc-500 font-mono text-xs">{record.ip_address || "N/D"}</td>
-                      <td className="px-5 py-4 text-zinc-500">{formatDate(record.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </Card>
-
-        {/* Sidebar info */}
-        <Card>
-          <CardHeader title="Texto legal recomendado" subtitle="Texto estipulado para la conformidad." />
-          <div className="space-y-4 p-5 text-sm">
-            <p className="text-xs text-zinc-500 leading-relaxed">
-              El siguiente texto es la declaración legal requerida antes de aplicar cualquier firma visual o criptográfica:
-            </p>
-            <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/40 p-4 font-medium text-xs text-zinc-700 leading-relaxed italic">
-              "Declaro haber leído y aceptado el contenido del documento, prestando conformidad de manera libre, voluntaria e informada."
-            </div>
-            <div className="rounded-xl bg-emerald-50/40 border border-emerald-100/60 p-4 text-xs text-emerald-900 leading-relaxed">
-              <strong>Trazabilidad Legal:</strong> Al hacer clic en Aceptar Conformidad, se registra de manera inmutable el hash SHA-256 del documento original, versión, IP, fecha y hora, estableciendo un nexo probatorio vinculante.
+            <div>
+              <p className="text-sm font-bold text-zinc-950 leading-none">Firma Digital</p>
+              <p className="text-[11px] text-zinc-500 mt-0.5">Términos y condiciones</p>
             </div>
           </div>
-        </Card>
-      </div>
-    </>
+          <p className="text-xs text-zinc-500 hidden sm:block truncate max-w-[200px]">
+            {user?.email}
+          </p>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-4xl px-4 py-10">
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-950">
+              Términos y Condiciones de Uso
+            </h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              Leé atentamente los términos antes de aceptarlos. Esta aceptación es
+              necesaria para poder operar en la plataforma.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8 overflow-auto max-h-[500px]">
+            <pre className="whitespace-pre-wrap font-sans text-sm text-zinc-700 leading-relaxed">
+              {TERMS_TEXT}
+            </pre>
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+              {error}
+            </div>
+          )}
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-5">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-zinc-900"
+              checked={checked}
+              onChange={(e) => setChecked(e.target.checked)}
+            />
+            <span className="text-sm text-zinc-700 leading-relaxed">
+              <span className="font-semibold">Leí y acepto</span> los Términos y
+              Condiciones de Uso de la plataforma Firma Digital Portal, incluyendo
+              las políticas de privacidad y tratamiento de datos personales.
+            </span>
+          </label>
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleAccept}
+              disabled={!checked || accepting}
+              className="h-12 flex-1 text-base"
+            >
+              <CheckCircle size={16} />
+              {accepting ? "Aceptando términos..." : "Aceptar términos y continuar"}
+            </Button>
+          </div>
+
+          <p className="text-center text-xs text-zinc-400">
+            Al hacer clic en "Aceptar términos y continuar" aceptás los términos
+            descritos arriba. Esta acción quedará registrada.
+          </p>
+        </div>
+      </main>
+    </div>
   );
 }

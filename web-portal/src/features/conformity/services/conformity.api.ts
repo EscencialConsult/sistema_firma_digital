@@ -1,4 +1,4 @@
-import { apiClient } from "../../../shared/services/apiClient";
+import { supabase } from "../../../shared/lib/supabase";
 
 export type ConformityRecord = {
   id: string;
@@ -13,7 +13,11 @@ export type ConformityRecord = {
 
 export const conformityApi = {
   async listMine() {
-    const response = await apiClient.get<{ data: ConformityRecord[] }>("/conformity");
-    return response.data;
+    const { data, error } = await supabase
+      .from("acceptance_records")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data as ConformityRecord[];
   }
 };

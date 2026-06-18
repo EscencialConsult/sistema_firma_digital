@@ -8,7 +8,8 @@ import {
   Search,
   Send,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Toast } from "../../shared/components/ui/Toast";
 import { Button } from "../../shared/components/ui/Button";
 import { getAllContracts, createContract } from "../../shared/services/contracts.service";
 import { getAllUsers } from "../../shared/services/admin.service";
@@ -176,8 +177,11 @@ export function AdminContractsPage() {
   const [users, setUsers]         = useState<AdminUserSummary[]>([]);
   const [userSearch, setUserSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
-  const [creating, setCreating]   = useState(false);
-  const [created, setCreated]     = useState(false);
+  const [creating, setCreating]      = useState(false);
+  const [created, setCreated]        = useState(false);
+  const [showToast, setShowToast]    = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     getAllContracts().then((c) => { setContracts(c); setLoading(false); });
@@ -251,12 +255,23 @@ export function AdminContractsPage() {
 
       setContracts((c) => [newContract, ...c]);
       setCreated(true);
+      setToastMessage(`Contrato enviado a ${alumno.nombre}`);
+      setShowToast(true);
     } catch (err) {
       console.error("[AdminContracts] Error al crear contrato:", err);
     } finally {
       setCreating(false);
     }
   }
+
+  // Auto-redirect to list after successful creation
+  useEffect(() => {
+    if (!created) return;
+    redirectTimerRef.current = setTimeout(() => {
+      exitCreate();
+    }, 2500);
+    return () => clearTimeout(redirectTimerRef.current);
+  }, [created]);
 
   function resetCreate() {
     setStep(0);
@@ -481,6 +496,14 @@ export function AdminContractsPage() {
             )}
           </>
         )}
+
+        <Toast
+          message={toastMessage}
+          type="success"
+          visible={showToast}
+          onClose={() => setShowToast(false)}
+          duration={4000}
+        />
       </div>
     );
   }
@@ -610,6 +633,14 @@ export function AdminContractsPage() {
           )}
         </div>
       </div>
+
+      <Toast
+        message={toastMessage}
+        type="success"
+        visible={showToast}
+        onClose={() => setShowToast(false)}
+        duration={4000}
+      />
     </>
   );
 }

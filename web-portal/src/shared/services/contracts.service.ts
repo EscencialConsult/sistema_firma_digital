@@ -51,7 +51,7 @@ export async function getMyContracts(): Promise<Contract[]> {
 
   const { data, error } = await supabase
     .from("documents")
-    .select("*, owner:users!owner_id(email), document_versions(*)")
+    .select("*, owner:users!owner_id(email), document_versions:document_versions!document_versions_document_id_fkey(*)")
     .eq("owner_id", user.id)
     .order("updated_at", { ascending: false });
 
@@ -66,7 +66,7 @@ export async function getContractById(id: string): Promise<ContractDetail | null
     .select(`
       *,
       owner:users!owner_id(email),
-      document_versions(*),
+      document_versions:document_versions!document_versions_document_id_fkey(*),
       signature_requests(*)
     `)
     .eq("id", id)
@@ -94,7 +94,7 @@ export async function getContractById(id: string): Promise<ContractDetail | null
 export async function getAllContracts(): Promise<Contract[]> {
   const { data, error } = await supabase
     .from("documents")
-    .select("*, owner:users!owner_id(email), document_versions(*)")
+    .select("*, owner:users!owner_id(email), document_versions:document_versions!document_versions_document_id_fkey(*)")
     .order("updated_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -125,7 +125,7 @@ export async function createContract(input: {
       total_signers:   1,
       status:          "DRAFT",
     })
-    .select("*, owner:users!owner_id(email), document_versions(*)")
+    .select("*, owner:users!owner_id(email), document_versions:document_versions!document_versions_document_id_fkey(*)")
     .single();
 
   if (docError || !doc) throw new Error(docError?.message ?? "Error al crear el contrato");

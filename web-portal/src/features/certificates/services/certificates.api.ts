@@ -1,4 +1,4 @@
-import { apiClient, getAccessToken } from "../../../shared/services/apiClient";
+import { supabase } from "../../../shared/lib/supabase";
 
 export type CertificateRecord = {
   id: string;
@@ -21,36 +21,47 @@ export type CreateCertificateInput = {
   password: string;
 };
 
+const CERT_BUCKET = "certificates";
+
 export const certificatesApi = {
   async list() {
-    const response = await apiClient.get<{ data: CertificateRecord[] }>("/certificates");
-    return response.data;
+    const { data, error } = await supabase
+      .from("certificates")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data as CertificateRecord[];
   },
   async create(input: CreateCertificateInput) {
-    const response = await apiClient.post<{ data: CertificateRecord }>("/certificates", input);
-    return response.data;
+    const { data, error } = await supabase.functions.invoke("generate-certificate", {
+      body: input,
+    });
+    if (error) throw error;
+    return data as CertificateRecord;
   },
   async updateStatus(id: string, status: "ACTIVE" | "INACTIVE" | "EXPIRED" | "REVOKED") {
-    const response = await apiClient.patch<{ data: CertificateRecord }>(`/certificates/${id}/status`, { status });
-    return response.data;
+    const { error } = await supabase
+      .from("certificates")
+      .update({ status })
+      .eq("id", id);
+    if (error) throw error;
   },
   async download(id: string, filename: string) {
-    const apiBase = import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:4000/api";
-    const token = getAccessToken();
-    const response = await fetch(`${apiBase}/certificates/${id}/download`, {
-      credentials: "include",
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => null);
-      throw new Error(error?.message ?? `Error HTTP ${response.status}`);
-    }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+    const { data: cert, error: certError } = await supabase
+      .from("certificates")
+      .select("storage_path")
+      .eq("id", id)
+      .single();
+    if (certError || !cert?.storage_path) throw new Error("Certificate not found or no storage path");
+
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from(CERT_BUCKET)
+      .createSignedUrl(cert.storage_path, 60);
+    if (signedError || !signedData?.signedUrl) throw new Error("Failed to generate download URL");
+
     const anchor = document.createElement("a");
-    anchor.href = url;
+    anchor.href = signedData.signedUrl;
     anchor.download = filename;
     anchor.click();
-    URL.revokeObjectURL(url);
   }
 };

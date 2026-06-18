@@ -28,23 +28,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError]     = useState<string | null>(null);
 
   useEffect(() => {
+    // Safety timeout: force loading off after 10s to prevent blank screen
+    const safetyTimer = setTimeout(() => setLoading(false), 10000);
+
     // Listen for Supabase auth state changes (fires INITIAL_SESSION immediately)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (session?.user) {
-          const profile = await fetchProfile(session.user.id);
-          setUser(profile);
-        } else {
+        try {
+          if (session?.user) {
+            const profile = await fetchProfile(session.user.id, session.user);
+            setUser(profile);
+          } else {
+            setUser(null);
+          }
+        } catch {
           setUser(null);
-        }
-        // Mark loading done after the initial session check
-        if (event === "INITIAL_SESSION") {
-          setLoading(false);
+        } finally {
+          // Mark loading done after the initial session check
+          if (event === "INITIAL_SESSION") {
+            setLoading(false);
+          }
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -56,9 +67,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async signIn(email, password) {
         setError(null);
         try {
-          setUser(await login(email, password));
+          const user = await login(email, password);
+          setUser(user);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "No se pudo iniciar sesión.");
+          const message = err instanceof Error
+            ? err.message
+            : typeof err === "object" && err !== null
+              ? ((err as Record<string, unknown>)?.message as string) ?? "No se pudo iniciar sesión."
+              : "No se pudo iniciar sesión.";
+          setError(message);
           throw err;
         }
       },
@@ -66,7 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async signUp(input) {
         setError(null);
         try {
-          setUser(await register(input));
+          const user = await register(input);
+          setUser(user);
         } catch (err) {
           setError(err instanceof Error ? err.message : "No se pudo crear la cuenta.");
           throw err;

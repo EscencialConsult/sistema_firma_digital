@@ -17,13 +17,15 @@ export interface AuthUser {
   verificationStatus: VerificationStatus;
   certificateStatus: CertificateStatus;
   organizationId?: string;
-}
-
-export interface UserProfile extends AuthUser {
+  termsAcceptedAt?: string;
   phone?: string;
   address?: string;
   documentNumber?: string;
   cuilCuit?: string;
+  birthDate?: string;
+}
+
+export interface UserProfile extends AuthUser {
   createdAt: string;
 }
 

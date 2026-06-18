@@ -1,5 +1,6 @@
 import {
   Bell,
+  FileText,
   Files,
   Gauge,
   History,
@@ -12,8 +13,9 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../providers/AuthProvider";
+import { TERMS_TEXT } from "../../shared/legal/terms";
 
 const USER_NAV = [
   { path: "/dashboard",  label: "Dashboard",      icon: Gauge,  end: true },
@@ -46,10 +48,11 @@ function NavItem({ path, label, icon: Icon, end }: { path: string; label: string
 
 export function AppLayout() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
   const isAdmin = user?.role === "ADMIN";
   const navItems = isAdmin ? [...USER_NAV, ...ADMIN_EXTRA] : USER_NAV;
+  const verificationLabel = user?.verificationStatus === "VERIFIED" ? "Verificado" : "KYC pendiente";
 
   const sidebar = (
     <>
@@ -69,7 +72,17 @@ export function AppLayout() {
         ))}
       </nav>
 
-      <div className="mt-auto rounded-2xl border border-zinc-200/60 bg-zinc-50 p-4">
+      <div className="mt-auto space-y-2">
+        <button
+          type="button"
+          onClick={() => setTermsOpen(true)}
+          className="mx-auto inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"
+        >
+          <FileText size={12} />
+          Términos y condiciones
+        </button>
+
+      <div className="rounded-2xl border border-zinc-200/60 bg-zinc-50 p-4">
         <div className="mb-1 flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -78,8 +91,9 @@ export function AppLayout() {
           <p className="text-xs font-semibold text-zinc-900 truncate">{user?.fullName}</p>
         </div>
         <p className="text-[11px] text-zinc-500 capitalize">
-          {user?.role?.toLowerCase()} · Verificado
+          {user?.role?.toLowerCase()} · {verificationLabel}
         </p>
+      </div>
       </div>
     </>
   );
@@ -142,6 +156,48 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {termsOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/45 px-4 py-6">
+          <div className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-zinc-950 text-white">
+                  <FileText size={17} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-950">Términos y condiciones</h3>
+                  <p className="text-xs text-zinc-500">Firma Digital Portal</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTermsOpen(false)}
+                className="grid h-9 w-9 place-items-center rounded-xl text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"
+                aria-label="Cerrar términos y condiciones"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="max-h-[62vh] overflow-auto p-5">
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-700">
+                {TERMS_TEXT}
+              </pre>
+            </div>
+
+            <div className="flex justify-end border-t border-zinc-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setTermsOpen(false)}
+                className="rounded-xl bg-zinc-950 px-5 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
