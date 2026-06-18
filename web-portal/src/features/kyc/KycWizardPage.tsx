@@ -290,20 +290,29 @@ function ProviderVerificationStep({
   useEffect(() => {
     if (status !== "PENDING") return;
 
-    const interval = setInterval(async () => {
-      try {
-        const { data: raw } = await supabase.rpc("get_my_kyc_status");
-        const currentStatus = (raw as Record<string, unknown> | null)?.status as string | undefined;
-        if (currentStatus && currentStatus !== status) {
-          void handleProviderStatus(currentStatus);
+    const channel = supabase
+      .channel(`kyc_status_${verification.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "identity_verifications",
+          filter: `id=eq.${verification.id}`,
+        },
+        (payload) => {
+          const newStatus = payload.new.status as string;
+          if (newStatus && newStatus !== status) {
+            void handleProviderStatus(newStatus);
+          }
         }
-      } catch {
-        // ignore polling errors
-      }
-    }, 3000);
+      )
+      .subscribe();
 
-    return () => clearInterval(interval);
-  }, [status, handleProviderStatus]);
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [status, handleProviderStatus, verification.id]);
 
   return (
     <div className="space-y-4">
@@ -411,7 +420,9 @@ export function KycWizardPage() {
             setPersonalData(normalizedPersonalData);
           }
           if (existing.provider || existing.providerSessionUrl) {
-            setStep(1);
+            setStep(2);
+          } else if (user.termsAcceptedAt) {
+            setStep(2);
           }
         }
       } catch (err) {
@@ -472,14 +483,8 @@ export function KycWizardPage() {
         address: personalData.address || undefined,
       });
 
-      if (!verification?.providerSessionUrl) {
-        await kycService.startProviderVerification();
-      }
       const updatedVerification = await kycService.getMyVerification(user.id);
-      if (!updatedVerification) {
-        throw new Error("No se pudo iniciar la verificacion.");
-      }
-      setVerification(updatedVerification);
+      if (updatedVerification) setVerification(updatedVerification);
       setStep(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar los datos.");
@@ -500,7 +505,15 @@ export function KycWizardPage() {
         updateUser({ termsAcceptedAt: acceptedAt });
       }
 
-      setStep(3);
+      if (!verification?.providerSessionUrl) {
+        await kycService.startProviderVerification();
+      }
+      const updatedVerification = await kycService.getMyVerification(user.id);
+      if (!updatedVerification) {
+        throw new Error("No se pudo iniciar la verificacion.");
+      }
+      setVerification(updatedVerification);
+      setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al aceptar terminos.");
     } finally {
@@ -539,30 +552,30 @@ export function KycWizardPage() {
             loading={loading}
           />
         )}
-        {step === 1 && verification && (
+        {step === 1 && (
+          <TermsStep
+            accepted={termsAccepted}
+            onAcceptedChange={setTermsAccepted}
+            onBack={() => setStep(0)}
+            onNext={handleTermsNext}
+            loading={loading}
+          />
+        )}
+        {step === 2 && verification && (
           <ProviderVerificationStep
             verification={verification}
-            onBack={() => setStep(0)}
+            onBack={() => setStep(1)}
             onVerified={(verifiedVerification) => {
               setVerification(verifiedVerification);
               const normalizedPersonalData = personalDataFromVerification(verifiedVerification, user?.fullName ?? "");
               if (normalizedPersonalData) setPersonalData(normalizedPersonalData);
-              setStep(2);
+              setStep(3);
             }}
             onExpired={() => {
               setVerification(null);
               setStep(0);
               setError("La sesion de Didit ya no existe o expiro. Carga los datos y genera una nueva verificacion.");
             }}
-          />
-        )}
-        {step === 2 && (
-          <TermsStep
-            accepted={termsAccepted}
-            onAcceptedChange={setTermsAccepted}
-            onBack={() => setStep(1)}
-            onNext={handleTermsNext}
-            loading={loading}
           />
         )}
         {step === 3 && (

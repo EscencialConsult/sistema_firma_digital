@@ -1,16 +1,47 @@
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
+import * as kycService from "../../shared/services/kyc.service";
+import type { KycVerification } from "../../shared/types/kyc";
 
 export function KycRejectedPage() {
-  const { updateUser } = useAuth();
+  const { user, updateUser } = useAuth();
   const navigate = useNavigate();
+  const [verification, setVerification] = useState<KycVerification | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadVerification() {
+      if (!user) return;
+      try {
+        const data = await kycService.getMyVerification(user.id);
+        setVerification(data);
+      } catch (err) {
+        console.error("Error al cargar la verificación", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    void loadVerification();
+  }, [user]);
 
   function handleRetry() {
     updateUser({ verificationStatus: "PENDING" });
     navigate("/kyc");
   }
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 size={36} className="animate-spin text-zinc-400" />
+      </div>
+    );
+  }
+
+  const defaultReason = "No se pudo validar tu identidad con las imágenes provistas. Por favor, asegúrate de que sean claras y sin reflejos.";
+  const reason = verification?.rejectionReason || defaultReason;
 
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -25,10 +56,7 @@ export function KycRejectedPage() {
 
       <div className="mt-8 w-full max-w-sm rounded-2xl border border-red-200 bg-red-50 p-5 text-left">
         <p className="text-xs font-bold uppercase tracking-wide text-red-600 mb-2">Motivo del rechazo</p>
-        <p className="text-sm text-red-800 leading-relaxed">
-          La selfie no coincide con la foto del DNI. Por favor, tomá una nueva foto en un lugar
-          bien iluminado, mirando directamente a la cámara.
-        </p>
+        <p className="text-sm text-red-800 leading-relaxed">{reason}</p>
       </div>
 
       <div className="mt-8 w-full max-w-sm space-y-3">

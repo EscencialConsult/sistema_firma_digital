@@ -1,0 +1,4 @@
+# Deshabilita la verificación JWT de Supabase para este webhook.
+# La seguridad se maneja internamente mediante HMAC (DIDIT_WEBHOOK_SECRET).
+[functions.kyc-webhook]
+verify_jwt = false

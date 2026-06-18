@@ -60,7 +60,7 @@ export type KycStep = 0 | 1 | 2 | 3;
 
 export const KYC_STEP_LABELS = [
   "Datos personales",
-  "Verificación de identidad",
   "Términos",
+  "Verificación de identidad",
   "Revisión final",
 ] as const;
