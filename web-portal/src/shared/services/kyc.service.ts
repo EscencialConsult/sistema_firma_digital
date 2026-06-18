@@ -149,11 +149,14 @@ export async function uploadDocument(
   type: KycDocumentType,
   file: File
 ): Promise<KycDocument> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error("No autenticado");
+  
+  const user = session.user;
+  const orgId = user.user_metadata?.organization_id || "default";
 
   const ext  = file.name.split(".").pop() ?? "jpg";
-  const path = `${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`;
+  const path = `${orgId}/${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`;
 
   // Upload to Storage
   const { error: uploadError } = await supabase.storage

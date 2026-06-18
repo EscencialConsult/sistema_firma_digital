@@ -37,12 +37,31 @@ serve(async (req) => {
       );
     }
 
-    if (!DIDIT_WORKFLOW_ID) {
+    const payloadBase64 = token.split(".")[1];
+    const payload = JSON.parse(atob(payloadBase64));
+    const organization_id = payload.organization_id;
+
+    if (!organization_id) {
       return new Response(
-        JSON.stringify({ error: "DIDIT_WORKFLOW_ID no configurado. Creá un workflow en Didit Console primero." }),
+        JSON.stringify({ error: "El usuario no pertenece a ninguna organización. Contacte a soporte." }),
+        { status: 403, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: org, error: orgError } = await supabase
+      .from("organizations")
+      .select("didit_workflow_id")
+      .eq("id", organization_id)
+      .single();
+
+    if (orgError || !org?.didit_workflow_id) {
+      return new Response(
+        JSON.stringify({ error: "La organización no tiene un flujo de KYC (DIDIT_WORKFLOW_ID) configurado." }),
         { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
+
+    const dynamicWorkflowId = org.didit_workflow_id;
 
     let { data: verification } = await supabase
       .from("identity_verifications")
@@ -56,7 +75,7 @@ serve(async (req) => {
     if (!verification) {
       const { data: newVer, error: insertError } = await supabase
         .from("identity_verifications")
-        .insert({ user_id: user.id, status: "PENDING" })
+        .insert({ user_id: user.id, organization_id, status: "PENDING" })
         .select()
         .single();
       if (insertError || !newVer) {
@@ -75,7 +94,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        workflow_id: DIDIT_WORKFLOW_ID,
+        workflow_id: dynamicWorkflowId,
         vendor_data: user.id,
         metadata: { verificationId: verification.id },
         ...(DIDIT_CALLBACK_URL ? { callback: DIDIT_CALLBACK_URL } : {}),
