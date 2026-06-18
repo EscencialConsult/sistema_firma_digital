@@ -20,11 +20,6 @@ import {
 import type { Organization, OrganizationStats } from "../../shared/types/organization";
 import { OrgLogo } from "../../shared/components/ui/OrgLogo";
 
-const PLAN_COLOR: Record<Organization["plan"], string> = {
-  basic: "bg-zinc-700 text-zinc-300",
-  pro: "bg-violet-900 text-violet-300",
-  enterprise: "bg-amber-900 text-amber-300",
-};
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: number; icon: React.ElementType; color: string }) {
   return (
@@ -140,9 +135,6 @@ export function OrganizationDetailPage() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold text-white">{org.name}</h1>
-            <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${PLAN_COLOR[org.plan]}`}>
-              {org.plan}
-            </span>
             {org.isActive ? (
               <span className="flex items-center gap-1 text-xs font-medium text-emerald-400">
                 <CheckCircle size={12} /> Activa

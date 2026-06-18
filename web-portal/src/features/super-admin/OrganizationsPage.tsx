@@ -5,18 +5,6 @@ import { listOrganizations } from "../../shared/services/organizations.service";
 import type { Organization } from "../../shared/types/organization";
 import { OrgLogo } from "../../shared/components/ui/OrgLogo";
 
-const PLAN_LABEL: Record<Organization["plan"], string> = {
-  basic: "Basic",
-  pro: "Pro",
-  enterprise: "Enterprise",
-};
-
-const PLAN_COLOR: Record<Organization["plan"], string> = {
-  basic: "bg-zinc-700 text-zinc-300",
-  pro: "bg-violet-900 text-violet-300",
-  enterprise: "bg-amber-900 text-amber-300",
-};
-
 export function OrganizationsPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,12 +84,7 @@ export function OrganizationsPage() {
               />
 
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-white truncate">{org.name}</p>
-                  <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${PLAN_COLOR[org.plan]}`}>
-                    {PLAN_LABEL[org.plan]}
-                  </span>
-                </div>
+                <p className="text-sm font-semibold text-white truncate">{org.name}</p>
                 <p className="mt-0.5 text-xs text-zinc-500">/{org.slug}</p>
               </div>
 

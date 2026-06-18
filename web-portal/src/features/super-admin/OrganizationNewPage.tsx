@@ -54,7 +54,6 @@ export function OrganizationNewPage() {
   const [name, setName]               = useState("");
   const [slug, setSlug]               = useState("");
   const [slugManual, setSlugManual]   = useState(false);
-  const [plan, setPlan]               = useState<Organization["plan"]>("basic");
   const [maxUsers, setMaxUsers]       = useState(50);
   const [contactEmail, setContactEmail] = useState("");
   const [diditWorkflowId, setDiditWorkflowId] = useState("");
@@ -77,7 +76,7 @@ export function OrganizationNewPage() {
       const org = await createOrganization({
         name: name.trim(),
         slug: slug.trim(),
-        plan,
+        plan: "basic",
         maxUsers,
         contactEmail: contactEmail.trim() || undefined,
         diditWorkflowId: diditWorkflowId.trim() || undefined,
@@ -147,29 +146,15 @@ export function OrganizationNewPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-400">Plan</label>
-              <select
-                value={plan}
-                onChange={(e) => setPlan(e.target.value as Organization["plan"])}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white focus:border-zinc-500 focus:outline-none"
-              >
-                <option value="basic">Basic</option>
-                <option value="pro">Pro</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-400">Máx. usuarios</label>
-              <input
-                type="number"
-                min={1}
-                value={maxUsers}
-                onChange={(e) => setMaxUsers(Number(e.target.value))}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white focus:border-zinc-500 focus:outline-none"
-              />
-            </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-zinc-400">Máx. usuarios</label>
+            <input
+              type="number"
+              min={1}
+              value={maxUsers}
+              onChange={(e) => setMaxUsers(Number(e.target.value))}
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white focus:border-zinc-500 focus:outline-none"
+            />
           </div>
 
           <div>
