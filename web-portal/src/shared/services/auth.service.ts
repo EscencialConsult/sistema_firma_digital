@@ -110,11 +110,12 @@ export async function register(input: {
   fullName: string;
   email: string;
   password: string;
+  organizationId?: string;
 }): Promise<AuthUser> {
   const { data, error } = await supabase.auth.signUp({
     email:    input.email,
     password: input.password,
-    options:  { data: { full_name: input.fullName } },
+    options:  { data: { full_name: input.fullName, organization_id: input.organizationId ?? null } },
   });
 
   if (error) {

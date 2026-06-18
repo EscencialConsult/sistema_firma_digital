@@ -73,6 +73,11 @@ const PublicSigningPage = lazy(() =>
   }))
 );
 
+// ─── Join org (sin login requerido) ───────────────────────────────────────────
+const JoinOrgPage = lazy(() =>
+  import("../../features/join/JoinOrgPage").then((m) => ({ default: m.JoinOrgPage }))
+);
+
 // ─── Super Admin ──────────────────────────────────────────────────────────────
 const SuperAdminDashboardPage = lazy(() =>
   import("../../features/super-admin/SuperAdminDashboardPage").then((m) => ({
@@ -169,7 +174,10 @@ export function AppRouter() {
         </Route>
 
         {/* Firma pública (sin cuenta) */}
-        <Route path="/sign/:id" element={<PublicSigningPage />} />
+        <Route path="/sign/:id"    element={<PublicSigningPage />} />
+
+        {/* Unirse a una organización (sin cuenta) */}
+        <Route path="/join/:slug"  element={<JoinOrgPage />} />
 
         {/* ── Requieren login ── */}
         <Route element={<AuthGuard />}>
