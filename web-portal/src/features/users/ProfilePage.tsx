@@ -10,13 +10,14 @@ import {
   UserCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
 import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
 import { getMyVerification } from "../../shared/services/kyc.service";
 import { supabase } from "../../shared/lib/supabase";
-import type { KycVerification } from "../../shared/types/kyc";
+import type { KycPersonalData, KycVerification } from "../../shared/types/kyc";
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING:   "Pendiente",
@@ -48,11 +49,13 @@ function StatusBadge({ status }: { status: string }) {
 
 export function ProfilePage() {
   const { user, reloadUser } = useAuth();
+  const navigate = useNavigate();
   const [fullName, setFullName]   = useState("");
   const [saving, setSaving]       = useState(false);
   const [success, setSuccess]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [kyc, setKyc]             = useState<KycVerification | null>(null);
+  const [profileKycData, setProfileKycData] = useState<KycPersonalData | null>(null);
   const [kycLoading, setKycLoading] = useState(true);
 
   useEffect(() => {
@@ -65,6 +68,44 @@ export function ProfilePage() {
       .then(setKyc)
       .catch(console.error)
       .finally(() => setKycLoading(false));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const currentUser = user;
+    async function loadProfileKycData() {
+      try {
+        const { data } = await supabase
+          .from("users")
+          .select("full_name, document_number, cuil_cuit, birth_date, phone, address")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+        if (!data) return;
+        const hasProfileKycData = Boolean(
+          data.document_number ||
+          data.cuil_cuit ||
+          data.birth_date ||
+          data.phone ||
+          data.address
+        );
+        if (!hasProfileKycData) return;
+        setProfileKycData({
+          fullName: data.full_name ?? currentUser.fullName,
+          documentType: "DNI",
+          documentNumber: data.document_number ?? "",
+          cuilCuit: data.cuil_cuit ?? "",
+          birthDate: data.birth_date ?? "",
+          phone: data.phone ?? "",
+          address: data.address ?? "",
+          city: "",
+          province: "",
+          country: "Argentina",
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    void loadProfileKycData();
   }, [user]);
 
   if (!user) {
@@ -91,7 +132,16 @@ export function ProfilePage() {
     }
   }
 
-  const pd = kyc?.personalData;
+  const pd = kyc?.personalData ?? profileKycData;
+  const canStartKyc = user.verificationStatus !== "VERIFIED" && user.verificationStatus !== "IN_REVIEW";
+  const kycActionLabel =
+    user.verificationStatus === "REJECTED"
+      ? "Reintentar verificación"
+      : user.verificationStatus === "EXPIRED"
+        ? "Generar nueva verificación"
+        : kyc?.status === "PENDING"
+          ? "Continuar verificación"
+          : "Iniciar verificación";
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -197,6 +247,12 @@ export function ProfilePage() {
               <Clock size={24} className="text-zinc-300 mx-auto mb-2" />
               <p className="text-sm font-semibold text-zinc-500">Sin datos KYC registrados</p>
               <p className="text-xs text-zinc-400 mt-1">Completá el proceso de verificación de identidad.</p>
+              {canStartKyc ? (
+                <Button type="button" className="mt-4 h-10 px-5" onClick={() => navigate("/kyc")}>
+                  <ShieldCheck size={15} />
+                  {kycActionLabel}
+                </Button>
+              ) : null}
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -224,7 +280,7 @@ export function ProfilePage() {
 
           {/* KYC status footer */}
           {kyc && (
-            <div className={`mt-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold ${
+            <div className={`mt-4 flex flex-col gap-3 rounded-xl p-3 text-xs font-semibold sm:flex-row sm:items-center sm:justify-between ${
               kyc.status === "VERIFIED"
                 ? "bg-emerald-50 text-emerald-800 border border-emerald-100"
                 : kyc.status === "IN_REVIEW"
@@ -233,11 +289,22 @@ export function ProfilePage() {
                     ? "bg-rose-50 text-rose-800 border border-rose-100"
                     : "bg-zinc-50 text-zinc-700 border border-zinc-100"
             }`}>
-              <ShieldCheck size={14} />
-              {kyc.status === "VERIFIED"  && "Identidad verificada por el equipo de Escencial."}
-              {kyc.status === "IN_REVIEW" && "Tu documentación está siendo revisada. Te notificaremos pronto."}
-              {kyc.status === "REJECTED"  && `Verificación rechazada${kyc.rejectionReason ? `: ${kyc.rejectionReason}` : "."}`}
-              {kyc.status === "PENDING"   && "Completá el proceso KYC para verificar tu identidad."}
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={14} className="shrink-0" />
+                <span>
+                  {kyc.status === "VERIFIED"  && "Identidad verificada por el equipo de Escencial."}
+                  {kyc.status === "IN_REVIEW" && "Tu documentación está siendo revisada. Te notificaremos pronto."}
+                  {kyc.status === "REJECTED"  && `Verificación rechazada${kyc.rejectionReason ? `: ${kyc.rejectionReason}` : "."}`}
+                  {kyc.status === "PENDING"   && "Completá el proceso KYC para verificar tu identidad."}
+                  {kyc.status === "EXPIRED"   && "La verificación expiró. Podés iniciar una nueva solicitud."}
+                </span>
+              </div>
+              {canStartKyc ? (
+                <Button type="button" className="h-9 px-4 text-xs" onClick={() => navigate("/kyc")}>
+                  <ShieldCheck size={14} />
+                  {kycActionLabel}
+                </Button>
+              ) : null}
             </div>
           )}
         </div>

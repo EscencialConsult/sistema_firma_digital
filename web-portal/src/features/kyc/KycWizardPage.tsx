@@ -1,11 +1,12 @@
-import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, CheckCircle, FileText, Loader2 } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
 import { Input } from "../../shared/components/ui/Input";
 import { Stepper } from "../../shared/components/ui/Stepper";
 import { supabase } from "../../shared/lib/supabase";
+import { TERMS_TEXT } from "../../shared/legal/terms";
 import { updateSessionUser } from "../../shared/services/auth.service";
 import * as kycService from "../../shared/services/kyc.service";
 import { KYC_STEP_LABELS, type KycPersonalData, type KycVerification } from "../../shared/types/kyc";
@@ -126,15 +127,133 @@ function PersonalDataStep({
   );
 }
 
-// ─── Step 1: Provider verification (Didit iframe) ─────────────────────────────
+function TermsStep({
+  accepted,
+  onAcceptedChange,
+  onBack,
+  onNext,
+  loading,
+}: {
+  accepted: boolean;
+  onAcceptedChange: (accepted: boolean) => void;
+  onBack: () => void;
+  onNext: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-950 text-white">
+          <FileText size={18} />
+        </div>
+        <h2 className="text-lg font-bold text-zinc-950">Terminos y condiciones</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Antes de finalizar necesitamos registrar tu consentimiento.
+        </p>
+      </div>
+
+      <div className="max-h-[360px] overflow-auto rounded-2xl border border-zinc-200 bg-zinc-50/40 p-5">
+        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-zinc-700">
+          {TERMS_TEXT}
+        </pre>
+      </div>
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-4">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-zinc-950"
+          checked={accepted}
+          onChange={(e) => onAcceptedChange(e.target.checked)}
+        />
+        <span className="text-sm leading-relaxed text-zinc-700">
+          <span className="font-semibold text-zinc-950">Lei y acepto</span> los terminos,
+          la politica de privacidad y el tratamiento de mis datos para completar la
+          verificacion de identidad.
+        </span>
+      </label>
+
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="secondary" onClick={onBack} type="button">
+          <ArrowLeft size={15} /> Atras
+        </Button>
+        <Button onClick={onNext} disabled={!accepted || loading} className="h-11 px-8">
+          {loading ? "Guardando..." : "Aceptar y continuar"}
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 2: Provider verification (Didit iframe) ─────────────────────────────
+
+function FinalReviewStep({
+  personalData,
+  onBack,
+  onFinish,
+}: {
+  personalData: KycPersonalData;
+  onBack: () => void;
+  onFinish: () => void;
+}) {
+  const items = [
+    ["Nombre completo", personalData.fullName],
+    ["DNI", personalData.documentNumber],
+    ["CUIL / CUIT", personalData.cuilCuit],
+    ["Fecha de nacimiento", personalData.birthDate],
+    ["Telefono", personalData.phone],
+    ["Domicilio", personalData.address],
+    ["Ciudad", personalData.city],
+    ["Provincia", personalData.province],
+  ] as const;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-950 text-white">
+          <CheckCircle size={18} />
+        </div>
+        <h2 className="text-lg font-bold text-zinc-950">Revision final</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          La verificacion de identidad fue completada. Revisa tus datos antes de continuar.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {items.map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-zinc-200 bg-zinc-50/40 p-4">
+            <p className="text-[11px] font-bold uppercase text-zinc-400">{label}</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-900">{value || "Sin cargar"}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+        Tu identidad fue validada y los terminos quedaron aceptados para esta cuenta.
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="secondary" onClick={onBack} type="button">
+          <ArrowLeft size={15} /> Atras
+        </Button>
+        <Button onClick={onFinish} className="h-11 px-8">
+          Finalizar
+          <ArrowRight size={15} />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function ProviderVerificationStep({
   verification,
   onBack,
+  onVerified,
   onExpired,
 }: {
   verification: KycVerification;
   onBack: () => void;
+  onVerified: (verification: KycVerification) => void;
   onExpired: () => void;
 }) {
   const navigate = useNavigate();
@@ -145,13 +264,15 @@ function ProviderVerificationStep({
     if (!currentStatus) return;
     setStatus(currentStatus);
     if (currentStatus === "VERIFIED") {
-      await syncSessionVerificationProfile(verification, "VERIFIED");
+      const updatedVerification = await kycService.getMyVerification(verification.userId);
+      const verifiedVerification = updatedVerification ?? { ...verification, status: "VERIFIED" as const };
+      await syncSessionVerificationProfile(verifiedVerification, "VERIFIED");
       updateUser({ verificationStatus: "VERIFIED" });
-      navigate("/dashboard", { replace: true });
+      onVerified(verifiedVerification);
     } else if (currentStatus === "IN_REVIEW") {
       await syncSessionVerificationProfile(verification, "IN_REVIEW");
       updateUser({ verificationStatus: "IN_REVIEW" });
-      navigate("/kyc/pending", { replace: true });
+      navigate("/dashboard", { replace: true });
     } else if (currentStatus === "REJECTED") {
       await syncSessionVerificationProfile(verification, "REJECTED");
       updateUser({ verificationStatus: "REJECTED" });
@@ -160,7 +281,7 @@ function ProviderVerificationStep({
       updateUser({ verificationStatus: "EXPIRED" });
       onExpired();
     }
-  }, [navigate, onExpired, updateUser, verification]);
+  }, [navigate, onExpired, onVerified, updateUser, verification]);
 
   useEffect(() => {
     void handleProviderStatus(verification.status);
@@ -225,14 +346,19 @@ function ProviderVerificationStep({
 export function KycWizardPage() {
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState<0 | 1>(0);
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
   const [verification, setVerification] = useState<KycVerification | null>(null);
   const [personalData, setPersonalData] = useState<KycPersonalData>({
     ...EMPTY_PERSONAL,
     fullName: user?.fullName ?? "",
   });
+  const [termsAccepted, setTermsAccepted] = useState(Boolean(user?.termsAcceptedAt));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTermsAccepted(Boolean(user?.termsAcceptedAt));
+  }, [user?.termsAcceptedAt]);
 
   useEffect(() => {
     async function init() {
@@ -250,13 +376,20 @@ export function KycWizardPage() {
           if (existing.status === "VERIFIED") {
             await syncSessionVerificationProfile(existing, "VERIFIED");
             updateUser({ verificationStatus: "VERIFIED" });
-            navigate("/dashboard", { replace: true });
+            if (user.termsAcceptedAt) {
+              navigate("/dashboard", { replace: true });
+            } else {
+              setVerification(existing);
+              const normalizedPersonalData = personalDataFromVerification(existing, user.fullName);
+              if (normalizedPersonalData) setPersonalData(normalizedPersonalData);
+              setStep(2);
+            }
             return;
           }
           if (existing.status === "IN_REVIEW") {
             await syncSessionVerificationProfile(existing, "IN_REVIEW");
             updateUser({ verificationStatus: "IN_REVIEW" });
-            navigate("/kyc/pending", { replace: true });
+            navigate("/dashboard", { replace: true });
             return;
           }
           if (existing.status === "REJECTED") {
@@ -339,8 +472,13 @@ export function KycWizardPage() {
         address: personalData.address || undefined,
       });
 
-      await kycService.startProviderVerification();
+      if (!verification?.providerSessionUrl) {
+        await kycService.startProviderVerification();
+      }
       const updatedVerification = await kycService.getMyVerification(user.id);
+      if (!updatedVerification) {
+        throw new Error("No se pudo iniciar la verificacion.");
+      }
       setVerification(updatedVerification);
       setStep(1);
     } catch (err) {
@@ -348,6 +486,30 @@ export function KycWizardPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleTermsNext() {
+    if (!user || !termsAccepted) return;
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (!user.termsAcceptedAt) {
+        const acceptedAt = new Date().toISOString();
+        await updateSessionUser({ termsAcceptedAt: acceptedAt });
+        updateUser({ termsAcceptedAt: acceptedAt });
+      }
+
+      setStep(3);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al aceptar terminos.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleFinish() {
+    navigate("/dashboard", { replace: true });
   }
 
   return (
@@ -381,11 +543,33 @@ export function KycWizardPage() {
           <ProviderVerificationStep
             verification={verification}
             onBack={() => setStep(0)}
+            onVerified={(verifiedVerification) => {
+              setVerification(verifiedVerification);
+              const normalizedPersonalData = personalDataFromVerification(verifiedVerification, user?.fullName ?? "");
+              if (normalizedPersonalData) setPersonalData(normalizedPersonalData);
+              setStep(2);
+            }}
             onExpired={() => {
               setVerification(null);
               setStep(0);
               setError("La sesion de Didit ya no existe o expiro. Carga los datos y genera una nueva verificacion.");
             }}
+          />
+        )}
+        {step === 2 && (
+          <TermsStep
+            accepted={termsAccepted}
+            onAcceptedChange={setTermsAccepted}
+            onBack={() => setStep(1)}
+            onNext={handleTermsNext}
+            loading={loading}
+          />
+        )}
+        {step === 3 && (
+          <FinalReviewStep
+            personalData={personalData}
+            onBack={() => setStep(2)}
+            onFinish={handleFinish}
           />
         )}
       </div>

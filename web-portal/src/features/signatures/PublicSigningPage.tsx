@@ -79,7 +79,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
         } else if (id) {
           const { data: sr } = await supabase
             .from("signature_requests")
-            .select("*, documents(*, document_versions(*))")
+            .select("*, documents(*, document_versions:document_versions!document_versions_document_id_fkey(*))")
             .eq("id", id)
             .single();
           data = sr;

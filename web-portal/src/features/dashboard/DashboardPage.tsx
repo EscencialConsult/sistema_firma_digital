@@ -92,6 +92,21 @@ export function DashboardPage() {
         </p>
       </div>
 
+      {user?.verificationStatus === "IN_REVIEW" && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="flex items-start gap-3">
+            <Clock3 size={18} className="mt-0.5 shrink-0 text-amber-700" />
+            <div>
+              <p className="font-bold">Tu verificación KYC está en revisión</p>
+              <p className="mt-1 text-amber-800">
+                Podés navegar el dashboard mientras esperamos la aprobación. Para firmar documentos
+                o emitir certificados, tu identidad tiene que quedar verificada.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[

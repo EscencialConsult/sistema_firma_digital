@@ -56,9 +56,11 @@ export interface KycVerification {
 }
 
 /** KYC Wizard step index */
-export type KycStep = 0 | 1 | 2 | 3 | 4;
+export type KycStep = 0 | 1 | 2 | 3;
 
 export const KYC_STEP_LABELS = [
   "Datos personales",
-  "Verificacion de identidad",
+  "Verificación de identidad",
+  "Términos",
+  "Revisión final",
 ] as const;

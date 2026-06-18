@@ -18,14 +18,14 @@ export interface AuthUser {
   certificateStatus: CertificateStatus;
   organizationId?: string;
   termsAcceptedAt?: string;
-}
-
-export interface UserProfile extends AuthUser {
   phone?: string;
   address?: string;
   documentNumber?: string;
   cuilCuit?: string;
   birthDate?: string;
+}
+
+export interface UserProfile extends AuthUser {
   createdAt: string;
 }
 

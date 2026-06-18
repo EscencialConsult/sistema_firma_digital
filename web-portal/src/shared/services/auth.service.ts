@@ -41,7 +41,7 @@ function fallbackProfile(userId: string, authUser?: SupabaseAuthUser | null): Au
 export async function fetchProfile(userId: string, authUser?: SupabaseAuthUser | null): Promise<AuthUser | null> {
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, full_name, role, verification_status, certificate_status, organization_id, terms_accepted_at")
+    .select("id, email, full_name, role, verification_status, certificate_status, organization_id, terms_accepted_at, document_number, cuil_cuit, birth_date, phone, address")
     .eq("id", userId)
     .maybeSingle();
 
@@ -62,7 +62,7 @@ export async function fetchProfile(userId: string, authUser?: SupabaseAuthUser |
 async function fetchRequiredProfile(userId: string): Promise<AuthUser> {
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, full_name, role, verification_status, certificate_status, organization_id, terms_accepted_at")
+    .select("id, email, full_name, role, verification_status, certificate_status, organization_id, terms_accepted_at, document_number, cuil_cuit, birth_date, phone, address")
     .eq("id", userId)
     .maybeSingle();
 
@@ -172,6 +172,7 @@ export async function updateSessionUser(updates: Partial<AuthUser & UserProfile>
   if (updates.birthDate)          dbUpdates.birth_date          = updates.birthDate;
   if (updates.phone)              dbUpdates.phone               = updates.phone;
   if (updates.address)            dbUpdates.address             = updates.address;
+  if (updates.termsAcceptedAt)    dbUpdates.terms_accepted_at   = updates.termsAcceptedAt;
 
   if (Object.keys(dbUpdates).length > 0) {
     await supabase.from("users").update(dbUpdates).eq("id", user.id);
