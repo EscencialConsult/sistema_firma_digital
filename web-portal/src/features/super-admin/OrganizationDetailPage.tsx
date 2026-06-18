@@ -3,6 +3,7 @@ import {
   CheckCircle,
   ClipboardList,
   Clock,
+  Copy,
   Loader2,
   Pencil,
   Save,
@@ -41,6 +42,15 @@ export function OrganizationDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState<string | null>(null);
+
+  const [copied, setCopied] = useState(false);
+
+  function copyId() {
+    if (!id) return;
+    navigator.clipboard.writeText(id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   // edit fields
   const [name, setName]               = useState("");
@@ -185,6 +195,22 @@ export function OrganizationDetailPage() {
           <StatCard label="Contratos"         value={stats.totalContracts}icon={ClipboardList} color="text-violet-400 bg-violet-950/60" />
         </div>
       )}
+
+      {/* ID de organización */}
+      <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-3.5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-0.5">ID de organización</p>
+          <p className="text-xs font-mono text-zinc-300 truncate">{id}</p>
+        </div>
+        <button
+          type="button"
+          onClick={copyId}
+          className="ml-4 shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition"
+        >
+          <Copy size={12} />
+          {copied ? "Copiado" : "Copiar"}
+        </button>
+      </div>
 
       {/* Info / Edit form */}
       <form onSubmit={handleSave} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
