@@ -1,0 +1,2 @@
+[functions.sign-document]
+verify_jwt = false

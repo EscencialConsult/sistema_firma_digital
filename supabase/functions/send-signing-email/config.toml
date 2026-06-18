@@ -1,0 +1,2 @@
+[functions.send-signing-email]
+verify_jwt = false

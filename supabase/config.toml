@@ -1,0 +1,30 @@
+# Configuración del proyecto Supabase
+# Deshabilita la verificación JWT de Supabase para todas las Edge Functions.
+# Cada función realiza su propia validación de autenticación internamente.
+
+[functions.admin-create-user]
+verify_jwt = false
+
+[functions.face-verify]
+verify_jwt = false
+
+[functions.generate-certificate]
+verify_jwt = false
+
+[functions.kyc-create-session]
+verify_jwt = false
+
+[functions.kyc-webhook]
+verify_jwt = false
+
+[functions.send-document]
+verify_jwt = false
+
+[functions.send-signing-email]
+verify_jwt = false
+
+[functions.sign-document]
+verify_jwt = false
+
+[functions.upload-document]
+verify_jwt = false

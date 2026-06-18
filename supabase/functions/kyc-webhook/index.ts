@@ -73,9 +73,33 @@ function verifySignature(body: Record<string, unknown>, headers: Headers): boole
   return false;
 }
 
+const FRONTEND_URL = (Deno.env.get("FRONTEND_URL") ?? Deno.env.get("APP_URL") ?? "").replace(/\/+$/, "");
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
+  }
+
+  // ── GET: redirect del browser luego de que Didit finaliza ─────────────────
+  // Didit redirige al usuario a esta URL con ?verificationSessionId=...&status=...
+  // No es un webhook POST — es simplemente el browser llegando de vuelta.
+  // Lo redirigimos al frontend en la página correcta según el estado.
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    const status = url.searchParams.get("status") ?? "";
+    let base = FRONTEND_URL || "https://faquqlnwniinqqfmonbv.supabase.co";
+    if (base && !base.startsWith("http")) {
+      base = `https://${base}`;
+    }
+
+    let destination = `${base}/kyc/pending`;
+    if (status === "Approved") destination = `${base}/dashboard`;
+    else if (status === "Declined" || status === "Abandoned") destination = `${base}/kyc/rejected`;
+
+    return new Response(null, {
+      status: 302,
+      headers: { ...CORS_HEADERS, Location: destination },
+    });
   }
 
   try {
