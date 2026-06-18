@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, CheckCircle, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle, FileText, Loader2, RefreshCw } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -255,6 +255,7 @@ function ProviderVerificationStep({
   onBack: () => void;
   onVerified: (verification: KycVerification) => void;
   onExpired: () => void;
+  onReload: () => void;
 }) {
   const navigate = useNavigate();
   const { updateUser } = useAuth();
@@ -323,9 +324,14 @@ function ProviderVerificationStep({
             Escaneá tu DNI y tomate una selfie para verificar tu identidad.
           </p>
         </div>
-        <Button variant="secondary" onClick={onBack} type="button">
-          <ArrowLeft size={15} /> Atrás
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={onReload} type="button" title="Generar nuevo código QR si el anterior caducó">
+            <RefreshCw size={15} /> Recargar
+          </Button>
+          <Button variant="secondary" onClick={onBack} type="button">
+            <ArrowLeft size={15} /> Atrás
+          </Button>
+        </div>
       </div>
 
       {verification.providerSessionUrl ? (
@@ -384,15 +390,13 @@ export function KycWizardPage() {
         if (existing) {
           if (existing.status === "VERIFIED") {
             await syncSessionVerificationProfile(existing, "VERIFIED");
-            updateUser({ verificationStatus: "VERIFIED" });
-            if (user.termsAcceptedAt) {
-              navigate("/dashboard", { replace: true });
-            } else {
-              setVerification(existing);
-              const normalizedPersonalData = personalDataFromVerification(existing, user.fullName);
-              if (normalizedPersonalData) setPersonalData(normalizedPersonalData);
-              setStep(2);
+            if (user.verificationStatus !== "VERIFIED") {
+              updateUser({ verificationStatus: "VERIFIED" });
             }
+            setVerification(existing);
+            const normalizedPersonalData = personalDataFromVerification(existing, user.fullName);
+            if (normalizedPersonalData) setPersonalData(normalizedPersonalData);
+            setStep(3);
             return;
           }
           if (existing.status === "IN_REVIEW") {
@@ -505,9 +509,7 @@ export function KycWizardPage() {
         updateUser({ termsAcceptedAt: acceptedAt });
       }
 
-      if (!verification?.providerSessionUrl) {
-        await kycService.startProviderVerification();
-      }
+      await kycService.startProviderVerification();
       const updatedVerification = await kycService.getMyVerification(user.id);
       if (!updatedVerification) {
         throw new Error("No se pudo iniciar la verificacion.");
@@ -575,6 +577,15 @@ export function KycWizardPage() {
               setVerification(null);
               setStep(0);
               setError("La sesion de Didit ya no existe o expiro. Carga los datos y genera una nueva verificacion.");
+            }}
+            onReload={async () => {
+              try {
+                await kycService.startProviderVerification();
+                const updatedVerification = await kycService.getMyVerification(user?.id ?? "");
+                if (updatedVerification) setVerification(updatedVerification);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Error al recargar sesión.");
+              }
             }}
           />
         )}
