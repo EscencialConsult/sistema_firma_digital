@@ -56,7 +56,6 @@ export function OrganizationNewPage() {
   const [slugManual, setSlugManual]   = useState(false);
   const [maxUsers, setMaxUsers]       = useState(50);
   const [contactEmail, setContactEmail] = useState("");
-  const [diditWorkflowId, setDiditWorkflowId] = useState("");
   const [logoDark, setLogoDark]       = useState<File | null>(null);
   const [logoLight, setLogoLight]     = useState<File | null>(null);
   const [loading, setLoading]         = useState(false);
@@ -79,7 +78,6 @@ export function OrganizationNewPage() {
         plan: "basic",
         maxUsers,
         contactEmail: contactEmail.trim() || undefined,
-        diditWorkflowId: diditWorkflowId.trim() || undefined,
       });
 
       if (logoDark)  await uploadOrgLogo(org.id, logoDark,  "dark");
@@ -168,16 +166,6 @@ export function OrganizationNewPage() {
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-zinc-400">DIDIT Workflow ID</label>
-            <input
-              type="text"
-              value={diditWorkflowId}
-              onChange={(e) => setDiditWorkflowId(e.target.value)}
-              placeholder="wf_xxxxxxxxxxxxxxxx"
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white placeholder-zinc-600 font-mono focus:border-zinc-500 focus:outline-none"
-            />
-          </div>
         </div>
 
         {/* Logos */}
