@@ -28,7 +28,7 @@ export type Pkcs11Token = {
   error?: string;
 };
 
-const AGENT_BASE = "http://127.0.0.1:4001";
+const AGENT_BASE = import.meta.env.VITE_AGENT_BASE_URL || "http://127.0.0.1:4001";
 
 export const documentsApi = {
   async list() {
