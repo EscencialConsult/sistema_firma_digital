@@ -1,0 +1,496 @@
+================================================================================
+  PLAN DE DESARROLLO — MULTI-TENANT
+  Plataforma Firma Digital — Escencial Consultora
+  Fecha: Junio 2026
+================================================================================
+
+CONTEXTO
+--------
+Escencial Consultora es el proveedor de la plataforma (SUPER_ADMIN).
+Las empresas cliente son los tenants (cada una con su ORG_ADMIN y usuarios).
+DIDIT maneja el KYC con un workflow separado por empresa.
+Supabase es el backend (un solo proyecto, aislamiento por RLS).
+
+
+ROLES DEL SISTEMA
+-----------------
+  SUPER_ADMIN   → Facundo / Escencial. Ve todo. Crea empresas. Gestiona planes.
+  ORG_ADMIN     → El responsable de cada empresa cliente. Gestiona sus usuarios y contratos.
+  USER          → Empleado/firmante de una empresa cliente.
+
+
+ARQUITECTURA DECIDIDA
+---------------------
+- Un solo proyecto Supabase (no uno por tenant)
+- Aislamiento por organization_id en todas las tablas via RLS
+- organization_id y role inyectados en el JWT via custom_access_token_hook
+- DIDIT: un workflow por empresa (workflow_id guardado en organizations table)
+- Storage: estructura orgId/userId/verificationId/archivo
+- Edge Functions leen organization_id del JWT, no hacen subquery a la DB
+
+
+================================================================================
+  FASE 0 — PREREQUISITOS (hacer antes de empezar)
+================================================================================
+
+[ ] Tener DIDIT API Key y Workflow ID de prueba disponibles
+[ ] Tener acceso al Supabase Dashboard del proyecto contratofirma
+[ ] Branch de git creado: feature/multitenant (desde Facundo)
+[ ] Definir URL final de Netlify para configurar en Supabase Auth
+
+
+================================================================================
+  FASE 1 — BASE DE DATOS
+  Estimado: 1 dia de trabajo
+================================================================================
+
+PASO 1.1 — Crear tabla organizations
+-------------------------------------
+Correr en Supabase SQL Editor:
+
+  CREATE TABLE public.organizations (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name               TEXT NOT NULL,
+    slug               TEXT UNIQUE NOT NULL,
+    logo_url           TEXT,
+    plan               TEXT NOT NULL DEFAULT 'basic',
+    is_active          BOOLEAN NOT NULL DEFAULT true,
+    didit_workflow_id  TEXT,
+    didit_branding     JSONB,
+    max_users          INTEGER DEFAULT 50,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
+
+  -- Solo SUPER_ADMIN puede ver y modificar organizations
+  CREATE POLICY "super_admin_all" ON public.organizations
+    USING (
+      (SELECT role FROM public.users WHERE id = auth.uid()) = 'SUPER_ADMIN'
+    );
+
+  -- ORG_ADMIN puede ver su propia organización
+  CREATE POLICY "org_admin_read_own" ON public.organizations
+    FOR SELECT USING (
+      id = (SELECT organization_id FROM public.users WHERE id = auth.uid())
+    );
+
+
+PASO 1.2 — Actualizar tabla users
+-----------------------------------
+  -- Agregar FK a organizations (ya existe organization_id, agregar constraint)
+  ALTER TABLE public.users
+    ADD CONSTRAINT fk_users_organization
+    FOREIGN KEY (organization_id)
+    REFERENCES public.organizations(id)
+    ON DELETE SET NULL;
+
+  -- Agregar valor SUPER_ADMIN al role (si es TEXT, ya funciona)
+  -- Verificar que role admite: 'SUPER_ADMIN', 'ORG_ADMIN', 'USER'
+  -- Si hay un CHECK constraint, actualizarlo:
+  ALTER TABLE public.users
+    DROP CONSTRAINT IF EXISTS users_role_check;
+
+  ALTER TABLE public.users
+    ADD CONSTRAINT users_role_check
+    CHECK (role IN ('SUPER_ADMIN', 'ORG_ADMIN', 'USER', 'ADMIN'));
+  -- Nota: mantener 'ADMIN' temporalmente para no romper datos existentes
+
+
+PASO 1.3 — Agregar organization_id a tablas principales
+---------------------------------------------------------
+  ALTER TABLE public.documents
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+  ALTER TABLE public.signature_requests
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+  ALTER TABLE public.identity_verifications
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+  ALTER TABLE public.audit_logs
+    ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+
+
+PASO 1.4 — Índices compuestos
+-------------------------------
+  CREATE INDEX idx_documents_org ON public.documents (organization_id, created_at DESC);
+  CREATE INDEX idx_sigreq_org ON public.signature_requests (organization_id, created_at DESC);
+  CREATE INDEX idx_kyc_org ON public.identity_verifications (organization_id, status);
+  CREATE INDEX idx_users_org ON public.users (organization_id, role);
+  CREATE INDEX idx_audit_org ON public.audit_logs (organization_id, created_at DESC);
+
+
+PASO 1.5 — custom_access_token_hook
+--------------------------------------
+  -- Esta función inyecta organization_id y role en el JWT en cada login.
+  -- Es la pieza central del multi-tenant: evita subqueries en RLS.
+
+  CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event JSONB)
+  RETURNS JSONB
+  LANGUAGE plpgsql STABLE
+  AS $$
+  DECLARE
+    claims        JSONB;
+    user_data     RECORD;
+  BEGIN
+    SELECT role, organization_id
+    INTO user_data
+    FROM public.users
+    WHERE id = (event->>'user_id')::UUID;
+
+    claims := event->'claims';
+    claims := jsonb_set(claims, '{user_role}', to_jsonb(COALESCE(user_data.role, 'USER')));
+    claims := jsonb_set(claims, '{organization_id}', to_jsonb(user_data.organization_id));
+
+    RETURN jsonb_set(event, '{claims}', claims);
+  END;
+  $$;
+
+  GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
+
+  -- Luego en Supabase Dashboard:
+  -- Authentication → Hooks → activar "Custom Access Token"
+  -- Seleccionar la función custom_access_token_hook
+
+
+PASO 1.6 — Actualizar RLS policies para usar JWT claims
+---------------------------------------------------------
+  -- Eliminar policies viejas y reemplazar con versión JWT-based.
+  -- Ejemplo para documents:
+
+  DROP POLICY IF EXISTS "users can read own documents" ON public.documents;
+
+  CREATE POLICY "org members read docs" ON public.documents
+    FOR SELECT USING (
+      organization_id = (auth.jwt() ->> 'organization_id')::UUID
+    );
+
+  CREATE POLICY "org members write docs" ON public.documents
+    FOR INSERT WITH CHECK (
+      organization_id = (auth.jwt() ->> 'organization_id')::UUID
+    );
+
+  -- SUPER_ADMIN ve todo
+  CREATE POLICY "super_admin_all_docs" ON public.documents
+    USING ((auth.jwt() ->> 'user_role') = 'SUPER_ADMIN');
+
+  -- Aplicar el mismo patrón a: signature_requests, identity_verifications, audit_logs
+
+
+PASO 1.7 — Trigger para propagar organization_id automáticamente
+-----------------------------------------------------------------
+  -- Cuando se crea un documento, heredar el org del owner
+
+  CREATE OR REPLACE FUNCTION public.fn_set_document_org()
+  RETURNS TRIGGER LANGUAGE plpgsql AS $$
+  BEGIN
+    IF NEW.organization_id IS NULL AND NEW.owner_id IS NOT NULL THEN
+      SELECT organization_id INTO NEW.organization_id
+      FROM public.users WHERE id = NEW.owner_id;
+    END IF;
+    RETURN NEW;
+  END;
+  $$;
+
+  CREATE TRIGGER trg_document_org
+    BEFORE INSERT ON public.documents
+    FOR EACH ROW EXECUTE FUNCTION public.fn_set_document_org();
+
+  -- Mismo patrón para identity_verifications (desde user_id)
+
+
+================================================================================
+  FASE 2 — STORAGE
+  Estimado: 0.5 dias
+================================================================================
+
+PASO 2.1 — Reestructurar rutas de storage
+-------------------------------------------
+  Estructura actual:  userId/verificationId/TIPO.ext
+  Estructura nueva:   orgId/userId/verificationId/TIPO.ext
+
+  Cambiar en: web-portal/src/shared/services/kyc.service.ts
+  Función uploadDocument(), línea donde construye el path:
+
+  ANTES:
+    const path = `${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`;
+
+  DESPUES:
+    const orgId = /* leer de JWT o del perfil del usuario */;
+    const path = `${orgId}/${user.id}/${verificationId}/${type}_${Date.now()}.${ext}`;
+
+  Nota: los archivos ya subidos con la estructura vieja quedan donde están.
+  Solo los nuevos usan la nueva estructura.
+
+
+PASO 2.2 — RLS en storage
+---------------------------
+  -- En Supabase Dashboard → Storage → Policies en kyc-documents:
+
+  CREATE POLICY "org isolation on kyc storage"
+    ON storage.objects FOR SELECT
+    USING (
+      (string_to_array(name, '/'))[1] = (auth.jwt() ->> 'organization_id')
+    );
+
+  -- SUPER_ADMIN puede ver todo
+  CREATE POLICY "super_admin_all_storage"
+    ON storage.objects FOR SELECT
+    USING ((auth.jwt() ->> 'user_role') = 'SUPER_ADMIN');
+
+
+================================================================================
+  FASE 3 — EDGE FUNCTIONS
+  Estimado: 1 dia
+================================================================================
+
+PASO 3.1 — kyc-create-session
+-------------------------------
+  Cambio: en vez de leer DIDIT_WORKFLOW_ID del env var global,
+  buscar el workflow_id de la organización del usuario.
+
+  LOGICA NUEVA:
+    1. Extraer organization_id del JWT (sin query a DB)
+    2. Buscar organizations.didit_workflow_id WHERE id = organization_id
+    3. Usar ese workflow_id para crear la sesión en DIDIT
+
+  CODIGO:
+    // Leer org del JWT
+    const jwt = await supabase.auth.getUser(token);
+    const orgId = jwt.data.user?.user_metadata?.organization_id
+                  ?? req.headers.get('x-organization-id');
+
+    // Buscar workflow de la org
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('didit_workflow_id, name')
+      .eq('id', orgId)
+      .single();
+
+    if (!org?.didit_workflow_id) {
+      return error 500 "Esta organización no tiene workflow de verificación configurado";
+    }
+
+    // Crear sesión con el workflow de la org
+    body: { workflow_id: org.didit_workflow_id, ... }
+
+
+PASO 3.2 — kyc-webhook
+------------------------
+  Cambio: al actualizar identity_verifications, propagar organization_id.
+  Ya funciona bien, solo asegurarse que el INSERT/UPDATE incluya organization_id.
+
+
+PASO 3.3 — admin-create-user
+------------------------------
+  Cambio: el ORG_ADMIN puede crear usuarios dentro de su misma organización.
+  El SUPER_ADMIN puede crear usuarios en cualquier organización.
+
+  LOGICA:
+    - Si caller es ORG_ADMIN: forzar organization_id = caller's org (ignorar lo que manden)
+    - Si caller es SUPER_ADMIN: usar el organization_id que vengan en el body
+    - Si caller es USER: rechazar 403
+
+
+PASO 3.4 — Variables de entorno a revisar
+-------------------------------------------
+  DIDIT_API_KEY          → sigue siendo global (una sola cuenta DIDIT)
+  DIDIT_WORKFLOW_ID      → dejar de usarse (queda en organizations table)
+  DIDIT_CALLBACK_URL     → sigue siendo global (mismo webhook para todos)
+  DIDIT_WEBHOOK_SECRET   → sigue siendo global
+
+
+================================================================================
+  FASE 4 — FRONTEND
+  Estimado: 3-4 dias
+================================================================================
+
+PASO 4.1 — Panel SUPER_ADMIN
+------------------------------
+  Ruta: /super-admin
+  Protegido: solo role === 'SUPER_ADMIN'
+
+  Páginas a crear:
+    /super-admin/organizations        → lista de todas las empresas
+    /super-admin/organizations/new    → formulario alta de empresa
+    /super-admin/organizations/:id    → detalle + usuarios + KYCs de esa empresa
+    /super-admin/metrics              → totales globales (verificaciones, contratos, etc)
+
+  Formulario de alta de empresa (fields):
+    - Nombre de la empresa
+    - Slug (identificador único)
+    - Plan (basic / pro / enterprise)
+    - Máx. usuarios
+    - DIDIT Workflow ID (se ingresa manualmente desde la consola de DIDIT)
+    - Logo URL (opcional)
+    - Email del ORG_ADMIN (se crea automáticamente)
+    - Contraseña inicial del ORG_ADMIN
+
+
+PASO 4.2 — Panel ORG_ADMIN
+-----------------------------
+  Ruta: /admin (el panel admin actual, adaptado)
+  Cambio principal: todas las queries ya filtran por org via RLS automáticamente.
+  No hay cambios grandes, solo agregar:
+
+  Páginas nuevas:
+    /admin/team         → lista de usuarios de la organización
+    /admin/team/new     → crear nuevo usuario (llama a admin-create-user)
+    /admin/settings     → nombre de la empresa, logo, datos de contacto
+
+  Cambio en el panel KYC existente:
+    - Solo muestra verificaciones de su organización (ya lo hace RLS)
+    - Agregar columna "Nombre de empresa" solo para SUPER_ADMIN
+
+
+PASO 4.3 — Onboarding de usuario nuevo
+----------------------------------------
+  Cuando un USER se registra por primera vez (sin org asignada):
+  - Mostrar pantalla "Tu cuenta está siendo configurada"
+  - O redirigir a una URL con un código de invitación de su empresa
+
+  Flujo recomendado para evitar usuarios huérfanos (sin org):
+    1. ORG_ADMIN crea el usuario desde el panel (ya tiene org asignada)
+    2. El usuario recibe email con contraseña temporal
+    3. El usuario entra, cambia la contraseña y arranca el KYC
+
+  Flujo de autoregistro (alternativa):
+    1. Empresa tiene una URL única: plataforma.com/join/slug-empresa
+    2. Usuario se registra en esa URL
+    3. Al registrarse, se le asigna automáticamente el organization_id del slug
+
+
+PASO 4.4 — Realtime para estado KYC
+--------------------------------------
+  Actualmente el usuario tiene que recargar para ver si su KYC fue aprobado.
+  Con Realtime, el cambio llega automáticamente.
+
+  En KycPendingPage o donde se muestra el estado:
+
+    useEffect(() => {
+      const channel = supabase
+        .channel('kyc-status')
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'identity_verifications',
+          filter: `user_id=eq.${userId}`
+        }, (payload) => {
+          if (payload.new.status === 'VERIFIED') {
+            // redirigir o mostrar mensaje de aprobación
+          }
+        })
+        .subscribe();
+
+      return () => supabase.removeChannel(channel);
+    }, [userId]);
+
+
+================================================================================
+  FASE 5 — OPERACIONES (cuando sale a producción)
+================================================================================
+
+PASO 5.1 — Proceso de onboarding de nueva empresa
+----------------------------------------------------
+  1. Empresa firma contrato con Escencial
+  2. SUPER_ADMIN entra a /super-admin/organizations/new
+  3. Crea la organización en la plataforma
+  4. Va a DIDIT Console → crea un nuevo workflow para esa empresa
+     (sube el logo, configura colores, activa los pasos de verificación)
+  5. Copia el Workflow ID y lo pega en la plataforma
+  6. Crea el usuario ORG_ADMIN con email y contraseña temporal
+  7. Le manda las credenciales al responsable de la empresa
+  8. El ORG_ADMIN entra, cambia la contraseña y empieza a crear sus usuarios
+
+
+PASO 5.2 — Proceso de baja de empresa
+----------------------------------------
+  1. SUPER_ADMIN marca is_active = false en la organización
+  2. Los usuarios de esa org no pueden loguearse (RLS o middleware lo bloquea)
+  3. Los datos se conservan por obligación legal (5 años según los T&C)
+
+
+PASO 5.3 — Monitoreo
+----------------------
+  Por ahora no hay dashboard de métricas. En el futuro:
+  - Verificaciones por empresa por mes (para facturación a clientes)
+  - Contratos firmados por empresa
+  - Usuarios activos por empresa
+
+
+================================================================================
+  ORDEN DE IMPLEMENTACIÓN RECOMENDADO
+================================================================================
+
+  Semana 1:
+    [ ] Fase 1: toda la base de datos (SQL + hook + RLS)
+    [ ] Verificar que el login sigue funcionando con el hook activo
+    [ ] Actualizar kyc-create-session para usar workflow por org
+
+  Semana 2:
+    [ ] Fase 3: actualizar todas las Edge Functions
+    [ ] Fase 2: reestructurar storage (solo archivos nuevos)
+    [ ] Tests manuales con 2 organizaciones de prueba en local
+
+  Semana 3:
+    [ ] Fase 4.1: Panel SUPER_ADMIN básico (lista + alta de empresa)
+    [ ] Fase 4.2: adaptar panel ORG_ADMIN existente
+
+  Semana 4:
+    [ ] Fase 4.3: flujo de invitación de usuarios
+    [ ] Fase 4.4: Realtime para estado KYC
+    [ ] QA completo del flujo end-to-end con 2 empresas de prueba
+
+  Deploy a producción:
+    [ ] Migrar datos existentes (asignar organization_id a registros actuales)
+    [ ] Crear organización "Escencial Consultora" como primera org
+    [ ] Asignar SUPER_ADMIN a Facundo
+
+
+================================================================================
+  DECISIONES TÉCNICAS TOMADAS
+================================================================================
+
+  1. Un solo proyecto Supabase (no uno por tenant)
+     Razón: más simple, suficiente para el volumen esperado, migrable después.
+
+  2. Aislamiento via RLS + JWT claims (no schemas separados)
+     Razón: performance, mantenimiento simple, recomendado por Supabase.
+
+  3. Una cuenta DIDIT, workflows separados por empresa
+     Razón: confirmado por DIDIT. Escencial paga consolidado, cobra a sus clientes.
+
+  4. Storage con orgId como carpeta raíz
+     Razón: recomendado por Supabase. Permite RLS eficiente en storage.objects.
+
+  5. Flujo de usuarios: ORG_ADMIN crea usuarios (no autoregistro)
+     Razón: evita usuarios sin organización asignada. Más control.
+
+  6. Rol SUPER_ADMIN separado de ORG_ADMIN
+     Razón: Facundo necesita ver todo sin estar asignado a ninguna org específica.
+
+
+================================================================================
+  NOTAS IMPORTANTES
+================================================================================
+
+  - Antes de implementar: confirmar que el custom_access_token_hook
+    no rompe el login de usuarios existentes. Testar en staging primero.
+
+  - Los registros existentes (sin organization_id) deben migrarse antes
+    de activar las nuevas RLS policies, o quedarán invisibles.
+
+  - DIDIT cobra por sesión exitosa. Implementar un contador por organización
+    para saber cuánto cobrarle a cada cliente.
+
+  - face-verify (Rekognition) sigue en mock mode. Decidir si se activa,
+    se reemplaza por DIDIT, o se deja así para MVP.
+
+  - Credenciales expuestas en el chat anterior deben rotarse:
+    Supabase service role key, AWS keys, Resend key.
+
+================================================================================
+  FIN DEL PLAN
+================================================================================

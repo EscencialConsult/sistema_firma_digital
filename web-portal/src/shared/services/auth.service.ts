@@ -87,8 +87,14 @@ async function fetchRequiredProfile(userId: string): Promise<AuthUser> {
 export async function login(email: string, password: string): Promise<AuthUser> {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
+    const msg = error.message?.toLowerCase() ?? "";
+    if (msg.includes("email not confirmed") || msg.includes("email_not_confirmed")) {
+      throw new Error("Tu cuenta aún no fue confirmada. Revisá tu casilla de correo y hacé clic en el link de verificación.");
+    }
+    if (msg.includes("invalid login credentials") || msg.includes("invalid_credentials")) {
+      throw new Error("Email o contraseña incorrectos.");
+    }
     const status = (error as any)?.status;
-    if (status === 400) throw new Error("Credenciales incorrectas");
     if (status === 500) throw new Error("Error del servidor, intentá más tarde.");
     throw new Error(error.message);
   }

@@ -1,0 +1,325 @@
+================================================================================
+  PLAN DE TRABAJO DIVIDIDO — MULTI-TENANT
+  Facundo + Santi — Sin pisarse
+  Fecha: Junio 2026
+================================================================================
+
+REGLA GENERAL
+-------------
+Santi toca el backend primero. Facundo arranca el frontend en paralelo
+solo en archivos NUEVOS. Los archivos compartidos tienen UN dueño, el otro
+no los toca sin avisar primero.
+
+
+================================================================================
+  BRANCHES DE GIT
+================================================================================
+
+  Santi:   feature/multitenant-backend   (desde Facundo)
+  Facundo: feature/multitenant-frontend  (desde Facundo)
+
+  Merge order:
+    1. Santi termina su parte y mergea a Facundo
+    2. Facundo rebasea su branch sobre el merge de Santi
+    3. Facundo termina su parte y mergea a Facundo
+    4. Push final a producción juntos
+
+  Regla de merge: NUNCA mergear sin avisarle al otro primero.
+  Si Santi va a mergear, le avisa a Facundo con 30 minutos de anticipación.
+
+
+================================================================================
+  SANTI — BACKEND + INFRAESTRUCTURA
+================================================================================
+
+ZONA EXCLUSIVA DE SANTI (no tocar Facundo):
+--------------------------------------------
+  supabase/
+    migrations/         → todos los SQL nuevos
+    functions/          → todas las Edge Functions
+
+  web-portal/src/shared/
+    services/kyc.service.ts        → cambio de storage path
+    services/admin.service.ts      → adaptar para multi-org
+    types/user.ts                  → agregar SUPER_ADMIN, ORG_ADMIN
+    types/kyc.ts                   → si hay cambios de tipos
+
+
+TAREAS DE SANTI (en orden):
+-----------------------------
+
+[SEMANA 1 — DB]
+
+  1. Crear archivo: supabase/migrations/20260620001_organizations.sql
+     Contenido: tabla organizations + FK en users + constraint de roles
+     (copiar el SQL del PLAN_MULTITENANT.txt paso 1.1 y 1.2)
+
+  2. Crear archivo: supabase/migrations/20260620002_org_columns.sql
+     Contenido: agregar organization_id a documents, signature_requests,
+     identity_verifications, audit_logs + índices compuestos
+     (pasos 1.3 y 1.4 del plan)
+
+  3. Crear archivo: supabase/migrations/20260620003_jwt_hook.sql
+     Contenido: función custom_access_token_hook + GRANT
+     (paso 1.5 del plan)
+
+  4. Crear archivo: supabase/migrations/20260620004_rls_update.sql
+     Contenido: eliminar RLS viejas + crear nuevas con JWT claims
+     (pasos 1.6 y 1.7 del plan)
+
+  5. Aplicar los 4 archivos en Supabase SQL Editor (en orden)
+
+  6. Activar el hook en Supabase Dashboard:
+     Authentication → Hooks → Custom Access Token → custom_access_token_hook
+
+  7. Verificar que el login de usuarios existentes sigue funcionando
+
+
+[SEMANA 1 — EDGE FUNCTIONS]
+
+  8. Actualizar supabase/functions/kyc-create-session/index.ts
+     Cambio: leer didit_workflow_id de la tabla organizations segun el org del usuario
+     (ver PLAN_MULTITENANT.txt paso 3.1)
+
+  9. Actualizar supabase/functions/kyc-webhook/index.ts
+     Cambio: asegurarse que el UPDATE a identity_verifications incluye organization_id
+
+  10. Actualizar supabase/functions/admin-create-user/index.ts
+      Cambio: ORG_ADMIN solo puede crear usuarios en su propia org
+      SUPER_ADMIN puede crear en cualquier org (recibe organization_id en el body)
+
+  11. Deployar las 3 funciones actualizadas:
+      supabase functions deploy kyc-create-session --project-ref faquqlnwniinqqfmonbv
+      supabase functions deploy kyc-webhook --project-ref faquqlnwniinqqfmonbv
+      supabase functions deploy admin-create-user --project-ref faquqlnwniinqqfmonbv
+
+
+[SEMANA 2 — STORAGE Y TIPOS]
+
+  12. Actualizar web-portal/src/shared/types/user.ts
+      Cambio: agregar 'SUPER_ADMIN' | 'ORG_ADMIN' al tipo UserRole
+
+  13. Actualizar web-portal/src/shared/services/kyc.service.ts
+      Cambio: función uploadDocument() usa orgId en el path del storage
+      ANTES:  ${user.id}/${verificationId}/${type}_...
+      DESPUES: ${orgId}/${user.id}/${verificationId}/${type}_...
+
+  14. Actualizar web-portal/src/shared/services/admin.service.ts
+      Cambio: función createUser() acepta organization_id en el body
+
+  15. Avisar a Facundo que los tipos y servicios están actualizados
+      para que pueda usarlos en el frontend
+
+
+ENTREGABLES DE SANTI:
+---------------------
+  ✓ 4 archivos de migración SQL aplicados en Supabase
+  ✓ Hook JWT activo
+  ✓ 3 Edge Functions actualizadas y deployadas
+  ✓ types/user.ts con roles nuevos
+  ✓ kyc.service.ts con storage path actualizado
+  ✓ admin.service.ts con organization_id en createUser
+
+
+================================================================================
+  FACUNDO — FRONTEND + UX
+================================================================================
+
+ZONA EXCLUSIVA DE FACUNDO (no tocar Santi):
+--------------------------------------------
+  web-portal/src/features/super-admin/   → carpeta NUEVA (Facundo la crea)
+  web-portal/src/features/admin/         → adaptar páginas existentes
+  web-portal/src/app/router/routes.ts    → agregar rutas nuevas
+  web-portal/src/app/router/AppRouter.tsx → agregar rutas protegidas
+  web-portal/src/app/guards/             → crear SuperAdminGuard
+  web-portal/src/features/kyc/KycPendingPage.tsx → agregar Realtime
+
+
+TAREAS DE FACUNDO (en orden):
+------------------------------
+
+[SEMANA 1 — MIENTRAS SANTI HACE LA DB]
+Facundo puede arrancar estas tareas en paralelo sin esperar a Santi:
+
+  1. Crear web-portal/src/app/guards/SuperAdminGuard.tsx
+     Lógica: redirigir a /dashboard si role !== 'SUPER_ADMIN'
+     Copiar la estructura de AdminGuard.tsx y adaptarla
+
+  2. Crear la carpeta web-portal/src/features/super-admin/ con:
+     - SuperAdminPage.tsx         → shell/layout del panel
+     - OrganizationsPage.tsx      → lista de empresas (tabla vacía por ahora)
+     - OrganizationNewPage.tsx    → formulario de alta (campos del plan)
+     - OrganizationDetailPage.tsx → detalle de empresa (placeholder por ahora)
+
+  3. Agregar las rutas en web-portal/src/app/router/routes.ts:
+     /super-admin                  → SuperAdminPage (protegida con SuperAdminGuard)
+     /super-admin/organizations    → OrganizationsPage
+     /super-admin/organizations/new → OrganizationNewPage
+     /super-admin/organizations/:id → OrganizationDetailPage
+
+  4. Agregar las rutas en AppRouter.tsx conectadas al guard nuevo
+
+
+[SEMANA 2 — CONECTAR CON LO DE SANTI]
+Esperar a que Santi termine los tipos y servicios (tarea 15 de Santi):
+
+  5. Crear web-portal/src/shared/services/organizations.service.ts
+     Funciones:
+       - listOrganizations()          → SELECT * FROM organizations
+       - getOrganization(id)          → SELECT * WHERE id
+       - createOrganization(data)     → INSERT + llama a admin-create-user para el ORG_ADMIN
+       - updateOrganization(id, data) → UPDATE
+       - deactivateOrganization(id)   → UPDATE is_active = false
+
+  6. Conectar OrganizationsPage.tsx con listOrganizations()
+     UI: tabla con columnas nombre / plan / usuarios activos / estado / acciones
+
+  7. Conectar OrganizationNewPage.tsx con createOrganization()
+     Formulario con los campos del PLAN_MULTITENANT.txt paso 4.1
+
+  8. Agregar en web-portal/src/features/admin/AdminUsersPage.tsx
+     - Botón "Nuevo usuario" que abre formulario
+     - Llama a admin.service.createUser() con organization_id del ORG_ADMIN actual
+
+  9. Crear web-portal/src/features/admin/AdminTeamPage.tsx
+     Lista de usuarios de la organización actual
+     Ruta: /admin/team
+
+
+[SEMANA 3 — REALTIME Y POLISH]
+
+  10. Actualizar web-portal/src/features/kyc/KycPendingPage.tsx
+      Agregar suscripción Realtime:
+        supabase.channel('kyc-status')
+          .on('postgres_changes', { event: 'UPDATE', table: 'identity_verifications',
+              filter: `user_id=eq.${userId}` }, (payload) => {
+            if (payload.new.status === 'VERIFIED') navigate('/dashboard')
+            if (payload.new.status === 'REJECTED') navigate('/kyc/rejected')
+          })
+          .subscribe()
+
+  11. Actualizar web-portal/src/app/providers/AuthProvider.tsx
+      Agregar lógica para rol SUPER_ADMIN:
+      - Al hacer login con SUPER_ADMIN, redirigir a /super-admin en vez de /dashboard
+
+  12. Actualizar el sidebar/navbar para mostrar el link /super-admin
+      solo cuando role === 'SUPER_ADMIN'
+
+
+ENTREGABLES DE FACUNDO:
+------------------------
+  ✓ SuperAdminGuard creado
+  ✓ 4 páginas del panel SUPER_ADMIN creadas y conectadas
+  ✓ organizations.service.ts funcionando
+  ✓ Formulario de alta de empresa completo
+  ✓ AdminTeamPage para ORG_ADMIN
+  ✓ Realtime en KycPendingPage
+  ✓ Redirección automática según rol en login
+
+
+================================================================================
+  ARCHIVOS COMPARTIDOS — UN SOLO DUEÑO
+================================================================================
+
+  web-portal/src/shared/types/user.ts
+    DUEÑO: Santi
+    Por qué: agrega los roles nuevos (SUPER_ADMIN, ORG_ADMIN)
+    Facundo: esperar a que Santi lo actualice antes de usarlos
+
+  web-portal/src/shared/services/kyc.service.ts
+    DUEÑO: Santi
+    Por qué: cambia el storage path que es lógica de backend
+    Facundo: no tocar
+
+  web-portal/src/shared/services/admin.service.ts
+    DUEÑO: Santi
+    Por qué: cambia createUser para multi-org
+    Facundo: no tocar, solo consumir
+
+  web-portal/src/app/providers/AuthProvider.tsx
+    DUEÑO: Facundo
+    Por qué: es UI/UX de redirección por rol
+    Santi: no tocar
+
+  web-portal/src/app/router/routes.ts
+    DUEÑO: Facundo
+    Por qué: agrega las rutas del panel SUPER_ADMIN
+    Santi: no tocar
+
+
+================================================================================
+  ARCHIVOS QUE NINGUNO TOCA (congelados)
+================================================================================
+
+  web-portal/src/shared/legal/terms.ts           → ya actualizado
+  web-portal/src/features/kyc/KycWizardPage.tsx  → no tocar durante multitenant
+  web-portal/src/features/admin/AdminKycReviewPage.tsx → no tocar
+  supabase/functions/sign-document/index.ts       → ya fixeado por Santi
+  supabase/functions/generate-certificate/index.ts → no tocar
+  netlify.toml                                    → no tocar
+
+
+================================================================================
+  COMUNICACIÓN ENTRE LOS DOS
+================================================================================
+
+  Punto de sincronización 1 (fin de semana 1):
+    Santi avisa cuando terminó:
+    - Las 4 migraciones aplicadas en Supabase
+    - Hook JWT activo
+    - types/user.ts actualizado
+    Facundo puede arrancar la tarea 5 en adelante.
+
+  Punto de sincronización 2 (mitad de semana 2):
+    Santi avisa cuando terminó:
+    - admin.service.ts actualizado
+    - kyc.service.ts con nuevo storage path
+    Facundo puede conectar el formulario de nueva empresa.
+
+  Punto de sincronización 3 (fin de semana 3):
+    Los dos juntos hacen QA del flujo completo:
+    - Crear una empresa de prueba desde SUPER_ADMIN
+    - ORG_ADMIN entra y crea un usuario
+    - El usuario hace el KYC con DIDIT
+    - El KYC se aprueba y el Realtime notifica al usuario
+    - SUPER_ADMIN ve todo
+
+
+================================================================================
+  RESUMEN VISUAL
+================================================================================
+
+  SEMANA 1:
+    Santi:   DB migrations + hook JWT + Edge Functions
+    Facundo: SuperAdminGuard + páginas vacías + rutas
+
+  SEMANA 2:
+    Santi:   types/user.ts + kyc.service.ts + admin.service.ts
+    Facundo: organizations.service.ts + formularios conectados + AdminTeamPage
+
+  SEMANA 3:
+    Santi:   QA backend + correcciones
+    Facundo: Realtime KYC + redirección por rol + polish UI
+
+  SEMANA 4:
+    Ambos:   QA end-to-end + fix de bugs + deploy
+
+
+================================================================================
+  PARA COMPARTIR CON SANTI
+================================================================================
+
+Santi necesita leer:
+  - Este archivo (PLAN_TRABAJO_DIVIDIDO.txt)
+  - PLAN_MULTITENANT.txt (para el SQL y la lógica completa)
+  - El README del repo para contexto general
+
+Accesos que Santi necesita tener:
+  - Acceso al repo en GitHub (rama feature/multitenant-backend)
+  - Supabase Dashboard del proyecto contratofirma (faquqlnwniinqqfmonbv)
+  - CLI de Supabase linkeado al proyecto
+  - Las variables de entorno del .env.local
+
+================================================================================
+  FIN DEL PLAN
+================================================================================
