@@ -1,6 +1,23 @@
 import { supabase } from "../lib/supabase";
 import type { Contract, ContractDetail, ContractSigner } from "../types/contract";
 
+// ─── Convenio types ───────────────────────────────────────────────────────────
+
+export interface ConvenioInfo {
+  documentId:                string;
+  documentTitle:             string;
+  documentStatus:            string;
+  documentCreatedAt:         string;
+  authorityId:               string;
+  authorityName:             string;
+  authorityEmail:            string;
+  authoritySigningRequestId: string;
+  authoritySigningStatus:    string;
+  recipientName:             string | null;
+  recipientEmail:            string | null;
+  recipientSigningStatus:    string | null;
+}
+
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
 function latestVersion(versions: Array<Record<string, unknown>>) {
@@ -91,15 +108,119 @@ export async function getContractById(id: string): Promise<ContractDetail | null
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
-/** All contracts in the system (admin only — RLS enforces this) */
+/** All contracts in the system — excludes convenio docs (admin only) */
 export async function getAllContracts(): Promise<Contract[]> {
+  const { data: convenioLinks } = await supabase
+    .from("organization_authorities")
+    .select("document_id")
+    .eq("type", "PROVISIONAL")
+    .not("document_id", "is", null);
+
+  const convenioIds = new Set(
+    (convenioLinks ?? []).map((r) => r.document_id as string).filter(Boolean)
+  );
+
   const { data, error } = await supabase
     .from("documents")
     .select("*, owner:users!owner_id(email), document_versions:document_versions!document_versions_document_id_fkey(*)")
     .order("updated_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []).map(mapDocToContract);
+  return (data ?? [])
+    .filter((d) => !convenioIds.has(d.id as string))
+    .map(mapDocToContract);
+}
+
+/** All convenio documents with their provisional authority and signing status */
+export async function getConvenios(): Promise<ConvenioInfo[]> {
+  const { data: authorities, error } = await supabase
+    .from("organization_authorities")
+    .select("id, full_name, email, signing_request_id, document_id")
+    .eq("type", "PROVISIONAL")
+    .not("document_id", "is", null)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  if (!authorities || authorities.length === 0) return [];
+
+  const docIds = authorities.map((a) => a.document_id as string).filter(Boolean);
+
+  const { data: docs } = await supabase
+    .from("documents")
+    .select("id, title, status, created_at, signature_requests(*)")
+    .in("id", docIds);
+
+  const docsMap = new Map((docs ?? []).map((d) => [d.id as string, d]));
+
+  const result: ConvenioInfo[] = [];
+  for (const auth of authorities) {
+    const doc = docsMap.get(auth.document_id as string);
+    if (!doc) continue;
+
+    const allSRs = (doc.signature_requests ?? []) as Array<Record<string, unknown>>;
+    const authSR    = allSRs.find((sr) => sr.id === auth.signing_request_id);
+    const recipSR   = allSRs.find((sr) => sr.id !== auth.signing_request_id);
+
+    result.push({
+      documentId:                auth.document_id as string,
+      documentTitle:             doc.title as string,
+      documentStatus:            doc.status as string,
+      documentCreatedAt:         doc.created_at as string,
+      authorityId:               auth.id as string,
+      authorityName:             auth.full_name as string,
+      authorityEmail:            auth.email as string,
+      authoritySigningRequestId: auth.signing_request_id as string,
+      authoritySigningStatus:    (authSR?.status as string) ?? "PENDING",
+      recipientName:             (recipSR?.signer_name as string) ?? null,
+      recipientEmail:            (recipSR?.signer_email as string) ?? null,
+      recipientSigningStatus:    (recipSR?.status as string) ?? null,
+    });
+  }
+  return result;
+}
+
+/** Assigns a recipient to an existing convenio after the authority has signed */
+export async function assignConvenioRecipient(
+  documentId: string,
+  recipient: { name: string; email: string; dni?: string; cuil?: string; domicilio?: string }
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error } = await supabase.from("signature_requests").insert({
+    document_id:     documentId,
+    signer_email:    recipient.email,
+    signer_name:     recipient.name,
+    signer_dni:      recipient.dni ?? null,
+    signer_cuil:     recipient.cuil ?? null,
+    signer_domicilio:recipient.domicilio ?? null,
+    status:          "PENDING",
+    expires_at:      expiresAt,
+    signing_order:   1,
+  });
+  if (error) throw new Error(error.message);
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("total_signers, template_fields")
+    .eq("id", documentId)
+    .single();
+
+  const existing = (doc?.template_fields as Record<string, string>) ?? {};
+  await supabase
+    .from("documents")
+    .update({
+      total_signers:   ((doc?.total_signers as number) ?? 1) + 1,
+      status:          "SENT",
+      template_fields: {
+        ...existing,
+        nombre_firmante_2:    recipient.name,
+        email_firmante_2:     recipient.email,
+        dni_firmante_2:       recipient.dni ?? "",
+        cuil_firmante_2:      recipient.cuil ?? "",
+        domicilio_firmante_2: recipient.domicilio ?? "",
+      },
+    })
+    .eq("id", documentId);
 }
 
 /** Send an already-completed document to an additional third-party signer */

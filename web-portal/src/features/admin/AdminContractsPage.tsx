@@ -24,6 +24,7 @@ import {
   AlumnoData,
 } from "../../shared/utils/contractTemplate";
 import { ContractDocument, ContractDetailModal } from "./components/ContractRenderer";
+import { AdminConveniosTab } from "./AdminConveniosTab";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -384,6 +385,10 @@ function SendThirdPartyModal({
 const EMPTY_ALUMNO: AlumnoData = { nombre: "", email: "", dni: "", cuil: "", domicilio: "" };
 
 export function AdminContractsPage() {
+  // ── Tab state ──
+  const [activeTab, setActiveTab] = useState<"contracts" | "convenios">("contracts");
+  const [orgId, setOrgId]         = useState<string | null>(null);
+
   // ── List state ──
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -411,6 +416,7 @@ export function AdminContractsPage() {
     getMyOrganization()
       .then((org) => {
         if (!org) { setHasActiveAuthority(false); return; }
+        setOrgId(org.id);
         return getOrgAuthorities(org.id).then((auths) => {
           setHasActiveAuthority(auths.some((a) => a.status === "ACTIVE"));
           setAuthorities(auths.filter((a) => a.status !== "REVOKED" && a.status !== "EXPIRED"));
@@ -734,18 +740,54 @@ export function AdminContractsPage() {
       )}
 
       <div className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
+        {/* ── Page header + tabs ── */}
+        <div className="space-y-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-zinc-600">Admin</p>
-            <h1 className="mt-1 text-2xl font-bold text-zinc-900">Contratos</h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              {contracts.length} contratos · {CONTRACT_TEMPLATES.length} templates legales disponibles.
-            </p>
+            <h1 className="mt-1 text-2xl font-bold text-zinc-900">Documentos</h1>
           </div>
+
+          {/* Tab bar */}
+          <div className="flex items-center gap-1 border-b border-zinc-200">
+            {([
+              { key: "contracts",  label: "Contratos" },
+              { key: "convenios",  label: "Convenios" },
+            ] as const).map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2.5 text-sm font-semibold transition border-b-2 -mb-px ${
+                  activeTab === tab.key
+                    ? "border-zinc-900 text-zinc-900"
+                    : "border-transparent text-zinc-500 hover:text-zinc-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Convenios tab ── */}
+        {activeTab === "convenios" && orgId && (
+          <AdminConveniosTab orgId={orgId} />
+        )}
+        {activeTab === "convenios" && !orgId && (
+          <p className="text-sm text-zinc-400">Cargando organización...</p>
+        )}
+
+        {/* ── Contracts tab ── */}
+        {activeTab === "contracts" && (<>
+
+        <div className="flex items-start justify-between gap-4">
+          <p className="text-sm text-zinc-500">
+            {contracts.length} contratos · {CONTRACT_TEMPLATES.length} templates legales disponibles.
+          </p>
           <Button
             onClick={() => { resetCreate(); setView("create"); }}
             disabled={hasActiveAuthority === false}
-            className="shrink-0 h-10 px-4 mt-1"
+            className="shrink-0 h-10 px-4"
             title={hasActiveAuthority === false ? "Necesitás configurar una autoridad firmante activa antes de emitir contratos" : undefined}
           >
             <Plus size={15} /> Nuevo contrato
@@ -886,6 +928,8 @@ export function AdminContractsPage() {
             </div>
           )}
         </div>
+
+        </>)} {/* end contracts tab */}
       </div>
 
       <Toast
