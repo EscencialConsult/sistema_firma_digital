@@ -45,24 +45,24 @@ export function AdminDashboardPage() {
           label: "Contratos totales",
           value: stats.totalContracts,
           sub: `${stats.signedContracts} firmados`,
-          color: "text-zinc-300",
-          bg: "bg-zinc-800",
+          color: "text-zinc-600",
+          bg: "bg-zinc-100",
         },
         {
           icon: CheckCircle2,
           label: "Firmados",
           value: stats.signedContracts,
           sub: `${stats.pendingContracts} pendientes`,
-          color: "text-emerald-400",
-          bg: "bg-emerald-900/30",
+          color: "text-emerald-600",
+          bg: "bg-emerald-100",
         },
         {
           icon: XCircle,
           label: "Rechazados",
           value: stats.rejectedContracts,
           sub: "Contratos rechazados",
-          color: "text-red-400",
-          bg: "bg-red-900/30",
+          color: "text-red-600",
+          bg: "bg-red-100",
         },
         {
           icon: FileSignature,
@@ -71,8 +71,8 @@ export function AdminDashboardPage() {
             ? `${Math.round((stats.signedContracts / stats.totalContracts) * 100)}%`
             : "—",
           sub: "Documentos completados",
-          color: "text-zinc-400",
-          bg: "bg-zinc-800",
+          color: "text-violet-600",
+          bg: "bg-violet-100",
         },
       ]
     : [];
@@ -83,7 +83,7 @@ export function AdminDashboardPage() {
         <p className="text-xs font-bold uppercase tracking-widest text-zinc-600">
           Panel de administración
         </p>
-        <h1 className="mt-1 text-2xl font-bold text-white">Resumen general</h1>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-900">Resumen general</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Métricas en tiempo real del sistema de firma electrónica.
         </p>
@@ -95,20 +95,20 @@ export function AdminDashboardPage() {
           ? Array(6)
               .fill(null)
               .map((_, i) => (
-                <div key={i} className="h-24 animate-pulse rounded-2xl bg-zinc-800" />
+                <div key={i} className="h-24 animate-pulse rounded-2xl bg-zinc-200" />
               ))
           : cards.map(({ icon: Icon, label, value, sub, color, bg }) => (
               <div
                 key={label}
-                className="flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
+                className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-5"
               >
                 <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${bg}`}>
                   <Icon size={20} className={color} />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{value}</p>
-                  <p className="text-xs font-semibold text-zinc-400">{label}</p>
-                  <p className="text-[11px] text-zinc-600">{sub}</p>
+                  <p className="text-2xl font-bold text-zinc-900">{value}</p>
+                  <p className="text-xs font-semibold text-zinc-600">{label}</p>
+                  <p className="text-[11px] text-zinc-400">{sub}</p>
                 </div>
               </div>
             ))}
@@ -125,13 +125,13 @@ export function AdminDashboardPage() {
           <Link
             key={path}
             to={path}
-            className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 hover:border-zinc-700 hover:bg-zinc-800/80 transition"
+            className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-5 hover:border-zinc-300 hover:bg-zinc-50 transition"
           >
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-800">
-              <Icon size={18} className="text-zinc-400" />
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100">
+              <Icon size={18} className="text-zinc-500" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">{label}</p>
+              <p className="text-sm font-semibold text-zinc-900">{label}</p>
               <p className="text-xs text-zinc-500">{sub}</p>
             </div>
           </Link>

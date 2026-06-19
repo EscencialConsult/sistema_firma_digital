@@ -6,6 +6,7 @@ import {
   uploadOrgLogo,
 } from "../../shared/services/organizations.service";
 import type { Organization } from "../../shared/types/organization";
+import { APP_CONFIG } from "../../shared/config/app";
 
 function slugify(name: string): string {
   return name
@@ -78,6 +79,7 @@ export function OrganizationNewPage() {
         plan: "basic",
         maxUsers,
         contactEmail: contactEmail.trim() || undefined,
+        diditWorkflowId: APP_CONFIG.defaultDiditWorkflowId,
       });
 
       if (logoDark)  await uploadOrgLogo(org.id, logoDark,  "dark");
