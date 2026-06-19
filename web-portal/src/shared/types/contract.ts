@@ -27,7 +27,7 @@ export interface Contract {
   finalPdfUrl: string | null;
   createdAt: string;
   updatedAt: string;
-  templateId:     string | null;
+  templateId: string | null;
   templateFields: Record<string, string> | null;
 }
 
