@@ -40,10 +40,12 @@ function InviteModal({
   onClose: () => void;
   onCreated: (a: OrgAuthority) => void;
 }) {
-  const [fullName, setFullName] = useState("");
-  const [email,    setEmail]    = useState("");
-  const [cuil,     setCuil]     = useState("");
-  const [notes,    setNotes]    = useState("");
+  const [fullName,   setFullName]   = useState("");
+  const [email,      setEmail]      = useState("");
+  const [dni,        setDni]        = useState("");
+  const [cuil,       setCuil]       = useState("");
+  const [domicilio,  setDomicilio]  = useState("");
+  const [notes,      setNotes]      = useState("");
   const [saving,   setSaving]   = useState(false);
   const [err,      setErr]      = useState<string | null>(null);
   const [created,  setCreated]  = useState<OrgAuthority | null>(null);
@@ -59,7 +61,9 @@ function InviteModal({
         organizationId: orgId,
         fullName:       fullName.trim(),
         email:          email.trim(),
+        dni:            dni.trim() || undefined,
         cuil:           cuil.trim() || undefined,
+        domicilio:      domicilio.trim() || undefined,
         type:           "PERMANENT",
         notes:          notes.trim() || undefined,
       });
@@ -152,12 +156,32 @@ function InviteModal({
                 className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-zinc-500">DNI</label>
+                <input
+                  value={dni}
+                  onChange={(e) => setDni(e.target.value)}
+                  placeholder="40123456"
+                  className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-zinc-500">CUIL</label>
+                <input
+                  value={cuil}
+                  onChange={(e) => setCuil(e.target.value)}
+                  placeholder="20-12345678-9"
+                  className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+            </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">CUIL</label>
+              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Domicilio</label>
               <input
-                value={cuil}
-                onChange={(e) => setCuil(e.target.value)}
-                placeholder="20-12345678-9"
+                value={domicilio}
+                onChange={(e) => setDomicilio(e.target.value)}
+                placeholder="Av. Corrientes 1234, CABA"
                 className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
               />
             </div>

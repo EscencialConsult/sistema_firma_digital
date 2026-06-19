@@ -8,8 +8,10 @@ export interface OrgAuthority {
   organizationId:   string;
   userId:           string | null;
   fullName:         string;
+  dni:              string | null;
   cuil:             string | null;
   cuit:             string | null;
+  domicilio:        string | null;
   email:            string;
   type:             AuthorityType;
   status:           AuthorityStatus;
@@ -42,8 +44,10 @@ function mapRow(r: Record<string, unknown>): OrgAuthority {
     organizationId:   r.organization_id as string,
     userId:           (r.user_id as string) ?? null,
     fullName:         r.full_name as string,
+    dni:              (r.dni as string) ?? null,
     cuil:             (r.cuil as string) ?? null,
     cuit:             (r.cuit as string) ?? null,
+    domicilio:        (r.domicilio as string) ?? null,
     email:            r.email as string,
     type:             r.type as AuthorityType,
     status:           r.status as AuthorityStatus,
@@ -71,7 +75,9 @@ export async function inviteAuthority(input: {
   organizationId:  string;
   fullName:        string;
   email:           string;
+  dni?:            string;
   cuil?:           string;
+  domicilio?:      string;
   type:            AuthorityType;
   notes?:          string;
   // Solo para PROVISIONAL: datos del convenio
@@ -88,7 +94,9 @@ export async function inviteAuthority(input: {
       organization_id: input.organizationId,
       full_name:       input.fullName,
       email:           input.email,
+      dni:             input.dni ?? null,
       cuil:            input.cuil ?? null,
+      domicilio:       input.domicilio ?? null,
       type:            input.type,
       status:          "PENDING",
       authorized_by:   user?.id ?? null,
@@ -110,8 +118,9 @@ export async function inviteAuthority(input: {
       ...(input.templateFields ?? {}),
       nombre_firmante:    input.fullName,
       email_firmante:     input.email,
+      dni_firmante:       input.dni ?? "",
       cuil_firmante:      input.cuil ?? "",
-      domicilio_firmante: "",
+      domicilio_firmante: input.domicilio ?? "",
     };
 
     const { data: doc, error: docErr } = await supabase

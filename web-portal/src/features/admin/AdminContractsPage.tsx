@@ -227,9 +227,11 @@ function RecipientForm({
                     setSearch("");
                     onChange({
                       ...alumno,
-                      nombre: a.fullName,
-                      email:  a.email,
-                      cuil:   a.cuil ?? "",
+                      nombre:    a.fullName,
+                      email:     a.email,
+                      dni:       a.dni ?? "",
+                      cuil:      a.cuil ?? "",
+                      domicilio: a.domicilio ?? "",
                     });
                   }}
                   className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50 ${selectedId === a.id ? "bg-zinc-50" : ""}`}
