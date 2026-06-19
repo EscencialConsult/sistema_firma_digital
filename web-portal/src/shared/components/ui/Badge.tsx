@@ -7,10 +7,16 @@ const tones = {
   neutral: "bg-zinc-100 text-zinc-700 ring-zinc-200/50"
 };
 
-export function Badge({ status }: { status: string }) {
+const sizes = {
+  sm: "px-2 py-0.5 text-[10px]",
+  md: "px-2.5 py-1 text-xs",
+  lg: "px-3 py-1.5 text-sm"
+};
+
+export function Badge({ status, size = "md" }: { status: string; size?: "sm" | "md" | "lg" }) {
   const tone = statusTone(status);
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ${tones[tone]}`}>
+    <span className={`inline-flex items-center rounded-full font-semibold capitalize ring-1 transition-all ${sizes[size]} ${tones[tone]}`}>
       {statusLabel(status)}
     </span>
   );

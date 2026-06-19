@@ -101,17 +101,20 @@ export async function getAllContracts(): Promise<Contract[]> {
   return (data ?? []).map(mapDocToContract);
 }
 
-/** Create a new contract document and its first signature request */
+/** Create a new contract document and its signature requests */
 export async function createContract(input: {
   title: string;
   description: string;
   templateId?: string;
   templateFields?: Record<string, string>;
-  signerEmail: string;
-  signerName: string;
+  signers: { email: string; name: string }[];
 }): Promise<Contract> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
+
+  if (!input.signers || input.signers.length === 0) {
+    throw new Error("Se requiere al menos un firmante");
+  }
 
   // 1. Insert document
   const { data: doc, error: docError } = await supabase
@@ -122,7 +125,7 @@ export async function createContract(input: {
       owner_id:        user.id,
       template_id:     input.templateId ?? null,
       template_fields: input.templateFields ?? null,
-      total_signers:   1,
+      total_signers:   input.signers.length,
       status:          "DRAFT",
     })
     .select("*, owner:users!owner_id(email), document_versions:document_versions!document_versions_document_id_fkey(*)")
@@ -130,30 +133,37 @@ export async function createContract(input: {
 
   if (docError || !doc) throw new Error(docError?.message ?? "Error al crear el contrato");
 
-  // 2. Insert first signature request
+  // 2. Insert signature requests
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  await supabase.from("signature_requests").insert({
+  
+  const srInserts = input.signers.map(s => ({
     document_id:  doc.id,
-    signer_email: input.signerEmail,
-    signer_name:  input.signerName,
+    signer_email: s.email,
+    signer_name:  s.name,
     status:       "PENDING",
     expires_at:   expiresAt,
-  });
+  }));
+
+  const { error: srError } = await supabase.from("signature_requests").insert(srInserts);
+  if (srError) throw new Error(srError.message);
 
   // 3. Update status to SENT
   await supabase.from("documents").update({ status: "SENT" }).eq("id", doc.id);
 
-  // 4. Notify signer by email (Edge Function — requires deploy + RESEND_API_KEY)
-  supabase.functions
-    .invoke("send-signing-email", {
-      body: {
-        signerEmail:   input.signerEmail,
-        signerName:    input.signerName,
-        documentTitle: input.title,
-        requestId:     doc.id, // será resuelto por la SR cuando el firmante abra /signing/:srId
-      },
-    })
-    .catch((e: unknown) => console.warn("[email] Edge Function no disponible:", e));
+  // 4. Notify all signers by email (Edge Function — requires deploy + RESEND_API_KEY)
+  for (const s of input.signers) {
+    supabase.functions
+      .invoke("send-signing-email", {
+        body: {
+          signerEmail:   s.email,
+          signerName:    s.name,
+          documentTitle: input.title,
+          requestId:     doc.id,
+        },
+      })
+      .catch((e: unknown) => console.warn(`[email] Edge Function no disponible para ${s.email}:`, e));
+  }
 
   return mapDocToContract(doc as Record<string, unknown>);
 }
+

@@ -27,7 +27,7 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; co
   IN_REVIEW: { label: "En revisión", icon: Clock,       color: "text-amber-500" },
   PENDING:   { label: "Pendiente",   icon: Clock,       color: "text-zinc-400" },
   REJECTED:  { label: "Rechazado",   icon: XCircle,     color: "text-red-500" },
-  EXPIRED:   { label: "Expirado",    icon: XCircle,     color: "text-red-400" },
+  EXPIRED:   { label: "Expirado",    icon: XCircle,     color: "text-red-600" },
 };
 
 function InviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (u: AdminUserSummary) => void }) {
@@ -101,7 +101,7 @@ function InviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 transition disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white py-2.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-100 transition disabled:opacity-50"
           >
             {loading ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
             {loading ? "Creando..." : "Crear usuario"}
@@ -142,7 +142,7 @@ export function AdminTeamPage() {
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 transition"
+          className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-100 transition"
         >
           <UserPlus size={16} />
           Invitar usuario

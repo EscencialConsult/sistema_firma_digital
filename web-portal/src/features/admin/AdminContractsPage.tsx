@@ -29,26 +29,26 @@ function statusMeta(status: ContractStatus) {
   switch (status) {
     case "SIGNED":
     case "COMPLETED":
-      return { label: "Firmado",  className: "text-emerald-400 bg-emerald-900/30 border-emerald-800" };
+      return { label: "Firmado",  className: "text-emerald-700 bg-emerald-50 border-emerald-200" };
     case "SENT":
     case "VIEWED":
-      return { label: "Pendiente", className: "text-amber-400 bg-amber-900/30 border-amber-800" };
+      return { label: "Pendiente", className: "text-amber-700 bg-amber-50 border-amber-200" };
     case "CONFORMITY_ACCEPTED":
-      return { label: "Conformidad", className: "text-blue-400 bg-blue-900/20 border-blue-800" };
+      return { label: "Conformidad", className: "text-blue-700 bg-blue-50 border-blue-200" };
     case "REJECTED":
     case "EXPIRED":
-      return { label: status === "REJECTED" ? "Rechazado" : "Vencido", className: "text-red-400 bg-red-900/20 border-red-800" };
+      return { label: status === "REJECTED" ? "Rechazado" : "Vencido", className: "text-red-700 bg-red-50 border-red-200" };
     default:
-      return { label: status, className: "text-zinc-400 bg-zinc-800 border-zinc-700" };
+      return { label: status, className: "text-zinc-400 bg-zinc-50 border-zinc-200" };
   }
 }
 
 const ACCENT_CLASSES = {
-  blue:    { border: "border-blue-700",   bg: "bg-blue-900/20",   badge: "bg-blue-900/30 text-blue-300 border-blue-800",   ring: "ring-blue-600"   },
-  amber:   { border: "border-amber-700",  bg: "bg-amber-900/20",  badge: "bg-amber-900/30 text-amber-300 border-amber-800", ring: "ring-amber-600"  },
-  emerald: { border: "border-emerald-700",bg: "bg-emerald-900/20",badge: "bg-emerald-900/30 text-emerald-300 border-emerald-800", ring: "ring-emerald-600" },
-  purple:  { border: "border-purple-700", bg: "bg-purple-900/20", badge: "bg-purple-900/30 text-purple-300 border-purple-800", ring: "ring-purple-600" },
-  rose:    { border: "border-rose-700",   bg: "bg-rose-900/20",   badge: "bg-rose-900/30 text-rose-300 border-rose-800",   ring: "ring-rose-600"   },
+  blue:    { border: "border-blue-200",   bg: "bg-blue-50",   badge: "bg-blue-100 text-blue-700 border-blue-800",   ring: "ring-blue-600"   },
+  amber:   { border: "border-amber-200",  bg: "bg-amber-50",  badge: "bg-amber-100 text-amber-700 border-amber-800", ring: "ring-amber-600"  },
+  emerald: { border: "border-emerald-200",bg: "bg-emerald-50",badge: "bg-emerald-100 text-emerald-700 border-emerald-800", ring: "ring-emerald-600" },
+  purple:  { border: "border-purple-200", bg: "bg-purple-50", badge: "bg-purple-100 text-purple-700 border-purple-800", ring: "ring-purple-600" },
+  rose:    { border: "border-rose-200",   bg: "bg-rose-50",   badge: "bg-rose-100 text-rose-700 border-rose-800",   ring: "ring-rose-600"   },
 };
 
 // ─── Template field input ─────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ function TemplateFieldInput({
   value: string;
   onChange: (v: string) => void;
 }) {
-  const base = "w-full rounded-xl border border-zinc-700 bg-zinc-800 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition";
+  const base = "w-full rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition";
 
   if (def.type === "textarea") {
     return (
@@ -99,7 +99,7 @@ function TemplateFieldInput({
   return (
     <div className={def.span === "full" ? "col-span-2" : ""}>
       <label className="mb-1 block text-xs font-semibold text-zinc-400">{def.label}</label>
-      <div className="flex overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800 focus-within:border-zinc-500 transition">
+      <div className="flex overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 focus-within:border-zinc-400 focus-within:ring-2 focus-within:ring-zinc-100 transition">
         {def.prefix && (
           <span className="px-3 text-zinc-500 text-sm font-medium select-none flex items-center">{def.prefix}</span>
         )}
@@ -108,7 +108,7 @@ function TemplateFieldInput({
           value={value}
           placeholder={def.placeholder}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1 bg-transparent py-2.5 pr-4 pl-3 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none"
+          className="flex-1 bg-transparent py-2.5 pr-4 pl-3 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none"
         />
       </div>
     </div>
@@ -128,8 +128,85 @@ function AlumnoField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition"
+        className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition"
       />
+    </div>
+  );
+}
+
+// ─── Recipient Form ────────────────────────────────────────────────────────────
+
+function RecipientForm({
+  index,
+  alumno,
+  onChange,
+  users,
+}: {
+  index: number;
+  alumno: AlumnoData;
+  onChange: (a: AlumnoData) => void;
+  users: AdminUserSummary[];
+}) {
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<AdminUserSummary | null>(null);
+
+  const filtered = useMemo(() => {
+    if (!search) return users;
+    const q = search.toLowerCase();
+    return users.filter((u) => u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  }, [users, search]);
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <p className="text-sm font-bold text-zinc-900 border-b border-zinc-100 pb-2">Destinatario / Firmante {index + 1}</p>
+      
+      {/* User search */}
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-zinc-400">Buscar usuario registrado (Opcional)</label>
+        <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 focus-within:border-zinc-400 focus-within:ring-2 focus-within:ring-zinc-100 transition">
+          <Search size={14} className="text-zinc-600" />
+          <input
+            className="w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-600 outline-none"
+            placeholder="Nombre o email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {search && (
+          <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-zinc-200 divide-y divide-zinc-200 shadow-lg absolute z-10 bg-white min-w-[300px]">
+            {filtered.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => {
+                  setSelected(u);
+                  setSearch("");
+                  onChange({ ...alumno, nombre: u.fullName, email: u.email });
+                }}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50 ${selected?.id === u.id ? "bg-zinc-50" : ""}`}
+              >
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-700 text-xs font-bold text-white">
+                  {u.fullName[0]?.toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-zinc-800 truncate">{u.fullName}</p>
+                  <p className="text-xs text-zinc-500 truncate">{u.email}</p>
+                </div>
+                {selected?.id === u.id && <Check size={14} className="text-emerald-600 shrink-0" />}
+              </button>
+            ))}
+            {filtered.length === 0 && <p className="px-4 py-3 text-xs text-zinc-500">No se encontraron usuarios.</p>}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <AlumnoField label="Nombre completo *" value={alumno.nombre} onChange={(v) => onChange({ ...alumno, nombre: v })} />
+        <AlumnoField label="Email *" value={alumno.email} onChange={(v) => onChange({ ...alumno, email: v })} />
+        <AlumnoField label="DNI *" value={alumno.dni} placeholder="40123456" onChange={(v) => onChange({ ...alumno, dni: v })} />
+        <AlumnoField label="CUIL / CUIT" value={alumno.cuil} placeholder="20-40123456-7" onChange={(v) => onChange({ ...alumno, cuil: v })} />
+      </div>
+      <AlumnoField label="Domicilio (opcional)" value={alumno.domicilio} placeholder="Av. Corrientes 1234, CABA" onChange={(v) => onChange({ ...alumno, domicilio: v })} />
     </div>
   );
 }
@@ -143,12 +220,12 @@ function Steps({ current, labels }: { current: number; labels: string[] }) {
         <div key={i} className="flex items-center gap-1.5">
           <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
             i < current ? "bg-emerald-500 text-white" :
-            i === current ? "bg-white text-zinc-900" :
-            "bg-zinc-800 text-zinc-500"
+            i === current ? "bg-zinc-900 text-white" :
+            "bg-zinc-50 text-zinc-500"
           }`}>
             {i < current ? <Check size={9} /> : i + 1}
           </span>
-          <span className={`hidden text-xs sm:inline ${i === current ? "font-semibold text-white" : "text-zinc-600"}`}>{label}</span>
+          <span className={`hidden text-xs sm:inline ${i === current ? "font-semibold text-zinc-900" : "text-zinc-600"}`}>{label}</span>
           {i < labels.length - 1 && <ChevronRight size={11} className="text-zinc-700 mx-0.5" />}
         </div>
       ))}
@@ -173,10 +250,8 @@ export function AdminContractsPage() {
   const [step, setStep]           = useState(0); // 0=pick template, 1=fields, 2=recipient, 3=preview
   const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplateDef | null>(null);
   const [fields, setFields]       = useState<Record<string, string>>({});
-  const [alumno, setAlumno]       = useState<AlumnoData>({ ...EMPTY_ALUMNO });
+  const [alumnos, setAlumnos]     = useState<AlumnoData[]>([{ ...EMPTY_ALUMNO }]);
   const [users, setUsers]         = useState<AdminUserSummary[]>([]);
-  const [userSearch, setUserSearch] = useState("");
-  const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
   const [creating, setCreating]      = useState(false);
   const [created, setCreated]        = useState(false);
   const [showToast, setShowToast]    = useState(false);
@@ -200,12 +275,6 @@ export function AdminContractsPage() {
     return list;
   }, [contracts, filter, search]);
 
-  const filteredUsers = useMemo(() => {
-    if (!userSearch) return users;
-    const q = userSearch.toLowerCase();
-    return users.filter((u) => u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-  }, [users, userSearch]);
-
   function pickTemplate(tpl: ContractTemplateDef) {
     setSelectedTemplate(tpl);
     const defaults: Record<string, string> = {};
@@ -213,6 +282,8 @@ export function AdminContractsPage() {
       if (def.defaultValue) defaults[k] = def.defaultValue;
     });
     setFields(defaults);
+    const reqSigners = tpl.requiredSigners || 1;
+    setAlumnos(Array(reqSigners).fill(null).map(() => ({ ...EMPTY_ALUMNO })));
     setStep(1);
   }
 
@@ -225,37 +296,35 @@ export function AdminContractsPage() {
     });
   }
 
-  function handleSelectUser(u: AdminUserSummary) {
-    setSelectedUser(u);
-    setAlumno((a) => ({ ...a, nombre: u.fullName, email: u.email }));
-  }
-
-  const step2Valid = selectedUser && alumno.nombre && alumno.email;
+  const step2Valid = alumnos.every(a => a.nombre && a.email && a.dni);
 
   async function handleConfirm() {
     if (!selectedTemplate) return;
     setCreating(true);
     try {
       // Merge template fields + signer personal data so ContractDocument can render them
-      const templateFields: Record<string, string> = {
-        ...fields,
-        dni_firmante:       alumno.dni,
-        cuil_firmante:      alumno.cuil,
-        domicilio_firmante: alumno.domicilio,
-      };
+      const templateFields: Record<string, string> = { ...fields };
+      
+      alumnos.forEach((a, index) => {
+        const prefix = index === 0 ? "" : `_${index + 1}`;
+        templateFields[`nombre_firmante${prefix}`] = a.nombre;
+        templateFields[`email_firmante${prefix}`] = a.email;
+        templateFields[`dni_firmante${prefix}`] = a.dni;
+        templateFields[`cuil_firmante${prefix}`] = a.cuil;
+        templateFields[`domicilio_firmante${prefix}`] = a.domicilio;
+      });
 
       const newContract = await createContract({
         title:          selectedTemplate.legalTitle,
-        description:    `Firmante: ${alumno.nombre} (${alumno.email})`,
+        description:    `Firmantes: ${alumnos.map(a => a.nombre).join(", ")}`,
         templateId:     selectedTemplate.id,
         templateFields,
-        signerEmail:    alumno.email,
-        signerName:     alumno.nombre,
+        signers:        alumnos.map(a => ({ email: a.email, name: a.nombre })),
       });
 
       setContracts((c) => [newContract, ...c]);
       setCreated(true);
-      setToastMessage(`Contrato enviado a ${alumno.nombre}`);
+      setToastMessage(`Contrato enviado a ${alumnos.length} firmantes.`);
       setShowToast(true);
     } catch (err) {
       console.error("[AdminContracts] Error al crear contrato:", err);
@@ -277,9 +346,7 @@ export function AdminContractsPage() {
     setStep(0);
     setSelectedTemplate(null);
     setFields({});
-    setAlumno({ ...EMPTY_ALUMNO });
-    setSelectedUser(null);
-    setUserSearch("");
+    setAlumnos([{ ...EMPTY_ALUMNO }]);
     setCreated(false);
   }
 
@@ -297,13 +364,13 @@ export function AdminContractsPage() {
           <button
             onClick={exitCreate}
             type="button"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition"
           >
             <ArrowLeft size={15} />
           </button>
           <div>
             <p className="text-xs text-zinc-600">Admin · Contratos</p>
-            <h2 className="font-bold text-white">
+            <h2 className="font-bold text-zinc-900">
               {selectedTemplate ? selectedTemplate.name : "Nuevo contrato"}
             </h2>
           </div>
@@ -311,7 +378,7 @@ export function AdminContractsPage() {
             <div className="ml-auto">
               <Steps
                 current={step - 1}
-                labels={["Completar datos", "Destinatario", "Vista previa"]}
+                labels={["Completar datos", "Destinatarios", "Vista previa"]}
               />
             </div>
           )}
@@ -320,15 +387,18 @@ export function AdminContractsPage() {
         {created ? (
           /* ── Success ── */
           <div className="flex flex-col items-center py-20 text-center max-w-sm mx-auto">
-            <div className="mb-6 grid h-20 w-20 place-items-center rounded-full bg-emerald-900/30 border border-emerald-700">
-              <Check size={36} className="text-emerald-400" />
+            <div className="mb-6 grid h-20 w-20 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
+              <Check size={36} className="text-emerald-600" />
             </div>
-            <h3 className="text-xl font-bold text-white">¡Contrato enviado!</h3>
+            <h3 className="text-xl font-bold text-zinc-900">¡Contrato enviado!</h3>
             <p className="mt-2 text-sm text-zinc-500">
-              Se envió el contrato a <strong className="text-zinc-300">{alumno.nombre}</strong> ({alumno.email}).
+              Se envió el contrato a:
             </p>
+            <ul className="mt-2 text-sm text-zinc-700 font-medium">
+              {alumnos.map((a, i) => <li key={i}>{a.nombre} ({a.email})</li>)}
+            </ul>
             {selectedTemplate && (
-              <p className="mt-1 text-xs text-zinc-600 italic">{selectedTemplate.legalTitle}</p>
+              <p className="mt-4 text-xs text-zinc-600 italic">{selectedTemplate.legalTitle}</p>
             )}
             <div className="mt-8 flex gap-3">
               <Button onClick={exitCreate} className="h-10 px-5">Ver contratos</Button>
@@ -345,7 +415,7 @@ export function AdminContractsPage() {
                 <p className="text-sm text-zinc-400">
                   Seleccioná el tipo de contrato. Cada template genera el documento legal correspondiente.
                 </p>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {CONTRACT_TEMPLATES.map((tpl) => {
                     const ac = ACCENT_CLASSES[tpl.accent];
                     return (
@@ -362,10 +432,15 @@ export function AdminContractsPage() {
                           <ChevronRight size={14} className="text-zinc-500 mt-0.5 group-hover:translate-x-0.5 transition-transform" />
                         </div>
                         <div>
-                          <p className="font-bold text-white text-sm">{tpl.name}</p>
+                          <p className="font-bold text-zinc-900 text-sm">{tpl.name}</p>
                           <p className="mt-0.5 text-[11px] text-zinc-500 italic leading-snug">{tpl.legalTitle}</p>
                         </div>
                         <p className="text-xs text-zinc-400 leading-relaxed">{tpl.description}</p>
+                        <div className="mt-auto pt-2 border-t border-zinc-200/50 flex items-center justify-between">
+                          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+                            {tpl.requiredSigners || 1} Firmante{(tpl.requiredSigners || 1) !== 1 ? 's' : ''}
+                          </span>
+                        </div>
                       </button>
                     );
                   })}
@@ -380,11 +455,11 @@ export function AdminContractsPage() {
                   <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${ACCENT_CLASSES[selectedTemplate.accent].badge}`}>
                     {selectedTemplate.category}
                   </span>
-                  <p className="text-xs text-zinc-300 italic leading-snug flex-1">{selectedTemplate.legalTitle}</p>
+                  <p className="text-xs text-zinc-700 italic leading-snug flex-1">{selectedTemplate.legalTitle}</p>
                   <button
                     type="button"
                     onClick={() => { setStep(0); setSelectedTemplate(null); }}
-                    className="text-[10px] text-zinc-500 underline hover:text-zinc-300 shrink-0"
+                    className="text-[10px] text-zinc-500 underline hover:text-zinc-700 shrink-0"
                   >
                     Cambiar
                   </button>
@@ -407,60 +482,34 @@ export function AdminContractsPage() {
                     <ArrowLeft size={14} /> Atrás
                   </Button>
                   <Button onClick={() => setStep(2)} disabled={!step1Valid()} className="h-10 px-6">
-                    Seleccionar destinatario <ChevronRight size={14} />
+                    Seleccionar destinatario(s) <ChevronRight size={14} />
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* ── Step 2: Recipient ── */}
-            {step === 2 && (
+            {/* ── Step 2: Recipients ── */}
+            {step === 2 && selectedTemplate && (
               <div className="space-y-5 max-w-2xl">
                 <p className="text-sm text-zinc-400">
-                  Buscá y seleccioná el destinatario del contrato, luego completá sus datos de identificación para el documento.
+                  Buscá y seleccioná los destinatarios del contrato, luego completá sus datos de identificación para el documento.
                 </p>
 
-                {/* User search */}
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-zinc-400">Buscar usuario registrado</label>
-                  <div className="flex items-center gap-2.5 rounded-xl border border-zinc-700 bg-zinc-800 px-3.5 py-2.5 focus-within:border-zinc-500 transition">
-                    <Search size={14} className="text-zinc-600" />
-                    <input
-                      className="w-full bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 outline-none"
-                      placeholder="Nombre o email..."
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
+                <div className="space-y-6">
+                  {alumnos.map((alum, index) => (
+                    <RecipientForm 
+                      key={index} 
+                      index={index} 
+                      alumno={alum} 
+                      onChange={(newA) => setAlumnos(prev => {
+                        const copy = [...prev];
+                        copy[index] = newA;
+                        return copy;
+                      })} 
+                      users={users} 
                     />
-                  </div>
-                  <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-zinc-800 divide-y divide-zinc-800">
-                    {filteredUsers.map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => handleSelectUser(u)}
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-800/60 ${selectedUser?.id === u.id ? "bg-zinc-800" : ""}`}
-                      >
-                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-700 text-xs font-bold text-zinc-300">
-                          {u.fullName[0]?.toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-zinc-200 truncate">{u.fullName}</p>
-                          <p className="text-xs text-zinc-500 truncate">{u.email}</p>
-                        </div>
-                        {selectedUser?.id === u.id && <Check size={14} className="text-emerald-400 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
+                  ))}
                 </div>
-
-                {/* Alumno identification fields */}
-                <div className="grid grid-cols-2 gap-4">
-                  <AlumnoField label="Nombre completo" value={alumno.nombre} onChange={(v) => setAlumno((a) => ({ ...a, nombre: v }))} />
-                  <AlumnoField label="Email" value={alumno.email} onChange={(v) => setAlumno((a) => ({ ...a, email: v }))} />
-                  <AlumnoField label="DNI *" value={alumno.dni} placeholder="40123456" onChange={(v) => setAlumno((a) => ({ ...a, dni: v }))} />
-                  <AlumnoField label="CUIL / CUIT" value={alumno.cuil} placeholder="20-40123456-7" onChange={(v) => setAlumno((a) => ({ ...a, cuil: v }))} />
-                </div>
-                <AlumnoField label="Domicilio (opcional)" value={alumno.domicilio} placeholder="Av. Corrientes 1234, CABA" onChange={(v) => setAlumno((a) => ({ ...a, domicilio: v }))} />
 
                 <div className="flex justify-between pt-2">
                   <Button variant="secondary" onClick={() => setStep(1)} className="h-10 px-5 text-zinc-700">
@@ -479,7 +528,7 @@ export function AdminContractsPage() {
                 <p className="text-sm text-zinc-400">
                   Revisá el contrato antes de enviarlo. Los datos en <strong className="text-blue-400">azul</strong> son los parámetros configurados.
                 </p>
-                <ContractDocument templateId={selectedTemplate.id} fields={fields} alumno={alumno} />
+                <ContractDocument templateId={selectedTemplate.id} fields={fields} alumnos={alumnos} />
                 <div className="flex justify-between pt-2">
                   <Button variant="secondary" onClick={() => setStep(2)} className="h-10 px-5 text-zinc-700">
                     <ArrowLeft size={14} /> Atrás
@@ -519,9 +568,9 @@ export function AdminContractsPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-zinc-600">Admin</p>
-            <h1 className="mt-1 text-2xl font-bold text-white">Contratos</h1>
+            <h1 className="mt-1 text-2xl font-bold text-zinc-900">Contratos</h1>
             <p className="mt-1 text-sm text-zinc-500">
-              {contracts.length} contratos · 5 templates legales disponibles.
+              {contracts.length} contratos · {CONTRACT_TEMPLATES.length} templates legales disponibles.
             </p>
           </div>
           <Button onClick={() => { resetCreate(); setView("create"); }} className="shrink-0 h-10 px-4 mt-1">
@@ -548,10 +597,10 @@ export function AdminContractsPage() {
 
         {/* Search + filter */}
         <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="flex flex-1 items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 focus-within:border-zinc-600">
+          <div className="flex flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 focus-within:border-zinc-300">
             <Files size={15} className="shrink-0 text-zinc-600" />
             <input
-              className="w-full bg-transparent text-sm text-zinc-300 outline-none placeholder:text-zinc-600"
+              className="w-full bg-transparent text-sm text-zinc-700 outline-none placeholder:text-zinc-600"
               placeholder="Buscar por título o email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -564,7 +613,7 @@ export function AdminContractsPage() {
                 onClick={() => setFilter(k)}
                 type="button"
                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  filter === k ? "border-zinc-400 bg-zinc-700 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-600"
+                  filter === k ? "border-zinc-300 bg-zinc-100 text-zinc-900" : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
                 }`}
               >
                 {k === "all" ? "Todos" : k === "pending" ? "Pendientes" : k === "signed" ? "Firmados" : "Rechazados"}
@@ -574,10 +623,10 @@ export function AdminContractsPage() {
         </div>
 
         {/* Contract list */}
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
           {loading ? (
             <div className="space-y-3 p-5">
-              {Array(4).fill(null).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-zinc-800" />)}
+              {Array(4).fill(null).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-zinc-50" />)}
             </div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center">
@@ -586,7 +635,7 @@ export function AdminContractsPage() {
               <button
                 type="button"
                 onClick={() => { resetCreate(); setView("create"); }}
-                className="mt-3 text-xs text-zinc-500 underline hover:text-zinc-300"
+                className="mt-3 text-xs text-zinc-500 underline hover:text-zinc-700"
               >
                 Crear el primero
               </button>
@@ -598,14 +647,14 @@ export function AdminContractsPage() {
                 return (
                   <div
                     key={c.id}
-                    className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-800/30 transition sm:flex-row sm:items-center sm:justify-between group"
+                    className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-50 transition sm:flex-row sm:items-center sm:justify-between group"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-800">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-50">
                         <Files size={14} className="text-zinc-500" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-semibold text-zinc-100 truncate">{c.title}</p>
+                        <p className="font-semibold text-zinc-900 truncate">{c.title}</p>
                         <p className="text-xs text-zinc-500 mt-0.5">
                           {c.ownerEmail} · v{c.versionNumber} · {new Date(c.updatedAt).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })}
                         </p>
@@ -621,7 +670,7 @@ export function AdminContractsPage() {
                       <button
                         type="button"
                         onClick={() => setViewContract(c)}
-                        className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition opacity-0 group-hover:opacity-100"
+                        className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100"
                       >
                         <Eye size={11} /> Ver
                       </button>

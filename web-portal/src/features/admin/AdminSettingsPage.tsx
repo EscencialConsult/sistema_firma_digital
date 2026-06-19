@@ -106,7 +106,7 @@ export function AdminSettingsPage() {
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-zinc-700 transition disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-100 transition disabled:opacity-50"
         >
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
           {saving ? "Guardando..." : "Guardar cambios"}

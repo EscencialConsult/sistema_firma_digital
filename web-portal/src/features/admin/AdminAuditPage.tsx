@@ -17,12 +17,12 @@ const ACTION_LABELS: Record<string, string> = {
 
 function actionColor(action: string) {
   if (action.includes("SIGNED") || action.includes("VERIFIED") || action.includes("COMPLETED"))
-    return "text-emerald-400 bg-emerald-900/20 border-emerald-800";
+    return "text-emerald-600 bg-emerald-50 border-emerald-800";
   if (action.includes("REJECTED"))
-    return "text-red-400 bg-red-900/20 border-red-800";
+    return "text-red-700 bg-red-50 border-red-200";
   if (action.includes("SENT") || action.includes("VIEWED"))
-    return "text-amber-400 bg-amber-900/20 border-amber-800";
-  return "text-zinc-400 bg-zinc-800 border-zinc-700";
+    return "text-amber-600 bg-amber-50 border-amber-800";
+  return "text-zinc-400 bg-zinc-50 border-zinc-200";
 }
 
 function formatDate(iso: string) {
@@ -63,16 +63,16 @@ export function AdminAuditPage() {
     <div className="space-y-6">
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-zinc-600">Admin</p>
-        <h1 className="mt-1 text-2xl font-bold text-white">Auditoría del sistema</h1>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-900">Auditoría del sistema</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Log completo e inmutable de todas las acciones del sistema.
         </p>
       </div>
 
-      <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 focus-within:border-zinc-600">
+      <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 focus-within:border-zinc-300">
         <FileClock size={15} className="shrink-0 text-zinc-600" />
         <input
-          className="w-full bg-transparent text-sm text-zinc-300 outline-none placeholder:text-zinc-600"
+          className="w-full bg-transparent text-sm text-zinc-700 outline-none placeholder:text-zinc-600"
           placeholder="Filtrar por acción, entidad o IP..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -82,7 +82,7 @@ export function AdminAuditPage() {
       {loading ? (
         <div className="space-y-3">
           {Array(5).fill(null).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-zinc-800" />
+            <div key={i} className="h-20 animate-pulse rounded-2xl bg-zinc-50" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -95,7 +95,7 @@ export function AdminAuditPage() {
           {[...filtered].reverse().map((event) => (
             <div
               key={event.id}
-              className="rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-4 space-y-2"
+              className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 space-y-2"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-2 min-w-0">
@@ -132,7 +132,7 @@ export function AdminAuditPage() {
               </div>
 
               {Object.keys(event.metadata).length > 0 && (
-                <div className="rounded-lg bg-zinc-800/50 px-3 py-2 font-mono text-[11px] text-zinc-500">
+                <div className="rounded-lg bg-zinc-50/50 px-3 py-2 font-mono text-[11px] text-zinc-500">
                   {JSON.stringify(event.metadata)}
                 </div>
               )}

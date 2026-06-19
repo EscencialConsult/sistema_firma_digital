@@ -2,53 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #fafafa;
-  color: #09090b;
-}
-
-@layer components {
-  .primary-action {
-    @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white transition duration-200 hover:bg-zinc-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400;
-  }
-
-  .secondary-action {
-    @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition duration-200 hover:bg-zinc-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:text-zinc-300;
-  }
-
-  .card-premium {
-    @apply rounded-2xl border border-zinc-200/50 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.01),0_10px_40px_-15px_rgba(0,0,0,0.04)];
-  }
-
-  .hover-lift {
-    @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_15px_40px_-12px_rgba(0,0,0,0.08)];
-    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-  }
-}
-
 @layer base {
-  @media print {
-    @page {
-      margin: 1.5cm;
-    }
+  :root {
+    --color-bg-primary: #fafafa;
+    --color-bg-secondary: #f4f4f5;
+    --color-text-base: #09090b;
+    --color-text-muted: #71717a;
+    --color-primary: #18181b;
+    --radius-card: 1rem;
+    --radius-button: 0.75rem;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.01), 0 10px 40px -15px rgba(0,0,0,0.04);
+    --shadow-hover: 0 15px 40px -12px rgba(0,0,0,0.08);
+  }
 
+  body {
+    margin: 0;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--color-bg-primary);
+    color: var(--color-text-base);
+    /* Mobile Native Feel */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  @media print {
+    @page { margin: 1.5cm; }
     body {
       background: white;
       color: black;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-
-    .print\:hidden {
-      display: none !important;
-    }
-
-    .no-print {
-      display: none !important;
-    }
+    .print\:hidden, .no-print { display: none !important; }
   }
 }
 
+@layer components {
+  /* Typography System */
+  .heading-xl { @apply text-3xl font-bold tracking-tight text-zinc-950 md:text-4xl; }
+  .heading-lg { @apply text-xl font-bold tracking-tight text-zinc-950 md:text-2xl; }
+  .body-base { @apply text-sm leading-relaxed text-zinc-700; }
+  .caption { @apply text-xs text-zinc-500; }
+
+  /* UI Tokens */
+  .primary-action {
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] bg-zinc-900 px-4 text-sm font-medium text-white transition-all duration-200 hover:bg-zinc-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2;
+    min-height: 44px; /* Apple HIG standard for touch targets */
+    touch-action: manipulation;
+  }
+
+  .secondary-action {
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition-all duration-200 hover:bg-zinc-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:text-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-200 focus-visible:ring-offset-2;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .card-premium {
+    @apply rounded-[var(--radius-card)] border border-zinc-200/50 bg-white shadow-[var(--shadow-card)];
+  }
+
+  .hover-lift {
+    @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-hover)];
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Page Transitions */
+  .page-transition-enter {
+    animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}

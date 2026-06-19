@@ -356,23 +356,73 @@ function SoporteDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
   );
 }
 
+function ConvenioDoc({ f, alumnos }: { f: Record<string, string>; alumnos: AlumnoData[] }) {
+  const juris = f.jurisdiccion || "Ciudad Autónoma de Buenos Aires";
+  const p1 = alumnos[0] || { nombre: "", dni: "", cuil: "", email: "", domicilio: "" };
+  const p2 = alumnos[1] || { nombre: "", dni: "", cuil: "", email: "", domicilio: "" };
+
+  return (
+    <DocWrapper>
+      <DocTitle
+        title="Convenio Privado Bilateral"
+        subtitle="Generado a través de Escencial Consultora"
+      />
+      <DocIntro text={`En la ciudad de ${juris}, República Argentina, a la fecha de la firma electrónica registrada.`} />
+      
+      <DocParties label="Partes intervinientes" items={[
+        <><strong>PARTE A:</strong> <Hi>{p1.nombre || "—"}</Hi>, D.N.I. N° <Hi>{p1.dni || "—"}</Hi>{p1.cuil ? `, CUIL ${p1.cuil}` : ""}{p1.domicilio ? `, domicilio: ${p1.domicilio}` : ""}, correo: <Hi>{p1.email || "—"}</Hi> (en adelante, <em>«LA PARTE A»</em>).</>,
+        <><strong>PARTE B:</strong> <Hi>{p2.nombre || "—"}</Hi>, D.N.I. N° <Hi>{p2.dni || "—"}</Hi>{p2.cuil ? `, CUIL ${p2.cuil}` : ""}{p2.domicilio ? `, domicilio: ${p2.domicilio}` : ""}, correo: <Hi>{p2.email || "—"}</Hi> (en adelante, <em>«LA PARTE B»</em>).</>,
+      ]} />
+      
+      <DocClause n="PRIMERA" title="OBJETO DEL CONVENIO">
+        <span className="whitespace-pre-wrap">{f.objeto_convenio || "—"}</span>
+      </DocClause>
+      
+      <DocClause n="SEGUNDA" title="CLÁUSULAS ADICIONALES Y CONDICIONES">
+        <span className="whitespace-pre-wrap">{f.clausulas_adicionales || "No se establecen cláusulas adicionales."}</span>
+      </DocClause>
+
+      <DocClause n="TERCERA" title="CONFORMIDAD Y BUENA FE">
+        Ambas partes declaran haber leído y comprendido los términos del presente convenio, obligándose a su cumplimiento de buena fe. El presente acuerdo refleja la entera voluntad de las partes.
+      </DocClause>
+
+      <DocClause n="CUARTA" title="VALIDEZ DE LA FIRMA ELECTRÓNICA">
+        El presente convenio es firmado electrónicamente con plena validez legal conforme a la Ley N° 25.506. La plataforma de Escencial Consultora actúa únicamente como prestadora del servicio de firma, no asumiendo responsabilidad alguna por las obligaciones contraídas entre las partes.
+      </DocClause>
+
+      <DocClause n="QUINTA" title="JURISDICCIÓN">
+        Para cualquier controversia derivada del presente, las partes se someten a la jurisdicción de <Hi>{juris}</Hi>.
+      </DocClause>
+
+      <DocSignatures>
+        <DocSig label="Parte A" name={p1.nombre || "—"} sub={`DNI: ${p1.dni || "—"}`} />
+        <DocSig label="Parte B" name={p2.nombre || "—"} sub={`DNI: ${p2.dni || "—"}`} />
+      </DocSignatures>
+      <DocFooter />
+    </DocWrapper>
+  );
+}
+
 // ─── Main export: router ─────────────────────────────────────────────────────
 
 export function ContractDocument({
   templateId,
   fields,
-  alumno,
+  alumnos,
 }: {
   templateId: string;
   fields: Record<string, string>;
-  alumno: AlumnoData;
+  alumnos: AlumnoData[];
 }) {
+  const alumno = alumnos[0]; // For legacy templates that expect a single "alumno"
+
   switch (templateId) {
     case "formacion": return <FormacionDoc f={fields} alumno={alumno} />;
     case "inmueble":  return <InmuebleDoc  f={fields} alumno={alumno} />;
     case "reserva":   return <ReservaDoc   f={fields} alumno={alumno} />;
     case "software":  return <SoftwareDoc  f={fields} alumno={alumno} />;
     case "soporte":   return <SoporteDoc   f={fields} alumno={alumno} />;
+    case "convenio_terceros": return <ConvenioDoc f={fields} alumnos={alumnos} />;
     default: return <div className="p-8 text-zinc-400 text-sm text-center">Template no reconocido.</div>;
   }
 }
@@ -380,15 +430,17 @@ export function ContractDocument({
 // ─── Contract detail viewer (for existing contracts from the list) ─────────────
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  SENT:                { label: "Enviado",            color: "text-amber-400 bg-amber-900/30 border-amber-800" },
-  VIEWED:              { label: "Visto",              color: "text-blue-400 bg-blue-900/20 border-blue-800" },
-  CONFORMITY_ACCEPTED: { label: "Conformidad aceptada", color: "text-blue-400 bg-blue-900/20 border-blue-800" },
-  SIGNED:              { label: "Firmado",            color: "text-emerald-400 bg-emerald-900/30 border-emerald-800" },
-  COMPLETED:           { label: "Completado",         color: "text-emerald-400 bg-emerald-900/30 border-emerald-800" },
-  REJECTED:            { label: "Rechazado",          color: "text-red-400 bg-red-900/20 border-red-800" },
-  EXPIRED:             { label: "Vencido",            color: "text-red-400 bg-red-900/20 border-red-800" },
-  DRAFT:               { label: "Borrador",           color: "text-zinc-400 bg-zinc-800 border-zinc-700" },
+  SENT:                { label: "Enviado",            color: "text-amber-700 bg-amber-50 border-amber-200" },
+  VIEWED:              { label: "Visto",              color: "text-blue-700 bg-blue-50 border-blue-200" },
+  CONFORMITY_ACCEPTED: { label: "Conformidad aceptada", color: "text-blue-700 bg-blue-50 border-blue-200" },
+  SIGNED:              { label: "Firmado",            color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  COMPLETED:           { label: "Completado",         color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+  REJECTED:            { label: "Rechazado",          color: "text-red-700 bg-red-50 border-red-200" },
+  EXPIRED:             { label: "Vencido",            color: "text-red-700 bg-red-50 border-red-200" },
+  DRAFT:               { label: "Borrador",           color: "text-zinc-400 bg-zinc-50 border-zinc-200" },
 };
+
+import { createPortal } from "react-dom";
 
 export function ContractDetailModal({
   contract,
@@ -397,114 +449,111 @@ export function ContractDetailModal({
   contract: Contract;
   onClose: () => void;
 }) {
-  const st = STATUS_LABELS[contract.status] ?? { label: contract.status, color: "text-zinc-400 bg-zinc-800 border-zinc-700" };
+  const st = STATUS_LABELS[contract.status] ?? { label: contract.status, color: "text-zinc-400 bg-zinc-50 border-zinc-200" };
 
   function fmtDate(iso: string) {
-    return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/60 backdrop-blur-sm">
-      <div className="relative flex h-full w-full max-w-2xl flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl overflow-y-auto">
+  const modalContent = (
+    <div className="fixed inset-0 z-[100] flex justify-end">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm animate-in fade-in duration-300" 
+        onClick={onClose} 
+      />
+
+      {/* Drawer */}
+      <div className="relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300">
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-800 bg-zinc-950 px-6 py-4">
+
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-100 bg-white/80 px-6 py-5 backdrop-blur-md">
           <div className="min-w-0 pr-4">
-            <p className="text-xs text-zinc-600 font-mono mb-0.5">Contrato #{contract.id}</p>
-            <h2 className="font-bold text-white leading-snug">{contract.title}</h2>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${st.color}`}>
+                {st.label}
+              </span>
+              <p className="text-[10px] text-zinc-500 font-mono tracking-widest">#{contract.id.split("-")[0]}</p>
+            </div>
+            <h2 className="font-bold text-zinc-900 text-lg leading-tight truncate">{contract.title}</h2>
           </div>
           <button
             onClick={onClose}
             type="button"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 transition"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
         </div>
 
-        <div className="flex-1 p-6 space-y-6">
-          {/* Status + version */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${st.color}`}>
-              {st.label}
-            </span>
-            <span className="rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-zinc-400">
-              Versión {contract.versionNumber}
-            </span>
-            <span className="text-xs text-zinc-600">
-              {contract.completedSigners}/{contract.totalSigners} firmas completadas
-            </span>
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-              <p className="text-xs text-zinc-600 mb-0.5">Creado</p>
-              <p className="text-sm font-medium text-zinc-300">{fmtDate(contract.createdAt)}</p>
-            </div>
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-              <p className="text-xs text-zinc-600 mb-0.5">Última actualización</p>
-              <p className="text-sm font-medium text-zinc-300">{fmtDate(contract.updatedAt)}</p>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+          {/* Main Info */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-600 flex items-center gap-2 shadow-sm">
+                <span>Versión {contract.versionNumber}</span>
+              </div>
+              <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 flex items-center gap-2 shadow-sm">
+                <span>{contract.completedSigners} / {contract.totalSigners} firmas</span>
+              </div>
             </div>
           </div>
 
-          {/* Owner */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-600 mb-1">Creado por</p>
-            <p className="text-sm font-medium text-zinc-300">{contract.ownerEmail}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Creado el</p>
+              <p className="text-sm font-medium text-zinc-800">{fmtDate(contract.createdAt)}</p>
+            </div>
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Última actualización</p>
+              <p className="text-sm font-medium text-zinc-800">{fmtDate(contract.updatedAt)}</p>
+            </div>
           </div>
 
-          {/* Description */}
+          <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Propietario</p>
+            <p className="text-sm font-medium text-zinc-800">{contract.ownerEmail}</p>
+          </div>
+
           {contract.description && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-              <p className="text-xs text-zinc-600 mb-1">Descripción</p>
-              <p className="text-sm text-zinc-400 leading-relaxed">{contract.description}</p>
+            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1.5">Descripción y Destinatarios</p>
+              <p className="text-sm text-zinc-600 leading-relaxed">{contract.description}</p>
             </div>
           )}
 
-          {/* Document hash */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-600 mb-2">Huella digital del documento (SHA-256)</p>
-            <p className="font-mono text-[11px] text-emerald-500 break-all leading-relaxed">
+          {/* SHA-256 Hash */}
+          <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-bl-full -mr-8 -mt-8 opacity-50 transition group-hover:scale-110" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-1.5 relative z-10">Huella Criptográfica (SHA-256)</p>
+            <p className="font-mono text-[11px] text-zinc-700 break-all leading-relaxed relative z-10 selection:bg-blue-200">
               {contract.sha256Hash}
             </p>
-            <p className="mt-2 text-[10px] text-zinc-600">
-              Este hash es la prueba criptográfica de integridad del documento. Cualquier modificación posterior al contenido generaría un hash diferente.
+            <p className="mt-2 text-[10px] text-zinc-500 relative z-10">
+              Este identificador único garantiza la inmutabilidad y validez legal del documento.
             </p>
           </div>
 
-          {/* File */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className="text-xs text-zinc-600 mb-1">Archivo del contrato</p>
-            <p className="text-sm font-mono text-zinc-400">{contract.fileName}</p>
-            <p className="mt-2 text-[10px] text-zinc-600">
-              El PDF firmado estará disponible en Supabase Storage una vez completada la integración.
-            </p>
-          </div>
-
-          {/* Document visual (generic) */}
+          {/* Document Preview Placeholder */}
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-zinc-600 mb-3">Vista del documento</p>
-            <div className="overflow-y-auto max-h-72 rounded-2xl bg-white border border-zinc-200 shadow-inner">
-              <div className="p-8 font-serif text-[12px] leading-6 space-y-3 text-zinc-900">
-                <div className="text-center pb-4 border-b border-zinc-200">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3 ml-1">Contenido Documental</p>
+            <div className="overflow-hidden rounded-2xl border border-zinc-200 shadow-sm bg-white">
+              <div className="bg-zinc-50 border-b border-zinc-200 p-3 flex justify-between items-center">
+                <span className="text-xs font-mono text-zinc-500">{contract.fileName || "documento.pdf"}</span>
+              </div>
+              <div className="p-8 font-serif text-[12px] leading-6 space-y-4 text-zinc-900 bg-gradient-to-b from-white to-zinc-50/30">
+                <div className="text-center pb-5 border-b border-zinc-200">
                   <h1 className="text-sm font-bold uppercase tracking-widest font-sans">{contract.title}</h1>
-                  <p className="text-[10px] text-zinc-500 mt-1 font-sans">Escencial Consultora S.A.S. · Firma Digital</p>
+                  <p className="text-[10px] text-zinc-500 mt-1 font-sans">Escencial Consultora S.A.S.</p>
                 </div>
-                <p className="text-xs text-zinc-500 italic">
-                  Documento generado el {fmtDate(contract.createdAt)}.
-                </p>
-                <p>
-                  <strong>{contract.description}</strong>
-                </p>
-                <div className="rounded-lg border border-zinc-100 bg-zinc-50 p-3 font-sans text-xs space-y-1">
-                  <p className="font-semibold text-zinc-700">Datos técnicos del documento</p>
-                  <p><span className="text-zinc-500">Estado:</span> <strong>{st.label}</strong></p>
-                  <p><span className="text-zinc-500">Firmantes:</span> <strong>{contract.completedSigners} de {contract.totalSigners}</strong></p>
-                  <p><span className="text-zinc-500">Versión:</span> v{contract.versionNumber}</p>
-                  <p><span className="text-zinc-500">SHA-256:</span> <span className="font-mono text-emerald-700 text-[10px]">{contract.sha256Hash.slice(0, 24)}...</span></p>
+                <div className="space-y-2 opacity-80">
+                  <div className="h-3 bg-zinc-200 rounded-full w-full" />
+                  <div className="h-3 bg-zinc-200 rounded-full w-5/6" />
+                  <div className="h-3 bg-zinc-200 rounded-full w-4/6" />
                 </div>
-                <p className="text-[10px] text-zinc-400 text-center pt-2 border-t border-zinc-100 font-sans">
-                  El contenido legal completo está disponible en el PDF del sistema de almacenamiento.
+                <p className="text-[10px] text-zinc-400 text-center pt-6 border-t border-zinc-100 font-sans italic">
+                  Visualización técnica parcial. El documento completo en formato PDF y firmado digitalmente estará disponible tras completar las integraciones necesarias.
                 </p>
               </div>
             </div>
@@ -513,4 +562,8 @@ export function ContractDetailModal({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(modalContent, document.body);
 }
+
