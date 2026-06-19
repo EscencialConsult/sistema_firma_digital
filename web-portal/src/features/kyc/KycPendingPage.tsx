@@ -1,12 +1,15 @@
-import { Clock } from "lucide-react";
-import { useEffect } from "react";
+import { Clock, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../app/providers/AuthProvider";
+import { Button } from "../../shared/components/ui/Button";
+import { updateSessionUser } from "../../shared/services/auth.service";
 
 export function KycPendingPage() {
-  const { user, reloadUser } = useAuth();
+  const { user, reloadUser, updateUser } = useAuth();
   const navigate = useNavigate();
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -37,6 +40,30 @@ export function KycPendingPage() {
       supabase.removeChannel(channel);
     };
   }, [user?.id, navigate, reloadUser]);
+
+  async function handleReset() {
+    if (!user?.id) return;
+    setResetting(true);
+    try {
+      // Limpia la sesión DIDIT y vuelve a PENDING para reintentar
+      await supabase
+        .from("identity_verifications")
+        .update({
+          status: "PENDING",
+          provider_session_id: null,
+          provider_session_url: null,
+          provider_session_token: null,
+        })
+        .eq("user_id", user.id)
+        .in("status", ["IN_REVIEW", "PENDING", "EXPIRED"]);
+
+      await updateSessionUser({ verificationStatus: "PENDING" });
+      updateUser({ verificationStatus: "PENDING" });
+      navigate("/kyc", { replace: true });
+    } finally {
+      setResetting(false);
+    }
+  }
 
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -80,6 +107,22 @@ export function KycPendingPage() {
           Contactanos
         </a>
       </p>
+
+      <div className="mt-10 w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 text-left">
+        <p className="text-sm font-semibold text-zinc-800">¿La verificación quedó trabada?</p>
+        <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+          Si la sesión de DIDIT no se completó o fue cancelada, podés reiniciar el proceso desde cero.
+        </p>
+        <Button
+          variant="secondary"
+          className="mt-4 w-full"
+          onClick={handleReset}
+          disabled={resetting}
+        >
+          <RotateCcw size={14} />
+          {resetting ? "Reiniciando..." : "Reiniciar verificación"}
+        </Button>
+      </div>
     </div>
   );
 }
