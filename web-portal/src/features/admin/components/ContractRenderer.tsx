@@ -425,7 +425,7 @@ export function ContractDocument({
   fields: Record<string, string>;
   alumnos: AlumnoData[];
 }) {
-  const alumno = alumnos[0]; // For legacy templates that expect a single "alumno"
+  const alumno = alumnos[0] ?? { nombre: "", dni: "", cuil: "", email: "", domicilio: "" };
 
   switch (templateId) {
     case "formacion": return <FormacionDoc f={fields} alumno={alumno} />;
