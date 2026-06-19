@@ -4,18 +4,18 @@ import type { Contract, ContractDetail, ContractSigner } from "../types/contract
 // ─── Convenio types ───────────────────────────────────────────────────────────
 
 export interface ConvenioInfo {
-  documentId:                string;
-  documentTitle:             string;
-  documentStatus:            string;
-  documentCreatedAt:         string;
-  authorityId:               string;
-  authorityName:             string;
-  authorityEmail:            string;
+  documentId: string;
+  documentTitle: string;
+  documentStatus: string;
+  documentCreatedAt: string;
+  authorityId: string;
+  authorityName: string;
+  authorityEmail: string;
   authoritySigningRequestId: string;
-  authoritySigningStatus:    string;
-  recipientName:             string | null;
-  recipientEmail:            string | null;
-  recipientSigningStatus:    string | null;
+  authoritySigningStatus: string;
+  recipientName: string | null;
+  recipientEmail: string | null;
+  recipientSigningStatus: string | null;
 }
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -33,21 +33,21 @@ function mapDocToContract(doc: Record<string, unknown>): Contract {
   const rawFields = doc.template_fields as Record<string, unknown> | null;
 
   return {
-    id:               doc.id as string,
-    title:            doc.title as string,
-    description:      (doc.description as string) ?? "",
-    status:           doc.status as Contract["status"],
-    ownerEmail:       (owner.email as string) ?? "",
-    sha256Hash:       (v?.sha256_hash as string) ?? "",
-    versionNumber:    (v?.version_number as number) ?? 1,
-    fileName:         (v?.file_name as string) ?? "",
-    totalSigners:     (doc.total_signers as number) ?? 0,
+    id: doc.id as string,
+    title: doc.title as string,
+    description: (doc.description as string) ?? "",
+    status: doc.status as Contract["status"],
+    ownerEmail: (owner.email as string) ?? "",
+    sha256Hash: (v?.sha256_hash as string) ?? "",
+    versionNumber: (v?.version_number as number) ?? 1,
+    fileName: (v?.file_name as string) ?? "",
+    totalSigners: (doc.total_signers as number) ?? 0,
     completedSigners: (doc.completed_signers as number) ?? 0,
-    finalPdfUrl:      (doc.final_pdf_url as string) ?? null,
-    createdAt:        doc.created_at as string,
-    updatedAt:        doc.updated_at as string,
-    templateId:       (doc.template_id as string) ?? null,
-    templateFields:   rawFields
+    finalPdfUrl: (doc.final_pdf_url as string) ?? null,
+    createdAt: doc.created_at as string,
+    updatedAt: doc.updated_at as string,
+    templateId: (doc.template_id as string) ?? null,
+    templateFields: rawFields
       ? Object.fromEntries(Object.entries(rawFields).map(([k, v]) => [k, String(v ?? "")]))
       : null,
   };
@@ -55,13 +55,13 @@ function mapDocToContract(doc: Record<string, unknown>): Contract {
 
 function mapSrToSigner(sr: Record<string, unknown>): ContractSigner {
   return {
-    id:        sr.id as string,
-    email:     sr.signer_email as string,
-    name:      sr.signer_name as string,
-    status:    sr.status as ContractSigner["status"],
-    sentAt:    sr.sent_at as string,
-    viewedAt:  (sr.viewed_at as string) ?? null,
-    signedAt:  (sr.completed_at as string) ?? null,
+    id: sr.id as string,
+    email: sr.signer_email as string,
+    name: sr.signer_name as string,
+    status: sr.status as ContractSigner["status"],
+    sentAt: sr.sent_at as string,
+    viewedAt: (sr.viewed_at as string) ?? null,
+    signedAt: (sr.completed_at as string) ?? null,
   };
 }
 
@@ -97,10 +97,10 @@ export async function getContractById(id: string): Promise<ContractDetail | null
 
   if (error || !data) return null;
 
-  const versions  = (data.document_versions as Array<Record<string, unknown>>) ?? [];
-  const v         = latestVersion(versions);
-  const signers   = ((data.signature_requests as Array<Record<string, unknown>>) ?? []).map(mapSrToSigner);
-  const pdfUrl    = v?.storage_path
+  const versions = (data.document_versions as Array<Record<string, unknown>>) ?? [];
+  const v = latestVersion(versions);
+  const signers = ((data.signature_requests as Array<Record<string, unknown>>) ?? []).map(mapSrToSigner);
+  const pdfUrl = v?.storage_path
     ? supabase.storage.from("contract-pdfs").getPublicUrl(v.storage_path as string).data.publicUrl
     : null;
 
@@ -163,22 +163,22 @@ export async function getConvenios(): Promise<ConvenioInfo[]> {
     if (!doc) continue;
 
     const allSRs = (doc.signature_requests ?? []) as Array<Record<string, unknown>>;
-    const authSR    = allSRs.find((sr) => sr.id === auth.signing_request_id);
-    const recipSR   = allSRs.find((sr) => sr.id !== auth.signing_request_id);
+    const authSR = allSRs.find((sr) => sr.id === auth.signing_request_id);
+    const recipSR = allSRs.find((sr) => sr.id !== auth.signing_request_id);
 
     result.push({
-      documentId:                auth.document_id as string,
-      documentTitle:             doc.title as string,
-      documentStatus:            doc.status as string,
-      documentCreatedAt:         doc.created_at as string,
-      authorityId:               auth.id as string,
-      authorityName:             auth.full_name as string,
-      authorityEmail:            auth.email as string,
+      documentId: auth.document_id as string,
+      documentTitle: doc.title as string,
+      documentStatus: doc.status as string,
+      documentCreatedAt: doc.created_at as string,
+      authorityId: auth.id as string,
+      authorityName: auth.full_name as string,
+      authorityEmail: auth.email as string,
       authoritySigningRequestId: auth.signing_request_id as string,
-      authoritySigningStatus:    (authSR?.status as string) ?? "PENDING",
-      recipientName:             (recipSR?.signer_name as string) ?? null,
-      recipientEmail:            (recipSR?.signer_email as string) ?? null,
-      recipientSigningStatus:    (recipSR?.status as string) ?? null,
+      authoritySigningStatus: (authSR?.status as string) ?? "PENDING",
+      recipientName: (recipSR?.signer_name as string) ?? null,
+      recipientEmail: (recipSR?.signer_email as string) ?? null,
+      recipientSigningStatus: (recipSR?.status as string) ?? null,
     });
   }
   return result;
@@ -192,15 +192,15 @@ export async function assignConvenioRecipient(
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const { error } = await supabase.from("signature_requests").insert({
-    document_id:     documentId,
-    signer_email:    recipient.email,
-    signer_name:     recipient.name,
-    signer_dni:      recipient.dni ?? null,
-    signer_cuil:     recipient.cuil ?? null,
-    signer_domicilio:recipient.domicilio ?? null,
-    status:          "PENDING",
-    expires_at:      expiresAt,
-    signing_order:   1,
+    document_id: documentId,
+    signer_email: recipient.email,
+    signer_name: recipient.name,
+    signer_dni: recipient.dni ?? null,
+    signer_cuil: recipient.cuil ?? null,
+    signer_domicilio: recipient.domicilio ?? null,
+    status: "PENDING",
+    expires_at: expiresAt,
+    signing_order: 1,
   });
   if (error) throw new Error(error.message);
 
@@ -214,14 +214,14 @@ export async function assignConvenioRecipient(
   await supabase
     .from("documents")
     .update({
-      total_signers:   ((doc?.total_signers as number) ?? 1) + 1,
-      status:          "SENT",
+      total_signers: ((doc?.total_signers as number) ?? 1) + 1,
+      status: "SENT",
       template_fields: {
         ...existing,
-        nombre_firmante_2:    recipient.name,
-        email_firmante_2:     recipient.email,
-        dni_firmante_2:       recipient.dni ?? "",
-        cuil_firmante_2:      recipient.cuil ?? "",
+        nombre_firmante_2: recipient.name,
+        email_firmante_2: recipient.email,
+        dni_firmante_2: recipient.dni ?? "",
+        cuil_firmante_2: recipient.cuil ?? "",
         domicilio_firmante_2: recipient.domicilio ?? "",
       },
     })
@@ -236,11 +236,11 @@ export async function sendDocumentToThirdParty(
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const { error: srErr } = await supabase.from("signature_requests").insert({
-    document_id:  documentId,
+    document_id: documentId,
     signer_email: signer.email,
-    signer_name:  signer.name,
-    status:       "PENDING",
-    expires_at:   expiresAt,
+    signer_name: signer.name,
+    status: "PENDING",
+    expires_at: expiresAt,
   });
   if (srErr) throw new Error(srErr.message);
 
@@ -273,13 +273,13 @@ export async function createContract(input: {
   const { data: doc, error: docError } = await supabase
     .from("documents")
     .insert({
-      title:           input.title,
-      description:     input.description,
-      owner_id:        user.id,
-      template_id:     input.templateId ?? null,
+      title: input.title,
+      description: input.description,
+      owner_id: user.id,
+      template_id: input.templateId ?? null,
       template_fields: input.templateFields ?? null,
-      total_signers:   input.signers.length,
-      status:          "DRAFT",
+      total_signers: input.signers.length,
+      status: "DRAFT",
     })
     .select("*, owner:users!owner_id(email), document_versions:document_versions!document_versions_document_id_fkey(*)")
     .single();
@@ -289,11 +289,11 @@ export async function createContract(input: {
   if (input.signers.length > 0) {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const srInserts = input.signers.map((s) => ({
-      document_id:  doc.id,
+      document_id: doc.id,
       signer_email: s.email,
-      signer_name:  s.name,
-      status:       "PENDING",
-      expires_at:   expiresAt,
+      signer_name: s.name,
+      status: "PENDING",
+      expires_at: expiresAt,
     }));
     const { error: srError } = await supabase.from("signature_requests").insert(srInserts);
     if (srError) throw new Error(srError.message);
@@ -304,10 +304,10 @@ export async function createContract(input: {
       supabase.functions
         .invoke("send-signing-email", {
           body: {
-            signerEmail:   s.email,
-            signerName:    s.name,
+            signerEmail: s.email,
+            signerName: s.name,
             documentTitle: input.title,
-            requestId:     doc.id,
+            requestId: doc.id,
           },
         })
         .catch((e: unknown) => console.warn(`[email] Edge Function no disponible para ${s.email}:`, e));
@@ -326,12 +326,12 @@ export async function assignContractToUser(
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   const { error: srErr } = await supabase.from("signature_requests").insert({
-    document_id:  documentId,
+    document_id: documentId,
     signer_email: user.email,
-    signer_name:  user.name,
-    signer_cuil:  user.cuil ?? null,
-    status:       "PENDING",
-    expires_at:   expiresAt,
+    signer_name: user.name,
+    signer_cuil: user.cuil ?? null,
+    status: "PENDING",
+    expires_at: expiresAt,
     signing_order: 0,
   });
   if (srErr) throw new Error(srErr.message);
@@ -344,23 +344,101 @@ export async function assignContractToUser(
 
   const existing = (doc?.template_fields as Record<string, string>) ?? {};
   await supabase.from("documents").update({
-    total_signers:   1,
-    status:          "SENT",
+    total_signers: 1,
+    status: "SENT",
     template_fields: {
       ...existing,
       // Destinatario (firma izquierda)
-      nombre_firmante:         user.name,
-      email_firmante:          user.email,
-      dni_firmante:            user.dni         ?? "",
-      cuil_firmante:           user.cuil        ?? "",
-      domicilio_firmante:      user.domicilio   ?? "",
+      nombre_firmante: user.name,
+      email_firmante: user.email,
+      dni_firmante: user.dni ?? "",
+      cuil_firmante: user.cuil ?? "",
+      domicilio_firmante: user.domicilio ?? "",
       // Autoridad firmante por Escencial SAS (firma derecha)
-      autoridad_nombre:        authority.fullName,
-      autoridad_cuil:          authority.cuil   ?? "",
-      autoridad_email:         authority.email,
+      autoridad_nombre: authority.fullName,
+      autoridad_cuil: authority.cuil ?? "",
+      autoridad_email: authority.email,
       autoridad_signature_url: authority.signatureUrl ?? "",
     },
   }).eq("id", documentId);
+}
+
+/**
+ * Send a contract directly from a DB template in one step.
+ * Creates document as SENT + signature_request. No DRAFT intermediate state.
+ */
+export async function sendContractFromTemplate(input: {
+  title:          string;
+  description:    string;
+  templateFields: Record<string, string>;  // includes _templateContent, _legalTitle, _dbTemplateId + all vars
+  user: {
+    email:     string;
+    name:      string;
+    dni?:      string | null;
+    cuil?:     string | null;
+    domicilio?: string | null;
+  };
+  authority: {
+    fullName:     string;
+    cuil?:        string | null;
+    email:        string;
+    signatureUrl?: string | null;
+  };
+}): Promise<Contract> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error("No autenticado");
+
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const allFields: Record<string, string> = {
+    ...input.templateFields,
+    // User vars (custom templates)
+    nombre_usuario:          input.user.name,
+    email_usuario:           input.user.email,
+    dni_usuario:             input.user.dni       ?? "",
+    cuil_usuario:            input.user.cuil      ?? "",
+    domicilio_usuario:       input.user.domicilio ?? "",
+    // Legacy vars (React templates)
+    nombre_firmante:         input.user.name,
+    email_firmante:          input.user.email,
+    dni_firmante:            input.user.dni       ?? "",
+    cuil_firmante:           input.user.cuil      ?? "",
+    domicilio_firmante:      input.user.domicilio ?? "",
+    // Authority
+    autoridad_nombre:        input.authority.fullName,
+    autoridad_cuil:          input.authority.cuil   ?? "",
+    autoridad_email:         input.authority.email,
+    autoridad_signature_url: input.authority.signatureUrl ?? "",
+  };
+
+  const { data: doc, error: docError } = await supabase
+    .from("documents")
+    .insert({
+      title:           input.title,
+      description:     input.description,
+      owner_id:        authUser.id,
+      template_id:     "custom",
+      template_fields: allFields,
+      total_signers:   1,
+      status:          "SENT",
+    })
+    .select("*, owner:users!owner_id(email), document_versions:document_versions!document_versions_document_id_fkey(*)")
+    .single();
+
+  if (docError || !doc) throw new Error(docError?.message ?? "Error creando contrato");
+
+  const { error: srErr } = await supabase.from("signature_requests").insert({
+    document_id:  doc.id,
+    signer_email: input.user.email,
+    signer_name:  input.user.name,
+    signer_cuil:  input.user.cuil ?? null,
+    status:       "PENDING",
+    expires_at:   expiresAt,
+    signing_order: 0,
+  });
+  if (srErr) throw new Error(srErr.message);
+
+  return mapDocToContract(doc as Record<string, unknown>);
 }
 
 /** Update template fields of an existing DRAFT contract */
