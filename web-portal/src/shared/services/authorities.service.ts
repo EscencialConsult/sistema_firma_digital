@@ -4,20 +4,24 @@ export type AuthorityType   = "PERMANENT" | "PROVISIONAL";
 export type AuthorityStatus = "PENDING" | "ACTIVE" | "REVOKED" | "EXPIRED";
 
 export interface OrgAuthority {
-  id:             string;
-  organizationId: string;
-  userId:         string | null;
-  fullName:       string;
-  cuil:           string | null;
-  cuit:           string | null;
-  email:          string;
-  type:           AuthorityType;
-  status:         AuthorityStatus;
-  signatureUrl:   string | null;
-  inviteToken:    string | null;
-  notes:          string | null;
-  invitedAt:      string;
-  acceptedAt:     string | null;
+  id:               string;
+  organizationId:   string;
+  userId:           string | null;
+  fullName:         string;
+  dni:              string | null;
+  cuil:             string | null;
+  cuit:             string | null;
+  domicilio:        string | null;
+  email:            string;
+  type:             AuthorityType;
+  status:           AuthorityStatus;
+  signatureUrl:     string | null;
+  inviteToken:      string | null;
+  notes:            string | null;
+  invitedAt:        string;
+  acceptedAt:       string | null;
+  documentId:       string | null;
+  signingRequestId: string | null;
 }
 
 export interface AuthorityInviteInfo {
@@ -36,31 +40,46 @@ export interface AuthorityInviteInfo {
 
 function mapRow(r: Record<string, unknown>): OrgAuthority {
   return {
-    id:             r.id as string,
-    organizationId: r.organization_id as string,
-    userId:         (r.user_id as string) ?? null,
-    fullName:       r.full_name as string,
-    cuil:           (r.cuil as string) ?? null,
-    cuit:           (r.cuit as string) ?? null,
-    email:          r.email as string,
-    type:           r.type as AuthorityType,
-    status:         r.status as AuthorityStatus,
-    signatureUrl:   (r.signature_url as string) ?? null,
-    inviteToken:    (r.invite_token as string) ?? null,
-    notes:          (r.notes as string) ?? null,
-    invitedAt:      r.invited_at as string,
-    acceptedAt:     (r.accepted_at as string) ?? null,
+    id:               r.id as string,
+    organizationId:   r.organization_id as string,
+    userId:           (r.user_id as string) ?? null,
+    fullName:         r.full_name as string,
+    dni:              (r.dni as string) ?? null,
+    cuil:             (r.cuil as string) ?? null,
+    cuit:             (r.cuit as string) ?? null,
+    domicilio:        (r.domicilio as string) ?? null,
+    email:            r.email as string,
+    type:             r.type as AuthorityType,
+    status:           r.status as AuthorityStatus,
+    signatureUrl:     (r.signature_url as string) ?? null,
+    inviteToken:      (r.invite_token as string) ?? null,
+    notes:            (r.notes as string) ?? null,
+    invitedAt:        r.invited_at as string,
+    acceptedAt:       (r.accepted_at as string) ?? null,
+    documentId:       (r.document_id as string) ?? null,
+    signingRequestId: (r.signing_request_id as string) ?? null,
   };
 }
 
 export async function getOrgAuthorities(organizationId: string): Promise<OrgAuthority[]> {
   const { data, error } = await supabase
     .from("organization_authorities")
-    .select("*")
+    .select("*, user:users!user_id(document_number, cuil_cuit, address)")
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+
+  return (data ?? []).map((r) => {
+    const row  = r as Record<string, unknown>;
+    const user = (row.user as Record<string, unknown>) ?? null;
+    const base = mapRow(row);
+    return {
+      ...base,
+      dni:       base.dni      ?? (user?.document_number as string) ?? null,
+      cuil:      base.cuil     ?? (user?.cuil_cuit as string)       ?? null,
+      domicilio: base.domicilio ?? (user?.address as string)        ?? null,
+    };
+  });
 }
 
 export async function inviteAuthority(input: {
@@ -71,7 +90,9 @@ export async function inviteAuthority(input: {
   type:            AuthorityType;
   notes?:          string;
   // Solo para PROVISIONAL: datos del convenio
-  convenioTitle?:  string;
+  convenioTitle?:   string;
+  templateId?:      string;
+  templateFields?:  Record<string, string>;
 }): Promise<OrgAuthority> {
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -100,15 +121,24 @@ export async function inviteAuthority(input: {
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     // Crear el documento de convenio
+    const mergedFields: Record<string, string> = {
+      ...(input.templateFields ?? {}),
+      nombre_firmante:    input.fullName,
+      email_firmante:     input.email,
+      cuil_firmante:      input.cuil ?? "",
+    };
+
     const { data: doc, error: docErr } = await supabase
       .from("documents")
       .insert({
         title,
-        description:   `Convenio de firma provisional — ${input.fullName}`,
-        owner_id:      user?.id ?? null,
+        description:     `Convenio de firma provisional — ${input.fullName}`,
+        owner_id:        user?.id ?? null,
         organization_id: input.organizationId,
-        total_signers: 1,
-        status:        "SENT",
+        total_signers:   1,
+        status:          "SENT",
+        template_id:     input.templateId ?? null,
+        template_fields: mergedFields,
       })
       .select()
       .single();
@@ -118,11 +148,13 @@ export async function inviteAuthority(input: {
     const { data: sr, error: srErr } = await supabase
       .from("signature_requests")
       .insert({
-        document_id:  doc.id,
-        signer_email: input.email,
-        signer_name:  input.fullName,
-        status:       "PENDING",
-        expires_at:   expiresAt,
+        document_id:   doc.id,
+        signer_email:  input.email,
+        signer_name:   input.fullName,
+        signer_cuil:   input.cuil ?? null,
+        status:        "PENDING",
+        expires_at:    expiresAt,
+        signing_order: 0,
       })
       .select()
       .single();
@@ -137,7 +169,12 @@ export async function inviteAuthority(input: {
       })
       .eq("id", authority.id);
 
-    return { ...authority, inviteToken: (data as Record<string, unknown>).invite_token as string };
+    return {
+      ...authority,
+      inviteToken:      (data as Record<string, unknown>).invite_token as string,
+      documentId:       (doc as Record<string, unknown>).id as string,
+      signingRequestId: (sr as Record<string, unknown>).id as string,
+    };
   }
 
   return authority;
