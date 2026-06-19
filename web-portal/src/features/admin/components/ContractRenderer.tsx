@@ -137,7 +137,11 @@ function FormacionDoc({ f, alumno }: { f: Record<string, string>; alumno: Alumno
         La nulidad de cualquier cláusula no afecta la validez de las restantes.
       </DocClause>
       <DocSignatures>
-        <DocSig label="Representante Legal" name="Escencial Consultora S.A.S." sub="CUIT 30-71234567-9" />
+        <DocSig
+          label="Representante Legal — Escencial Consultora S.A.S."
+          name={f.autoridad_nombre || "—"}
+          sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+        />
         <DocSigEmpty label="El/La Alumno/a" />
       </DocSignatures>
       <DocFooter />
@@ -304,7 +308,11 @@ function SoftwareDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
         Las partes se someten a los Tribunales de <Hi>{juris}</Hi>, renunciando a cualquier otro fuero.
       </DocClause>
       <DocSignatures>
-        <DocSig label="Contratista" name="Escencial Consultora S.A.S." sub="CUIT 30-71234567-9" />
+        <DocSig
+          label="Contratista — Escencial Consultora S.A.S."
+          name={f.autoridad_nombre || "—"}
+          sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+        />
         <DocSigEmpty label="Comitente" />
       </DocSignatures>
       <DocFooter />
@@ -359,7 +367,11 @@ function SoporteDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
         Las partes se someten a los Tribunales de <Hi>{juris}</Hi>, renunciando a cualquier otro fuero.
       </DocClause>
       <DocSignatures>
-        <DocSig label="Prestadora" name="Escencial Consultora S.A.S." sub="CUIT 30-71234567-9" />
+        <DocSig
+          label="Prestadora — Escencial Consultora S.A.S."
+          name={f.autoridad_nombre || "—"}
+          sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+        />
         <DocSigEmpty label="Comitente" />
       </DocSignatures>
       <DocFooter />
