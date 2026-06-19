@@ -8,13 +8,14 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   getAuthorityByToken,
   acceptAuthorityInvite,
   uploadAuthoritySignature,
   type AuthorityInviteInfo,
 } from "../../shared/services/authorities.service";
+import { supabase } from "../../shared/lib/supabase";
 import { OrgLogo } from "../../shared/components/ui/OrgLogo";
 import { Button } from "../../shared/components/ui/Button";
 
@@ -126,10 +127,11 @@ function SignatureCanvas({ onConfirm }: { onConfirm: (dataUrl: string) => void }
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
-type PageState = "loading" | "invite" | "signing" | "done" | "error" | "already";
+type PageState = "loading" | "invite" | "done" | "error" | "already";
 
 export function AuthorityAcceptPage() {
-  const { token } = useParams<{ token: string }>();
+  const { token }  = useParams<{ token: string }>();
+  const navigate   = useNavigate();
   const [invite,    setInvite]    = useState<AuthorityInviteInfo | null>(null);
   const [pageState, setPageState] = useState<PageState>("loading");
   const [errMsg,    setErrMsg]    = useState("");
@@ -144,10 +146,21 @@ export function AuthorityAcceptPage() {
   useEffect(() => {
     if (!token) { setPageState("error"); setErrMsg("Token inválido."); return; }
     getAuthorityByToken(token)
-      .then((inv) => {
+      .then(async (inv) => {
         if (!inv) { setPageState("error"); setErrMsg("Invitación no encontrada o expirada."); return; }
         if (inv.status !== "PENDING") { setPageState("already"); return; }
         setInvite(inv);
+
+        // Para PROVISIONAL: buscar el signing_request_id y redirigir al flujo de firma
+        if (inv.type === "PROVISIONAL") {
+          const { data } = await supabase.rpc("get_authority_signing_request", { p_token: token });
+          if (data?.signing_request_id) {
+            navigate(`/signing/${data.signing_request_id}`, { replace: true });
+            return;
+          }
+          // Si no tiene convenio asociado, mostrar formulario de aceptación simple
+        }
+
         setPageState("invite");
       })
       .catch((e) => { setPageState("error"); setErrMsg(e.message); });

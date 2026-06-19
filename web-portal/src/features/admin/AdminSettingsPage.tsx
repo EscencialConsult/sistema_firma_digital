@@ -46,15 +46,16 @@ function InviteModal({
   onClose: () => void;
   onCreated: (a: OrgAuthority) => void;
 }) {
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail]       = useState("");
-  const [cuil, setCuil]         = useState("");
-  const [type, setType]         = useState<AuthorityType>("PERMANENT");
-  const [notes, setNotes]       = useState("");
-  const [saving, setSaving]     = useState(false);
-  const [err, setErr]           = useState<string | null>(null);
-  const [created, setCreated]   = useState<OrgAuthority | null>(null);
-  const [copied, setCopied]     = useState(false);
+  const [fullName,       setFullName]       = useState("");
+  const [email,          setEmail]          = useState("");
+  const [cuil,           setCuil]           = useState("");
+  const [type,           setType]           = useState<AuthorityType>("PERMANENT");
+  const [notes,          setNotes]          = useState("");
+  const [convenioTitle,  setConvenioTitle]  = useState("");
+  const [saving,         setSaving]         = useState(false);
+  const [err,            setErr]            = useState<string | null>(null);
+  const [created,        setCreated]        = useState<OrgAuthority | null>(null);
+  const [copied,         setCopied]         = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -64,11 +65,12 @@ function InviteModal({
     try {
       const a = await inviteAuthority({
         organizationId: orgId,
-        fullName: fullName.trim(),
-        email: email.trim(),
-        cuil: cuil.trim() || undefined,
+        fullName:       fullName.trim(),
+        email:          email.trim(),
+        cuil:           cuil.trim() || undefined,
         type,
-        notes: notes.trim() || undefined,
+        notes:          notes.trim() || undefined,
+        convenioTitle:  type === "PROVISIONAL" ? convenioTitle.trim() : undefined,
       });
       setCreated(a);
       onCreated(a);
@@ -194,6 +196,28 @@ function InviteModal({
                   : "Habilitada para un convenio puntual. Le llegará el contrato vacío para que firme."}
               </p>
             </div>
+            {/* Campo de convenio — solo PROVISIONAL */}
+            {type === "PROVISIONAL" && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-3">
+                <p className="text-xs font-semibold text-amber-800">
+                  Convenio de firma provisional
+                </p>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Título del convenio *</label>
+                  <input
+                    value={convenioTitle}
+                    onChange={(e) => setConvenioTitle(e.target.value)}
+                    placeholder="Ej: Convenio de representación OSPA 2026"
+                    required={type === "PROVISIONAL"}
+                    className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                  />
+                </div>
+                <p className="text-[11px] text-amber-700">
+                  Se creará un documento de convenio que la autoridad deberá firmar al aceptar la invitación.
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Notas internas</label>
               <input
@@ -210,7 +234,7 @@ function InviteModal({
 
             <button
               type="submit"
-              disabled={saving || !fullName.trim() || !email.trim()}
+              disabled={saving || !fullName.trim() || !email.trim() || (type === "PROVISIONAL" && !convenioTitle.trim())}
               className="w-full rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 transition disabled:opacity-50"
             >
               {saving ? <Loader2 size={15} className="animate-spin inline mr-1" /> : null}

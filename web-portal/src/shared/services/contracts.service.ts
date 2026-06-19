@@ -101,6 +101,37 @@ export async function getAllContracts(): Promise<Contract[]> {
   return (data ?? []).map(mapDocToContract);
 }
 
+/** Send an already-completed document to an additional third-party signer */
+export async function sendDocumentToThirdParty(
+  documentId: string,
+  signer: { email: string; name: string }
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: srErr } = await supabase.from("signature_requests").insert({
+    document_id:  documentId,
+    signer_email: signer.email,
+    signer_name:  signer.name,
+    status:       "PENDING",
+    expires_at:   expiresAt,
+  });
+  if (srErr) throw new Error(srErr.message);
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("total_signers")
+    .eq("id", documentId)
+    .single();
+
+  await supabase
+    .from("documents")
+    .update({
+      total_signers: ((doc?.total_signers as number) ?? 0) + 1,
+      status: "SENT",
+    })
+    .eq("id", documentId);
+}
+
 /** Create a new contract document and its signature requests */
 export async function createContract(input: {
   title: string;

@@ -11,7 +11,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Toast } from "../../shared/components/ui/Toast";
 import { Button } from "../../shared/components/ui/Button";
-import { getAllContracts, createContract } from "../../shared/services/contracts.service";
+import { getAllContracts, createContract, sendDocumentToThirdParty } from "../../shared/services/contracts.service";
 import { getAllUsers } from "../../shared/services/admin.service";
 import type { Contract, ContractStatus } from "../../shared/types/contract";
 import type { AdminUserSummary } from "../../shared/types/user";
@@ -233,6 +233,97 @@ function Steps({ current, labels }: { current: number; labels: string[] }) {
   );
 }
 
+// ─── Send to Third Party Modal ────────────────────────────────────────────────
+
+function SendThirdPartyModal({
+  contract,
+  onClose,
+  onSent,
+}: {
+  contract: Contract;
+  onClose: () => void;
+  onSent: (contractId: string) => void;
+}) {
+  const [name, setName]       = useState("");
+  const [email, setEmail]     = useState("");
+  const [sending, setSending] = useState(false);
+  const [done, setDone]       = useState(false);
+  const [error, setError]     = useState("");
+
+  async function handleSend() {
+    if (!name.trim() || !email.trim()) return;
+    setSending(true);
+    setError("");
+    try {
+      await sendDocumentToThirdParty(contract.id, { name: name.trim(), email: email.trim() });
+      setDone(true);
+      onSent(contract.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al enviar");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-6 space-y-5">
+        {done ? (
+          <div className="text-center py-4 space-y-3">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
+              <Check size={24} className="text-emerald-600" />
+            </div>
+            <p className="font-bold text-zinc-900">Enviado a {name}</p>
+            <p className="text-sm text-zinc-500">{email} recibirá el documento para firmar.</p>
+            <Button onClick={onClose} className="h-10 px-6">Cerrar</Button>
+          </div>
+        ) : (
+          <>
+            <div className="border-b border-zinc-100 pb-4">
+              <h3 className="font-bold text-zinc-900">Enviar al tercero</h3>
+              <p className="text-xs text-zinc-500 mt-0.5 truncate">"{contract.title}"</p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-400">Nombre completo *</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Nombre del firmante"
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-zinc-400">Email *</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@ejemplo.com"
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition"
+                />
+              </div>
+              {error && <p className="text-xs text-red-500">{error}</p>}
+            </div>
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" onClick={onClose} className="flex-1 h-10 text-zinc-700">
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSend}
+                disabled={!name.trim() || !email.trim() || sending}
+                className="flex-1 h-10"
+              >
+                {sending ? "Enviando..." : <><Send size={14} /> Enviar</>}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const EMPTY_ALUMNO: AlumnoData = { nombre: "", email: "", dni: "", cuil: "", domicilio: "" };
@@ -243,7 +334,8 @@ export function AdminContractsPage() {
   const [loading, setLoading]     = useState(true);
   const [filter, setFilter]       = useState<"all" | "pending" | "signed" | "rejected">("all");
   const [search, setSearch]       = useState("");
-  const [viewContract, setViewContract] = useState<Contract | null>(null);
+  const [viewContract, setViewContract]       = useState<Contract | null>(null);
+  const [sendThirdParty, setSendThirdParty]   = useState<Contract | null>(null);
 
   // ── Create flow state ──
   const [view, setView]           = useState<"list" | "create">("list");
@@ -563,6 +655,19 @@ export function AdminContractsPage() {
       {viewContract && (
         <ContractDetailModal contract={viewContract} onClose={() => setViewContract(null)} />
       )}
+      {sendThirdParty && (
+        <SendThirdPartyModal
+          contract={sendThirdParty}
+          onClose={() => setSendThirdParty(null)}
+          onSent={(id) => {
+            setContracts((prev) =>
+              prev.map((x) =>
+                x.id === id ? { ...x, status: "SENT", totalSigners: x.totalSigners + 1 } : x
+              )
+            );
+          }}
+        />
+      )}
 
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
@@ -667,6 +772,15 @@ export function AdminContractsPage() {
                       <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${className}`}>
                         {label}
                       </span>
+                      {c.status === "COMPLETED" && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setSendThirdParty(c); }}
+                          className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-100 transition"
+                        >
+                          <Send size={11} /> Enviar al tercero
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setViewContract(c)}

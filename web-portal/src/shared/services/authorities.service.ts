@@ -64,15 +64,18 @@ export async function getOrgAuthorities(organizationId: string): Promise<OrgAuth
 }
 
 export async function inviteAuthority(input: {
-  organizationId: string;
+  organizationId:  string;
   fullName:        string;
   email:           string;
   cuil?:           string;
   type:            AuthorityType;
   notes?:          string;
+  // Solo para PROVISIONAL: datos del convenio
+  convenioTitle?:  string;
 }): Promise<OrgAuthority> {
   const { data: { user } } = await supabase.auth.getUser();
 
+  // 1. Crear registro de autoridad
   const { data, error } = await supabase
     .from("organization_authorities")
     .insert({
@@ -88,7 +91,56 @@ export async function inviteAuthority(input: {
     .select()
     .single();
   if (error || !data) throw new Error(error?.message ?? "Error al invitar autoridad");
-  return mapRow(data as Record<string, unknown>);
+
+  const authority = mapRow(data as Record<string, unknown>);
+
+  // 2. Si es PROVISIONAL: crear documento de convenio + signature_request
+  if (input.type === "PROVISIONAL" && input.convenioTitle) {
+    const title = input.convenioTitle.trim();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Crear el documento de convenio
+    const { data: doc, error: docErr } = await supabase
+      .from("documents")
+      .insert({
+        title,
+        description:   `Convenio de firma provisional — ${input.fullName}`,
+        owner_id:      user?.id ?? null,
+        organization_id: input.organizationId,
+        total_signers: 1,
+        status:        "SENT",
+      })
+      .select()
+      .single();
+    if (docErr || !doc) throw new Error(docErr?.message ?? "Error al crear convenio");
+
+    // Crear signature_request para la autoridad
+    const { data: sr, error: srErr } = await supabase
+      .from("signature_requests")
+      .insert({
+        document_id:  doc.id,
+        signer_email: input.email,
+        signer_name:  input.fullName,
+        status:       "PENDING",
+        expires_at:   expiresAt,
+      })
+      .select()
+      .single();
+    if (srErr || !sr) throw new Error(srErr?.message ?? "Error al crear solicitud de firma");
+
+    // Vincular el documento y la solicitud a la autoridad
+    await supabase
+      .from("organization_authorities")
+      .update({
+        document_id:        doc.id,
+        signing_request_id: sr.id,
+      })
+      .eq("id", authority.id);
+
+    return { ...authority, inviteToken: (data as Record<string, unknown>).invite_token as string };
+  }
+
+  return authority;
 }
 
 export async function revokeAuthority(id: string): Promise<void> {
