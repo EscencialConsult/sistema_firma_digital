@@ -1,5 +1,6 @@
 import {
   CheckCircle2,
+  Copy,
   Loader2,
   PenLine,
   PlusCircle,
@@ -15,6 +16,7 @@ import {
   getOrgAuthorities,
   inviteAuthority,
   revokeAuthority,
+  buildInviteUrl,
   type OrgAuthority,
   type AuthorityType,
 } from "../../shared/services/authorities.service";
@@ -51,6 +53,8 @@ function InviteModal({
   const [notes, setNotes]       = useState("");
   const [saving, setSaving]     = useState(false);
   const [err, setErr]           = useState<string | null>(null);
+  const [created, setCreated]   = useState<OrgAuthority | null>(null);
+  const [copied, setCopied]     = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -66,12 +70,20 @@ function InviteModal({
         type,
         notes: notes.trim() || undefined,
       });
+      setCreated(a);
       onCreated(a);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error al invitar");
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleCopy() {
+    if (!created?.inviteToken) return;
+    navigator.clipboard.writeText(buildInviteUrl(created.inviteToken));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -84,84 +96,128 @@ function InviteModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Nombre completo *</label>
-            <input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Ej: María García"
-              required
-              className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Email *</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="autoridad@empresa.com"
-              required
-              className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-zinc-500">CUIL</label>
-            <input
-              value={cuil}
-              onChange={(e) => setCuil(e.target.value)}
-              placeholder="20-12345678-9"
-              className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Tipo de autoridad</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(["PERMANENT", "PROVISIONAL"] as AuthorityType[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setType(t)}
-                  className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
-                    type === t
-                      ? "border-zinc-900 bg-zinc-900 text-white"
-                      : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
-                  }`}
-                >
-                  {TYPE_LABEL[t]}
-                </button>
-              ))}
+        {/* ── Estado: link generado ── */}
+        {created ? (
+          <div className="p-5 space-y-4">
+            <div className="flex flex-col items-center gap-3 py-2 text-center">
+              <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-100">
+                <CheckCircle2 size={28} className="text-emerald-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-zinc-900">Invitación creada</p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Compartí este link con <strong>{created.fullName}</strong> para que acepte su rol.
+                </p>
+              </div>
             </div>
-            <p className="mt-2 text-[11px] text-zinc-400">
-              {type === "PERMANENT"
-                ? "Habilitada indefinidamente. Su firma quedará guardada y disponible para todos los contratos."
-                : "Habilitada para un convenio puntual. Le llegará el contrato vacío para que firme."}
+
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+              <p className="text-[11px] font-semibold text-zinc-400 mb-1.5">Link de invitación</p>
+              <p className="break-all text-xs text-zinc-700 font-mono">
+                {created.inviteToken ? buildInviteUrl(created.inviteToken) : "Generando..."}
+              </p>
+            </div>
+
+            <button
+              onClick={handleCopy}
+              type="button"
+              className={`w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition ${
+                copied
+                  ? "bg-emerald-600 text-white"
+                  : "bg-zinc-900 text-white hover:bg-zinc-700"
+              }`}
+            >
+              {copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+              {copied ? "¡Copiado!" : "Copiar link"}
+            </button>
+
+            <p className="text-center text-xs text-zinc-400">
+              {created.type === "PERMANENT"
+                ? "Al abrir el link, la autoridad podrá cargar su firma y activar su acceso."
+                : "Al abrir el link, la autoridad aceptará el rol provisional."}
             </p>
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Notas internas</label>
-            <input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ej: Directora comercial — convenio OSPA 2026"
-              className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-            />
-          </div>
+        ) : (
+          /* ── Formulario ── */
+          <form onSubmit={handleSubmit} className="p-5 space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Nombre completo *</label>
+              <input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Ej: María García"
+                required
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Email *</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="autoridad@empresa.com"
+                required
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">CUIL</label>
+              <input
+                value={cuil}
+                onChange={(e) => setCuil(e.target.value)}
+                placeholder="20-12345678-9"
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Tipo de autoridad</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["PERMANENT", "PROVISIONAL"] as AuthorityType[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setType(t)}
+                    className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
+                      type === t
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+                    }`}
+                  >
+                    {TYPE_LABEL[t]}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-400">
+                {type === "PERMANENT"
+                  ? "Habilitada indefinidamente. Su firma quedará guardada y disponible para todos los contratos."
+                  : "Habilitada para un convenio puntual. Le llegará el contrato vacío para que firme."}
+              </p>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Notas internas</label>
+              <input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Ej: Directora comercial — convenio OSPA 2026"
+                className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+              />
+            </div>
 
-          {err && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{err}</div>
-          )}
+            {err && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{err}</div>
+            )}
 
-          <button
-            type="submit"
-            disabled={saving || !fullName.trim() || !email.trim()}
-            className="w-full rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 transition disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={15} className="animate-spin inline mr-1" /> : null}
-            {saving ? "Enviando invitación..." : "Invitar autoridad"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={saving || !fullName.trim() || !email.trim()}
+              className="w-full rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 transition disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={15} className="animate-spin inline mr-1" /> : null}
+              {saving ? "Creando invitación..." : "Crear invitación"}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

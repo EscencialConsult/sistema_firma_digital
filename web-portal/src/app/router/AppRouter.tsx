@@ -73,6 +73,13 @@ const PublicSigningPage = lazy(() =>
   }))
 );
 
+// ─── Aceptación de autoridad (sin login requerido) ────────────────────────────
+const AuthorityAcceptPage = lazy(() =>
+  import("../../features/authority/AuthorityAcceptPage").then((m) => ({
+    default: m.AuthorityAcceptPage,
+  }))
+);
+
 // ─── Join org (sin login requerido) ───────────────────────────────────────────
 const JoinOrgPage = lazy(() =>
   import("../../features/join/JoinOrgPage").then((m) => ({ default: m.JoinOrgPage }))
@@ -175,6 +182,9 @@ export function AppRouter() {
 
         {/* Firma pública (sin cuenta) */}
         <Route path="/sign/:id"    element={<PublicSigningPage />} />
+
+        {/* Aceptar invitación de autoridad (sin cuenta) */}
+        <Route path="/authority/accept/:token" element={<AuthorityAcceptPage />} />
 
         {/* Unirse a una organización (sin cuenta) */}
         <Route path="/join/:slug"  element={<JoinOrgPage />} />

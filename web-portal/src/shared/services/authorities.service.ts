@@ -14,9 +14,24 @@ export interface OrgAuthority {
   type:           AuthorityType;
   status:         AuthorityStatus;
   signatureUrl:   string | null;
+  inviteToken:    string | null;
   notes:          string | null;
   invitedAt:      string;
   acceptedAt:     string | null;
+}
+
+export interface AuthorityInviteInfo {
+  id:           string;
+  fullName:     string;
+  email:        string;
+  cuil:         string | null;
+  type:         AuthorityType;
+  status:       AuthorityStatus;
+  notes:        string | null;
+  inviteToken:  string;
+  orgName:      string;
+  orgLogoDark:  string | null;
+  orgLogoLight: string | null;
 }
 
 function mapRow(r: Record<string, unknown>): OrgAuthority {
@@ -31,6 +46,7 @@ function mapRow(r: Record<string, unknown>): OrgAuthority {
     type:           r.type as AuthorityType,
     status:         r.status as AuthorityStatus,
     signatureUrl:   (r.signature_url as string) ?? null,
+    inviteToken:    (r.invite_token as string) ?? null,
     notes:          (r.notes as string) ?? null,
     invitedAt:      r.invited_at as string,
     acceptedAt:     (r.accepted_at as string) ?? null,
@@ -95,4 +111,42 @@ export async function uploadAuthoritySignature(
   if (error) throw new Error(error.message);
   const { data } = supabase.storage.from("authority-signatures").getPublicUrl(path);
   return data.publicUrl;
+}
+
+/** Carga los datos de la invitación por token (sin autenticación) */
+export async function getAuthorityByToken(token: string): Promise<AuthorityInviteInfo | null> {
+  const { data, error } = await supabase.rpc("get_authority_by_token", { p_token: token });
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    id:           data.id as string,
+    fullName:     data.full_name as string,
+    email:        data.email as string,
+    cuil:         (data.cuil as string) ?? null,
+    type:         data.type as AuthorityType,
+    status:       data.status as AuthorityStatus,
+    notes:        (data.notes as string) ?? null,
+    inviteToken:  data.invite_token as string,
+    orgName:      data.org_name as string,
+    orgLogoDark:  (data.org_logo_dark as string) ?? null,
+    orgLogoLight: (data.org_logo_light as string) ?? null,
+  };
+}
+
+/** Acepta la invitación y activa la autoridad (sin autenticación) */
+export async function acceptAuthorityInvite(
+  token: string,
+  signatureUrl?: string
+): Promise<void> {
+  const { data, error } = await supabase.rpc("accept_authority_invite", {
+    p_token:         token,
+    p_signature_url: signatureUrl ?? null,
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error("No se pudo aceptar la invitación");
+}
+
+/** Construye la URL de invitación para copiar */
+export function buildInviteUrl(token: string): string {
+  return `${window.location.origin}/authority/accept/${token}`;
 }
