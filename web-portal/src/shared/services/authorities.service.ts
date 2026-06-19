@@ -64,39 +64,22 @@ function mapRow(r: Record<string, unknown>): OrgAuthority {
 export async function getOrgAuthorities(organizationId: string): Promise<OrgAuthority[]> {
   const { data, error } = await supabase
     .from("organization_authorities")
-    .select("*")
+    .select("*, user:users!user_id(document_number, cuil_cuit, address)")
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
 
-  const authorities = (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
-
-  // Enriquecer con datos de DIDIT (identity_verifications) para los que ya verificaron
-  const userIds = authorities.map((a) => a.userId).filter(Boolean) as string[];
-  if (userIds.length > 0) {
-    const { data: ivs } = await supabase
-      .from("identity_verifications")
-      .select("user_id, document_number, cuil_cuit, address, city, province")
-      .in("user_id", userIds)
-      .eq("status", "APPROVED");
-
-    const ivMap = new Map((ivs ?? []).map((iv) => [iv.user_id as string, iv]));
-
-    return authorities.map((a) => {
-      if (!a.userId) return a;
-      const iv = ivMap.get(a.userId);
-      if (!iv) return a;
-      const domicilioRaw = [iv.address, iv.city, iv.province].filter(Boolean).join(", ");
-      return {
-        ...a,
-        dni:       a.dni      ?? (iv.document_number as string) ?? null,
-        cuil:      a.cuil     ?? (iv.cuil_cuit as string)       ?? null,
-        domicilio: a.domicilio ?? domicilioRaw                   ?? null,
-      };
-    });
-  }
-
-  return authorities;
+  return (data ?? []).map((r) => {
+    const row  = r as Record<string, unknown>;
+    const user = (row.user as Record<string, unknown>) ?? null;
+    const base = mapRow(row);
+    return {
+      ...base,
+      dni:       base.dni      ?? (user?.document_number as string) ?? null,
+      cuil:      base.cuil     ?? (user?.cuil_cuit as string)       ?? null,
+      domicilio: base.domicilio ?? (user?.address as string)        ?? null,
+    };
+  });
 }
 
 export async function inviteAuthority(input: {
