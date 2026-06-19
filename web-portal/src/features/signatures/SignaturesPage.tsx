@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
   Clock,
   Download,
@@ -120,12 +121,22 @@ export function SignaturesPage() {
               {AUTHORITY_STATUS_LABEL[myAuthority.status] ?? myAuthority.status}
             </span>
           </div>
-          {myAuthority.status === "PENDING" && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Te invitaron a ser autoridad firmante de esta organización.
-              {myAuthority.type === "PERMANENT"
-                ? " Vas a recibir un enlace para cargar tu firma y habilitar tu acceso."
-                : " Vas a recibir el documento de convenio para que lo firmes."}
+          {myAuthority.status === "PENDING" && myAuthority.inviteToken && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-3">
+              <p className="text-sm text-amber-800">
+                Te invitaron a ser autoridad firmante de esta organización.
+                {myAuthority.type === "PERMANENT"
+                  ? " Necesitás registrar tu firma para habilitar tu acceso."
+                  : " Necesitás firmar el convenio para activar tu rol."}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate(`/authority/accept/${myAuthority.inviteToken}`)}
+                className="flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 transition"
+              >
+                {myAuthority.type === "PERMANENT" ? "Registrar mi firma" : "Firmar convenio"}
+                <ArrowRight size={13} />
+              </button>
             </div>
           )}
         </div>
