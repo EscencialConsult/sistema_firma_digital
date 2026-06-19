@@ -4,12 +4,15 @@ import {
   ChevronRight,
   Download,
   Eye,
+  FileText,
   Files,
+  LayoutTemplate,
   Pencil,
   Plus,
   Search,
   Send,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Toast } from "../../shared/components/ui/Toast";
@@ -24,17 +27,23 @@ import {
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
 import { getMyOrganization } from "../../shared/services/organizations.service";
 import { getAllUsers } from "../../shared/services/admin.service";
+import {
+  getContractTemplates,
+  createContractTemplate,
+  updateContractTemplate,
+  deleteContractTemplate,
+  extractVariables,
+  AUTO_FILL_VARS,
+  VAR_LABELS,
+  type DbContractTemplate,
+} from "../../shared/services/contractTemplates.service";
 import type { Contract } from "../../shared/types/contract";
 import type { AdminUserSummary } from "../../shared/types/user";
-import {
-  CONTRACT_TEMPLATES,
-  type ContractTemplateDef,
-  type TemplateFieldDef,
-} from "../../shared/utils/contractTemplate";
 import { ContractDocument, ContractDetailModal } from "./components/ContractRenderer";
+import { RichTextEditor } from "./components/RichTextEditor";
 import { AdminConveniosTab } from "./AdminConveniosTab";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Status helpers ───────────────────────────────────────────────────────────
 
 function statusMeta(status: string) {
   switch (status) {
@@ -50,74 +59,6 @@ function statusMeta(status: string) {
   }
 }
 
-const ACCENT_CLASSES = {
-  blue:    { border: "border-blue-200",   bg: "bg-blue-50",   badge: "bg-blue-100 text-blue-700 border-blue-800",   ring: "ring-blue-600"   },
-  amber:   { border: "border-amber-200",  bg: "bg-amber-50",  badge: "bg-amber-100 text-amber-700 border-amber-800", ring: "ring-amber-600"  },
-  emerald: { border: "border-emerald-200",bg: "bg-emerald-50",badge: "bg-emerald-100 text-emerald-700 border-emerald-800", ring: "ring-emerald-600" },
-  purple:  { border: "border-purple-200", bg: "bg-purple-50", badge: "bg-purple-100 text-purple-700 border-purple-800", ring: "ring-purple-600" },
-  rose:    { border: "border-rose-200",   bg: "bg-rose-50",   badge: "bg-rose-100 text-rose-700 border-rose-800",   ring: "ring-rose-600"   },
-};
-
-// ─── Template field input ─────────────────────────────────────────────────────
-
-function TemplateFieldInput({
-  fieldKey, def, value, onChange,
-}: { fieldKey: string; def: TemplateFieldDef; value: string; onChange: (v: string) => void }) {
-  const base = "w-full rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition";
-
-  if (def.type === "textarea") {
-    return (
-      <div className={def.span === "full" ? "col-span-2" : ""}>
-        <label className="mb-1 block text-xs font-semibold text-zinc-400">{def.label}</label>
-        <textarea value={value} placeholder={def.placeholder} onChange={(e) => onChange(e.target.value)}
-          rows={3} className={`${base} px-4 py-3 resize-none`} />
-      </div>
-    );
-  }
-
-  if (def.type === "select") {
-    return (
-      <div className={def.span === "full" ? "col-span-2" : ""}>
-        <label className="mb-1 block text-xs font-semibold text-zinc-400">{def.label}</label>
-        <select value={value || def.defaultValue || ""} onChange={(e) => onChange(e.target.value)} className={`${base} px-4 py-2.5`}>
-          {def.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-        </select>
-      </div>
-    );
-  }
-
-  return (
-    <div className={def.span === "full" ? "col-span-2" : ""}>
-      <label className="mb-1 block text-xs font-semibold text-zinc-400">{def.label}</label>
-      <div className="flex overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 focus-within:border-zinc-400 focus-within:ring-2 focus-within:ring-zinc-100 transition">
-        {def.prefix && <span className="px-3 text-zinc-500 text-sm font-medium select-none flex items-center">{def.prefix}</span>}
-        <input type={def.type} value={value} placeholder={def.placeholder} onChange={(e) => onChange(e.target.value)}
-          className="flex-1 bg-transparent py-2.5 pr-4 pl-3 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none" />
-      </div>
-    </div>
-  );
-}
-
-// ─── Step indicator ───────────────────────────────────────────────────────────
-
-function Steps({ current, labels }: { current: number; labels: string[] }) {
-  return (
-    <div className="flex items-center gap-1">
-      {labels.map((label, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-            i < current ? "bg-emerald-500 text-white" : i === current ? "bg-zinc-900 text-white" : "bg-zinc-50 text-zinc-500"
-          }`}>
-            {i < current ? <Check size={9} /> : i + 1}
-          </span>
-          <span className={`hidden text-xs sm:inline ${i === current ? "font-semibold text-zinc-900" : "text-zinc-600"}`}>{label}</span>
-          {i < labels.length - 1 && <ChevronRight size={11} className="text-zinc-700 mx-0.5" />}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── Assign User Modal ────────────────────────────────────────────────────────
 
 function AssignUserModal({
@@ -131,27 +72,25 @@ function AssignUserModal({
   onClose: () => void;
   onAssigned: (contractId: string) => void;
 }) {
-  const [authorities, setAuthorities]       = useState<OrgAuthority[]>([]);
-  const [loadingAuth, setLoadingAuth]       = useState(true);
-  const [selectedAuth, setSelectedAuth]     = useState<OrgAuthority | null>(null);
-  const [authSearch, setAuthSearch]         = useState("");
+  const [authorities, setAuthorities]   = useState<OrgAuthority[]>([]);
+  const [loadingAuth, setLoadingAuth]   = useState(true);
+  const [selectedAuth, setSelectedAuth] = useState<OrgAuthority | null>(null);
+  const [authSearch, setAuthSearch]     = useState("");
 
-  const [users, setUsers]                   = useState<AdminUserSummary[]>([]);
-  const [loadingUsers, setLoadingUsers]     = useState(true);
-  const [selectedUser, setSelectedUser]     = useState<AdminUserSummary | null>(null);
-  const [userSearch, setUserSearch]         = useState("");
+  const [users, setUsers]               = useState<AdminUserSummary[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
+  const [userSearch, setUserSearch]     = useState("");
 
-  const [submitting, setSubmitting]         = useState(false);
-  const [done, setDone]                     = useState(false);
-  const [error, setError]                   = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone]             = useState(false);
+  const [error, setError]           = useState("");
 
   useEffect(() => {
     getOrgAuthorities(orgId)
       .then((all) => setAuthorities(all.filter((a) => a.status === "ACTIVE" && a.type === "PERMANENT")))
       .finally(() => setLoadingAuth(false));
-    getAllUsers()
-      .then(setUsers)
-      .finally(() => setLoadingUsers(false));
+    getAllUsers().then(setUsers).finally(() => setLoadingUsers(false));
   }, [orgId]);
 
   const filteredAuth = useMemo(() => {
@@ -197,8 +136,8 @@ function AssignUserModal({
     }
   }
 
-  const inputBase = "w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-500 outline-none";
   const searchBox = "flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 focus-within:border-zinc-400 transition";
+  const inputBase = "w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-500 outline-none";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -210,28 +149,23 @@ function AssignUserModal({
             </div>
             <p className="font-bold text-zinc-900">Contrato asignado</p>
             <p className="text-sm text-zinc-500">
-              <strong>{selectedUser?.fullName}</strong> verá el contrato pendiente en su panel.<br />
+              <strong>{selectedUser?.fullName}</strong> verá el contrato pendiente en su panel.
               Firma por Escencial: <strong>{selectedAuth?.fullName}</strong>.
             </p>
             <Button onClick={onClose} className="h-10 px-6 mt-2">Cerrar</Button>
           </div>
         ) : (
           <>
-            {/* Header */}
             <div className="border-b border-zinc-100 px-6 py-4 shrink-0">
               <h3 className="font-bold text-zinc-900">Asignar contrato</h3>
               <p className="text-xs text-zinc-500 mt-0.5 truncate">"{contract.title}"</p>
             </div>
-
             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
-
-              {/* Sección 1: Autoridad firmante */}
+              {/* Autoridad */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
-                  <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">
-                    1. Autoridad firmante por Escencial SAS
-                  </p>
+                  <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">1. Autoridad firmante por Escencial SAS</p>
                 </div>
                 <div className={searchBox}>
                   <Search size={14} className="text-zinc-400 shrink-0" />
@@ -240,9 +174,7 @@ function AssignUserModal({
                 {loadingAuth ? (
                   <div className="space-y-2">{Array(2).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-50" />)}</div>
                 ) : filteredAuth.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-zinc-400">
-                    {authorities.length === 0 ? "Sin autoridades PERMANENTES activas" : "Sin resultados"}
-                  </p>
+                  <p className="py-4 text-center text-xs text-zinc-400">{authorities.length === 0 ? "Sin autoridades PERMANENTES activas" : "Sin resultados"}</p>
                 ) : (
                   <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-36 overflow-y-auto">
                     {filteredAuth.map((a) => (
@@ -267,14 +199,11 @@ function AssignUserModal({
                   </div>
                 )}
               </div>
-
-              {/* Sección 2: Destinatario */}
+              {/* Destinatario */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Send size={13} className="text-zinc-500 shrink-0" />
-                  <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">
-                    2. Destinatario (quien firma)
-                  </p>
+                  <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">2. Destinatario (quien firma)</p>
                 </div>
                 <div className={searchBox}>
                   <Search size={14} className="text-zinc-400 shrink-0" />
@@ -308,18 +237,11 @@ function AssignUserModal({
                   </div>
                 )}
               </div>
-
               {error && <p className="text-xs text-red-500">{error}</p>}
             </div>
-
-            {/* Footer */}
             <div className="border-t border-zinc-100 px-6 py-4 flex gap-3 shrink-0">
               <Button variant="secondary" onClick={onClose} className="flex-1 h-10 text-zinc-700">Cancelar</Button>
-              <Button
-                onClick={handleAssign}
-                disabled={!selectedAuth || !selectedUser || submitting}
-                className="flex-1 h-10"
-              >
+              <Button onClick={handleAssign} disabled={!selectedAuth || !selectedUser || submitting} className="flex-1 h-10">
                 {submitting ? "Asignando..." : <><Send size={14} /> Asignar y enviar</>}
               </Button>
             </div>
@@ -330,11 +252,11 @@ function AssignUserModal({
   );
 }
 
-// ─── Send to Third Party Modal ────────────────────────────────────────────────
+// ─── Send Third Party Modal ───────────────────────────────────────────────────
 
 function SendThirdPartyModal({
   contract, onClose, onSent,
-}: { contract: Contract; onClose: () => void; onSent: (contractId: string) => void }) {
+}: { contract: Contract; onClose: () => void; onSent: (id: string) => void }) {
   const [name, setName]       = useState("");
   const [email, setEmail]     = useState("");
   const [sending, setSending] = useState(false);
@@ -344,7 +266,6 @@ function SendThirdPartyModal({
   async function handleSend() {
     if (!name.trim() || !email.trim()) return;
     setSending(true);
-    setError("");
     try {
       await sendDocumentToThirdParty(contract.id, { name: name.trim(), email: email.trim() });
       setDone(true);
@@ -356,6 +277,8 @@ function SendThirdPartyModal({
     }
   }
 
+  const inputCls = "w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-6 space-y-5">
@@ -365,7 +288,6 @@ function SendThirdPartyModal({
               <Check size={24} className="text-emerald-600" />
             </div>
             <p className="font-bold text-zinc-900">Enviado a {name}</p>
-            <p className="text-sm text-zinc-500">{email} recibirá el documento para firmar.</p>
             <Button onClick={onClose} className="h-10 px-6">Cerrar</Button>
           </div>
         ) : (
@@ -377,13 +299,11 @@ function SendThirdPartyModal({
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-zinc-400">Nombre completo *</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del firmante"
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del firmante" className={inputCls} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-zinc-400">Email *</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@ejemplo.com"
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@ejemplo.com" className={inputCls} />
               </div>
               {error && <p className="text-xs text-red-500">{error}</p>}
             </div>
@@ -400,12 +320,83 @@ function SendThirdPartyModal({
   );
 }
 
+// ─── Template Card ────────────────────────────────────────────────────────────
+
+function TemplateCard({
+  template,
+  onUse,
+  onEdit,
+  onDelete,
+}: {
+  template: DbContractTemplate;
+  onUse:    () => void;
+  onEdit:   () => void;
+  onDelete: () => void;
+}) {
+  const vars      = extractVariables(template.contentHtml);
+  const adminVars = vars.filter((v) => !AUTO_FILL_VARS.has(v));
+  const autoVars  = vars.filter((v) => AUTO_FILL_VARS.has(v));
+
+  return (
+    <div className="group rounded-2xl border border-zinc-200 bg-white p-5 flex flex-col gap-3 hover:border-zinc-300 hover:shadow-sm transition">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100">
+            <FileText size={16} className="text-zinc-500" />
+          </div>
+          <div>
+            <p className="font-bold text-zinc-900 text-sm">{template.name}</p>
+            <p className="text-xs text-zinc-500 mt-0.5">{new Date(template.createdAt).toLocaleDateString("es-AR")}</p>
+          </div>
+        </div>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+          <button type="button" onClick={onEdit}
+            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
+            <Pencil size={12} />
+          </button>
+          <button type="button" onClick={onDelete}
+            className="grid h-7 w-7 place-items-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition">
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+
+      {template.description && (
+        <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2">{template.description}</p>
+      )}
+
+      {vars.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {adminVars.map((v) => (
+            <span key={v} className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
+              {"{{"}{v}{"}}"}
+            </span>
+          ))}
+          {autoVars.map((v) => (
+            <span key={v} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
+              {"{{"}{v}{"}}"}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <Button onClick={onUse} className="mt-auto h-9 w-full text-xs">
+        <ChevronRight size={13} /> Usar esta plantilla
+      </Button>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
+
+type PageView = "list" | "templates" | "editor" | "filling";
 
 export function AdminContractsPage() {
   const [activeTab, setActiveTab] = useState<"contracts" | "convenios">("contracts");
   const [orgId, setOrgId]         = useState<string | null>(null);
+  const [hasActiveAuthority, setHasActiveAuthority] = useState<boolean | null>(null);
 
+  // Contract list state
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading]     = useState(true);
   const [filter, setFilter]       = useState<"all" | "pending" | "signed" | "rejected">("all");
@@ -413,33 +404,54 @@ export function AdminContractsPage() {
   const [viewContract, setViewContract]     = useState<Contract | null>(null);
   const [sendThirdParty, setSendThirdParty] = useState<Contract | null>(null);
   const [assignTarget, setAssignTarget]     = useState<Contract | null>(null);
-  const [hasActiveAuthority, setHasActiveAuthority] = useState<boolean | null>(null);
 
-  // Create / edit flow
-  const [view, setView]                     = useState<"list" | "create">("list");
-  const [step, setStep]                     = useState(0);
-  const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplateDef | null>(null);
-  const [fields, setFields]                 = useState<Record<string, string>>({});
-  const [editingContract, setEditingContract] = useState<Contract | null>(null);
-  const [creating, setCreating]             = useState(false);
-  const [created, setCreated]               = useState(false);
-  const [showToast, setShowToast]           = useState(false);
-  const [toastMessage, setToastMessage]     = useState("");
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // DB Template state
+  const [dbTemplates, setDbTemplates]           = useState<DbContractTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
+  // Page view
+  const [view, setView] = useState<PageView>("list");
+
+  // Editor state
+  const [editingTemplate, setEditingTemplate] = useState<DbContractTemplate | null>(null);
+  const [tplName, setTplName] = useState("");
+  const [tplDesc, setTplDesc] = useState("");
+  const [tplHtml, setTplHtml] = useState("");
+  const [savingTpl, setSavingTpl] = useState(false);
+
+  // Filling state
+  const [activeTemplate, setActiveTemplate]         = useState<DbContractTemplate | null>(null);
+  const [varValues, setVarValues]                   = useState<Record<string, string>>({});
+  const [showPreview, setShowPreview]               = useState(false);
+  const [editingContractId, setEditingContractId]   = useState<string | null>(null);
+  const [creatingContract, setCreatingContract]     = useState(false);
+  const [contractDone, setContractDone]             = useState(false);
+
+  // Toast
+  const [toast, setToast] = useState({ visible: false, message: "" });
+  const showToast = (message: string) => setToast({ visible: true, message });
+
+  const redirectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // ── Init ──
   useEffect(() => {
     getAllContracts().then((c) => { setContracts(c); setLoading(false); });
-    getMyOrganization()
-      .then((org) => {
-        if (!org) { setHasActiveAuthority(false); return; }
-        setOrgId(org.id);
-        return getOrgAuthorities(org.id).then((auths) => {
-          setHasActiveAuthority(auths.some((a) => a.status === "ACTIVE"));
-        });
-      })
-      .catch(() => setHasActiveAuthority(null));
+    getMyOrganization().then((org) => {
+      if (!org) { setHasActiveAuthority(false); return; }
+      setOrgId(org.id);
+      return getOrgAuthorities(org.id).then((auths) => {
+        setHasActiveAuthority(auths.some((a) => a.status === "ACTIVE"));
+      });
+    }).catch(() => setHasActiveAuthority(null));
   }, []);
 
+  useEffect(() => {
+    if (activeTab !== "contracts" || !orgId) return;
+    setLoadingTemplates(true);
+    getContractTemplates(orgId).then(setDbTemplates).finally(() => setLoadingTemplates(false));
+  }, [activeTab, orgId]);
+
+  // ── Contract list filter ──
   const filtered = useMemo(() => {
     let list = contracts;
     if (filter === "pending") list = list.filter((c) => ["SENT","VIEWED","CONFORMITY_ACCEPTED"].includes(c.status));
@@ -452,221 +464,362 @@ export function AdminContractsPage() {
     return list;
   }, [contracts, filter, search]);
 
-  function pickTemplate(tpl: ContractTemplateDef) {
-    setSelectedTemplate(tpl);
-    const defaults: Record<string, string> = {};
-    Object.entries(tpl.fields).forEach(([k, def]) => { if (def.defaultValue) defaults[k] = def.defaultValue; });
-    setFields(defaults);
-    setStep(1);
+  // ── Template editor ──
+
+  function openNewTemplate() {
+    setEditingTemplate(null);
+    setTplName(""); setTplDesc(""); setTplHtml("");
+    setView("editor");
   }
 
-  function startEdit(contract: Contract) {
-    const tpl = CONTRACT_TEMPLATES.find((t) => t.id === contract.templateId);
-    if (!tpl) return;
-    setEditingContract(contract);
-    setSelectedTemplate(tpl);
-    setFields({ ...(contract.templateFields ?? {}) });
-    setStep(1);
-    setView("create");
+  function openEditTemplate(tpl: DbContractTemplate) {
+    setEditingTemplate(tpl);
+    setTplName(tpl.name); setTplDesc(tpl.description); setTplHtml(tpl.contentHtml);
+    setView("editor");
   }
 
-  function step1Valid() {
-    if (!selectedTemplate) return false;
-    return Object.keys(selectedTemplate.fields).every((k) => {
-      const def = selectedTemplate.fields[k];
-      if (def.defaultValue !== undefined) return true;
-      if (def.type === "date") return true;
-      return !!fields[k];
-    });
-  }
-
-  async function handleConfirm() {
-    if (!selectedTemplate) return;
-    setCreating(true);
+  async function handleSaveTemplate() {
+    const htmlContent = tplHtml.replace(/<[^>]+>/g, "").trim();
+    if (!tplName.trim() || !htmlContent) return;
+    setSavingTpl(true);
     try {
-      if (editingContract) {
-        await updateContractFields(editingContract.id, { ...fields });
-        setContracts((prev) =>
-          prev.map((c) => c.id === editingContract.id ? { ...c, templateFields: { ...fields } } : c)
-        );
-        setToastMessage("Cambios guardados correctamente.");
-      } else {
-        const newContract = await createContract({
-          title:          selectedTemplate.legalTitle,
-          description:    selectedTemplate.name,
-          templateId:     selectedTemplate.id,
-          templateFields: { ...fields },
-          signers:        [],
-        });
-        setContracts((c) => [newContract, ...c]);
-        setToastMessage("Contrato guardado como borrador. Asignalo a un usuario desde la lista.");
+      if (editingTemplate) {
+        await updateContractTemplate(editingTemplate.id, { name: tplName, description: tplDesc, contentHtml: tplHtml });
+        setDbTemplates((prev) => prev.map((t) => t.id === editingTemplate.id
+          ? { ...t, name: tplName, description: tplDesc, contentHtml: tplHtml }
+          : t));
+        showToast("Plantilla actualizada.");
+      } else if (orgId) {
+        const created = await createContractTemplate({ orgId, name: tplName, description: tplDesc, contentHtml: tplHtml });
+        setDbTemplates((prev) => [created, ...prev]);
+        showToast("Plantilla creada.");
       }
-      setCreated(true);
-      setShowToast(true);
+      setView("templates");
     } catch (err) {
-      console.error("[AdminContracts] Error:", err);
+      showToast(err instanceof Error ? err.message : "Error guardando plantilla");
     } finally {
-      setCreating(false);
+      setSavingTpl(false);
     }
   }
 
-  useEffect(() => {
-    if (!created) return;
-    redirectTimerRef.current = setTimeout(() => { exitCreate(); }, 3000);
-    return () => clearTimeout(redirectTimerRef.current);
-  }, [created]);
-
-  function resetCreate() {
-    setStep(0);
-    setSelectedTemplate(null);
-    setFields({});
-    setCreated(false);
-    setEditingContract(null);
+  async function handleDeleteTemplate(id: string) {
+    if (!window.confirm("¿Eliminar esta plantilla? Los contratos ya creados no se ven afectados.")) return;
+    await deleteContractTemplate(id);
+    setDbTemplates((prev) => prev.filter((t) => t.id !== id));
+    showToast("Plantilla eliminada.");
   }
 
-  function exitCreate() {
-    resetCreate();
-    setView("list");
+  // ── Contract creation from template ──
+
+  function useTemplate(tpl: DbContractTemplate) {
+    setActiveTemplate(tpl);
+    const vars = extractVariables(tpl.contentHtml);
+    const initial: Record<string, string> = {};
+    vars.filter((v) => !AUTO_FILL_VARS.has(v)).forEach((v) => { initial[v] = ""; });
+    setVarValues(initial);
+    setShowPreview(false);
+    setContractDone(false);
+    setEditingContractId(null);
+    setView("filling");
   }
 
-  // ── Create / Edit view ──
-  if (view === "create") {
-    const isEditing = !!editingContract;
+  function editContractFilling(contract: Contract) {
+    const dbTplId = contract.templateFields?._dbTemplateId;
+    const tpl = dbTplId ? dbTemplates.find((t) => t.id === dbTplId) : null;
+    if (!tpl) return;
+    setActiveTemplate(tpl);
+    const vars = extractVariables(tpl.contentHtml);
+    const initial: Record<string, string> = {};
+    vars.filter((v) => !AUTO_FILL_VARS.has(v)).forEach((v) => {
+      initial[v] = contract.templateFields?.[v] ?? "";
+    });
+    setVarValues(initial);
+    setShowPreview(false);
+    setContractDone(false);
+    setEditingContractId(contract.id);
+    setView("filling");
+  }
+
+  const fillingVars = useMemo(() => activeTemplate ? extractVariables(activeTemplate.contentHtml) : [], [activeTemplate]);
+  const adminVars   = fillingVars.filter((v) => !AUTO_FILL_VARS.has(v));
+  const autoVars    = fillingVars.filter((v) => AUTO_FILL_VARS.has(v));
+  const allAdminFilled = adminVars.every((v) => !!varValues[v]?.trim());
+
+  const previewFields = useMemo(() => {
+    if (!activeTemplate) return {};
+    return {
+      _templateContent: activeTemplate.contentHtml,
+      _legalTitle:      activeTemplate.name,
+      _dbTemplateId:    activeTemplate.id,
+      ...varValues,
+    };
+  }, [activeTemplate, varValues]);
+
+  async function handleCreateContract() {
+    if (!activeTemplate) return;
+    setCreatingContract(true);
+    try {
+      const templateFields: Record<string, string> = {
+        _templateContent: activeTemplate.contentHtml,
+        _legalTitle:      activeTemplate.name,
+        _dbTemplateId:    activeTemplate.id,
+        ...varValues,
+      };
+      if (editingContractId) {
+        await updateContractFields(editingContractId, templateFields);
+        setContracts((prev) => prev.map((c) => c.id === editingContractId ? { ...c, templateFields } : c));
+        showToast("Cambios guardados.");
+      } else {
+        const newContract = await createContract({
+          title:          activeTemplate.name,
+          description:    activeTemplate.description || activeTemplate.name,
+          templateId:     "custom",
+          templateFields,
+          signers:        [],
+        });
+        setContracts((c) => [newContract, ...c]);
+        showToast("Contrato creado como borrador.");
+      }
+      setContractDone(true);
+      redirectTimer.current = setTimeout(() => {
+        setView("list");
+        setContractDone(false);
+        setActiveTemplate(null);
+        setEditingContractId(null);
+      }, 3000);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error");
+    } finally {
+      setCreatingContract(false);
+    }
+  }
+
+  useEffect(() => () => clearTimeout(redirectTimer.current), []);
+
+  // ─── Editor view ───────────────────────────────────────────────────────────
+
+  if (view === "editor") {
+    const isValid = !!(tplName.trim() && tplHtml.replace(/<[^>]+>/g, "").trim());
     return (
-      <div className="min-h-screen">
-        <div className="mb-6 flex items-center gap-4">
-          <button onClick={exitCreate} type="button"
+      <div className="min-h-screen space-y-6">
+        <div className="flex items-center gap-4">
+          <button type="button" onClick={() => setView("templates")}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition">
+            <ArrowLeft size={15} />
+          </button>
+          <div>
+            <p className="text-xs text-zinc-600">Admin · Plantillas</p>
+            <h2 className="font-bold text-zinc-900">{editingTemplate ? "Editar plantilla" : "Nueva plantilla"}</h2>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-zinc-400">Nombre de la plantilla *</label>
+            <input value={tplName} onChange={(e) => setTplName(e.target.value)}
+              placeholder="Ej: Contrato de prestación de servicios"
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-zinc-400">Descripción (opcional)</label>
+            <input value={tplDesc} onChange={(e) => setTplDesc(e.target.value)}
+              placeholder="Descripción breve"
+              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+          </div>
+        </div>
+
+        <RichTextEditor
+          value={tplHtml}
+          onChange={setTplHtml}
+          placeholder="Redactá el contrato aquí. Usá las variables del panel derecho para insertar datos dinámicos..."
+        />
+
+        <div className="flex justify-between">
+          <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-5 text-zinc-700">
+            <ArrowLeft size={14} /> Cancelar
+          </Button>
+          <Button onClick={handleSaveTemplate} disabled={!isValid || savingTpl} className="h-10 px-6">
+            {savingTpl ? "Guardando..." : <><Check size={14} /> {editingTemplate ? "Guardar cambios" : "Crear plantilla"}</>}
+          </Button>
+        </div>
+
+        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
+      </div>
+    );
+  }
+
+  // ─── Templates view ────────────────────────────────────────────────────────
+
+  if (view === "templates") {
+    return (
+      <div className="min-h-screen space-y-6">
+        <div className="flex items-center gap-4">
+          <button type="button" onClick={() => setView("list")}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition">
             <ArrowLeft size={15} />
           </button>
           <div>
             <p className="text-xs text-zinc-600">Admin · Contratos</p>
-            <h2 className="font-bold text-zinc-900">
-              {isEditing ? `Editar — ${selectedTemplate?.name}` : (selectedTemplate ? selectedTemplate.name : "Nuevo contrato")}
-            </h2>
+            <h2 className="font-bold text-zinc-900">Plantillas de contratos</h2>
           </div>
-          {step > 0 && !created && (
-            <div className="ml-auto">
-              <Steps current={step - 1} labels={["Completar datos", "Vista previa"]} />
-            </div>
-          )}
+          <Button onClick={openNewTemplate} className="ml-auto h-10 px-4 shrink-0">
+            <Plus size={14} /> Nueva plantilla
+          </Button>
         </div>
 
-        {created ? (
-          <div className="flex flex-col items-center py-20 text-center max-w-sm mx-auto">
-            <div className="mb-6 grid h-20 w-20 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
-              <Check size={36} className="text-emerald-600" />
+        {loadingTemplates ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array(3).fill(null).map((_, i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-zinc-100" />)}
+          </div>
+        ) : dbTemplates.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+            <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
+              <LayoutTemplate size={28} className="text-zinc-400" />
             </div>
-            <h3 className="text-xl font-bold text-zinc-900">
-              {isEditing ? "Cambios guardados" : "Contrato creado"}
-            </h3>
-            <p className="mt-2 text-sm text-zinc-500">
-              {isEditing
-                ? "Los campos del contrato fueron actualizados."
-                : "Quedó guardado como borrador. Asignalo a un usuario desde la lista para enviarlo."}
-            </p>
-            {selectedTemplate && <p className="mt-4 text-xs text-zinc-600 italic">{selectedTemplate.legalTitle}</p>}
-            <div className="mt-8 flex gap-3">
-              <Button onClick={exitCreate} className="h-10 px-5">Ver contratos</Button>
-              {!isEditing && (
-                <Button variant="secondary" onClick={() => { resetCreate(); }} className="h-10 px-5 text-zinc-700">
-                  Nuevo contrato
-                </Button>
-              )}
+            <div>
+              <p className="font-semibold text-zinc-700">Sin plantillas</p>
+              <p className="text-sm text-zinc-400 mt-1">Creá tu primera plantilla de contrato con el editor.</p>
             </div>
+            <Button onClick={openNewTemplate} className="h-10 px-5">
+              <Plus size={14} /> Crear primera plantilla
+            </Button>
           </div>
         ) : (
-          <>
-            {/* Step 0: Template picker (solo si no editamos) */}
-            {step === 0 && !isEditing && (
-              <div className="space-y-5">
-                <p className="text-sm text-zinc-400">Seleccioná el tipo de contrato.</p>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {CONTRACT_TEMPLATES.map((tpl) => {
-                    const ac = ACCENT_CLASSES[tpl.accent];
-                    return (
-                      <button key={tpl.id} type="button" onClick={() => pickTemplate(tpl)}
-                        className={`group flex flex-col gap-3 rounded-2xl border p-5 text-left transition hover:scale-[1.01] active:scale-[0.99] ${ac.border} ${ac.bg} hover:brightness-110`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${ac.badge}`}>{tpl.category}</span>
-                          <ChevronRight size={14} className="text-zinc-500 mt-0.5 group-hover:translate-x-0.5 transition-transform" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-zinc-900 text-sm">{tpl.name}</p>
-                          <p className="mt-0.5 text-[11px] text-zinc-500 italic leading-snug">{tpl.legalTitle}</p>
-                        </div>
-                        <p className="text-xs text-zinc-400 leading-relaxed">{tpl.description}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Step 1: Fill fields */}
-            {step === 1 && selectedTemplate && (
-              <div className="space-y-5 max-w-2xl">
-                <div className={`rounded-xl border p-3 flex items-center gap-3 ${ACCENT_CLASSES[selectedTemplate.accent].border} ${ACCENT_CLASSES[selectedTemplate.accent].bg}`}>
-                  <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${ACCENT_CLASSES[selectedTemplate.accent].badge}`}>
-                    {selectedTemplate.category}
-                  </span>
-                  <p className="text-xs text-zinc-700 italic leading-snug flex-1">{selectedTemplate.legalTitle}</p>
-                  {!isEditing && (
-                    <button type="button" onClick={() => { setStep(0); setSelectedTemplate(null); }}
-                      className="text-[10px] text-zinc-500 underline hover:text-zinc-700 shrink-0">Cambiar</button>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(selectedTemplate.fields).map(([key, def]) => (
-                    <TemplateFieldInput key={key} fieldKey={key} def={def}
-                      value={fields[key] ?? def.defaultValue ?? ""}
-                      onChange={(v) => setFields((f) => ({ ...f, [key]: v }))} />
-                  ))}
-                </div>
-                <div className="flex justify-between pt-2">
-                  {!isEditing ? (
-                    <Button variant="secondary" onClick={() => setStep(0)} className="h-10 px-5 text-zinc-700">
-                      <ArrowLeft size={14} /> Atrás
-                    </Button>
-                  ) : <div />}
-                  <Button onClick={() => setStep(2)} disabled={!step1Valid()} className="h-10 px-6">
-                    Ver contrato <ChevronRight size={14} />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Preview */}
-            {step === 2 && selectedTemplate && (
-              <div className="space-y-5 max-w-3xl">
-                <p className="text-sm text-zinc-400">
-                  Revisá el contrato. Los datos del firmante y la autoridad se cargan al asignar.
-                </p>
-                <ContractDocument templateId={selectedTemplate.id} fields={fields} alumnos={[]} />
-                <div className="flex justify-between pt-2">
-                  <Button variant="secondary" onClick={() => setStep(1)} className="h-10 px-5 text-zinc-700">
-                    <ArrowLeft size={14} /> Atrás
-                  </Button>
-                  <Button onClick={handleConfirm} disabled={creating}
-                    className="h-10 px-6 bg-emerald-600 hover:bg-emerald-700 text-white">
-                    {creating
-                      ? "Guardando..."
-                      : isEditing
-                        ? <><Check size={14} /> Guardar cambios</>
-                        : <><Check size={14} /> Guardar borrador</>}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {dbTemplates.map((tpl) => (
+              <TemplateCard
+                key={tpl.id}
+                template={tpl}
+                onUse={() => useTemplate(tpl)}
+                onEdit={() => openEditTemplate(tpl)}
+                onDelete={() => handleDeleteTemplate(tpl.id)}
+              />
+            ))}
+          </div>
         )}
 
-        <Toast message={toastMessage} type="success" visible={showToast} onClose={() => setShowToast(false)} duration={4000} />
+        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
       </div>
     );
   }
 
-  // ── List view ──
+  // ─── Filling view ──────────────────────────────────────────────────────────
+
+  if (view === "filling" && activeTemplate) {
+    return (
+      <div className="min-h-screen space-y-6">
+        <div className="flex items-center gap-4">
+          <button type="button" onClick={() => { setView("templates"); setShowPreview(false); }}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition">
+            <ArrowLeft size={15} />
+          </button>
+          <div>
+            <p className="text-xs text-zinc-600">Admin · Contratos · {editingContractId ? "Editar" : "Nuevo"}</p>
+            <h2 className="font-bold text-zinc-900">{activeTemplate.name}</h2>
+          </div>
+        </div>
+
+        {contractDone ? (
+          <div className="flex flex-col items-center py-20 text-center max-w-sm mx-auto gap-4">
+            <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
+              <Check size={36} className="text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-zinc-900">{editingContractId ? "Cambios guardados" : "Contrato creado"}</h3>
+              <p className="text-sm text-zinc-500 mt-2">
+                {editingContractId
+                  ? "Los campos del contrato fueron actualizados."
+                  : "Borrador guardado. Asignalo a un usuario desde la lista."}
+              </p>
+            </div>
+            <Button onClick={() => { setView("list"); setContractDone(false); }} className="h-10 px-5">
+              Ver contratos
+            </Button>
+          </div>
+        ) : showPreview ? (
+          <div className="space-y-5 max-w-3xl">
+            <p className="text-sm text-zinc-400">
+              Las variables en verde se completan al asignar. Los datos del firmante y la autoridad se cargan en ese paso.
+            </p>
+            <ContractDocument templateId="custom" fields={previewFields} alumnos={[]} />
+            <div className="flex justify-between pt-2">
+              <Button variant="secondary" onClick={() => setShowPreview(false)} className="h-10 px-5 text-zinc-700">
+                <ArrowLeft size={14} /> Volver
+              </Button>
+              <Button onClick={handleCreateContract} disabled={creatingContract} className="h-10 px-6 bg-emerald-600 hover:bg-emerald-700 text-white">
+                {creatingContract ? "Guardando..." : <><Check size={14} /> {editingContractId ? "Guardar cambios" : "Guardar borrador"}</>}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-2xl space-y-6">
+            {adminVars.length > 0 ? (
+              <div className="space-y-4">
+                <p className="text-sm font-semibold text-zinc-700">Completá los datos del contrato:</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {adminVars.map((v) => {
+                    const isLong = v.includes("objeto") || v.includes("descripcion");
+                    const isDate = v.includes("fecha");
+                    const isNum  = v.includes("monto") || v.includes("cuotas");
+                    return (
+                      <div key={v} className={isLong ? "col-span-2" : ""}>
+                        <label className="mb-1 block text-xs font-semibold text-zinc-400">
+                          {VAR_LABELS[v] ?? v.replace(/_/g, " ")}
+                        </label>
+                        {isLong ? (
+                          <textarea value={varValues[v] ?? ""} rows={3} placeholder={`{{${v}}}`}
+                            onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
+                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition resize-none" />
+                        ) : (
+                          <input
+                            type={isDate ? "date" : isNum ? "number" : "text"}
+                            value={varValues[v] ?? ""} placeholder={`{{${v}}}`}
+                            onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
+                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 text-sm text-zinc-500">
+                Esta plantilla no tiene variables para completar.
+              </div>
+            )}
+
+            {autoVars.length > 0 && (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 space-y-2">
+                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Variables automáticas</p>
+                <p className="text-xs text-emerald-600">Se completan al asignar a un usuario:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {autoVars.map((v) => (
+                    <span key={v} className="rounded-full border border-emerald-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                      {"{{"}{v}{"}}"} — {VAR_LABELS[v] ?? v}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between pt-2">
+              <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-5 text-zinc-700">
+                <ArrowLeft size={14} /> Cambiar plantilla
+              </Button>
+              <Button onClick={() => setShowPreview(true)} disabled={!allAdminFilled && adminVars.length > 0} className="h-10 px-6">
+                Ver contrato <ChevronRight size={14} />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
+      </div>
+    );
+  }
+
+  // ─── List view ─────────────────────────────────────────────────────────────
+
   return (
     <>
       {viewContract && <ContractDetailModal contract={viewContract} onClose={() => setViewContract(null)} />}
@@ -709,14 +862,19 @@ export function AdminContractsPage() {
         {activeTab === "contracts" && (
           <>
             <div className="flex items-start justify-between gap-4">
-              <p className="text-sm text-zinc-500">
-                {contracts.length} contratos · {CONTRACT_TEMPLATES.length} templates disponibles.
-              </p>
-              <Button onClick={() => { resetCreate(); setView("create"); }}
-                disabled={hasActiveAuthority === false} className="shrink-0 h-10 px-4"
-                title={hasActiveAuthority === false ? "Configurá una autoridad firmante activa primero" : undefined}>
-                <Plus size={15} /> Nuevo contrato
-              </Button>
+              <p className="text-sm text-zinc-500">{contracts.length} contratos</p>
+              <div className="flex gap-2 shrink-0">
+                <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-4 text-zinc-700">
+                  <LayoutTemplate size={14} /> Plantillas
+                  {dbTemplates.length > 0 && (
+                    <span className="ml-1 rounded-full bg-zinc-200 text-zinc-700 text-[10px] px-1.5 py-0.5 font-bold">{dbTemplates.length}</span>
+                  )}
+                </Button>
+                <Button onClick={() => setView("templates")} disabled={hasActiveAuthority === false} className="h-10 px-4"
+                  title={hasActiveAuthority === false ? "Configurá una autoridad firmante primero" : undefined}>
+                  <Plus size={15} /> Nuevo contrato
+                </Button>
+              </div>
             </div>
 
             {hasActiveAuthority === false && (
@@ -728,19 +886,6 @@ export function AdminContractsPage() {
                 </p>
               </div>
             )}
-
-            <div className="flex flex-wrap gap-2">
-              {CONTRACT_TEMPLATES.map((tpl) => {
-                const ac = ACCENT_CLASSES[tpl.accent];
-                return (
-                  <button key={tpl.id} type="button"
-                    onClick={() => { resetCreate(); pickTemplate(tpl); setView("create"); setStep(1); }}
-                    className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition hover:brightness-110 ${ac.badge}`}>
-                    {tpl.name}
-                  </button>
-                );
-              })}
-            </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="flex flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 focus-within:border-zinc-300">
@@ -766,13 +911,14 @@ export function AdminContractsPage() {
                 <div className="py-16 text-center">
                   <Files size={32} className="text-zinc-700 mx-auto mb-2" />
                   <p className="text-sm text-zinc-500">Sin contratos en este estado</p>
-                  <button type="button" onClick={() => { resetCreate(); setView("create"); }}
+                  <button type="button" onClick={() => setView("templates")}
                     className="mt-3 text-xs text-zinc-500 underline hover:text-zinc-700">Crear el primero</button>
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-100">
                   {filtered.map((c) => {
                     const { label, className } = statusMeta(c.status);
+                    const isCustom = !!(c.templateFields?._dbTemplateId || c.templateFields?._templateContent);
                     return (
                       <div key={c.id}
                         className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-50 transition sm:flex-row sm:items-center sm:justify-between group">
@@ -793,9 +939,8 @@ export function AdminContractsPage() {
                           )}
                           <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${className}`}>{label}</span>
 
-                          {/* Botones para DRAFT */}
-                          {c.status === "DRAFT" && c.templateId && (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); startEdit(c); }}
+                          {c.status === "DRAFT" && isCustom && (
+                            <button type="button" onClick={(e) => { e.stopPropagation(); editContractFilling(c); }}
                               className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 transition">
                               <Pencil size={11} /> Editar
                             </button>
@@ -806,7 +951,6 @@ export function AdminContractsPage() {
                               <Send size={11} /> Asignar
                             </button>
                           )}
-
                           {c.status === "COMPLETED" && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); setSendThirdParty(c); }}
                               className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-100 transition">
@@ -835,7 +979,7 @@ export function AdminContractsPage() {
         )}
       </div>
 
-      <Toast message={toastMessage} type="success" visible={showToast} onClose={() => setShowToast(false)} duration={4000} />
+      <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
     </>
   );
 }
