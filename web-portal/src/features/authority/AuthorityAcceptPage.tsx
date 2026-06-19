@@ -1,10 +1,10 @@
 import {
   CheckCircle2,
+  LayoutDashboard,
   Loader2,
   PenLine,
   ShieldCheck,
   Trash2,
-  Upload,
   XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -137,10 +137,7 @@ export function AuthorityAcceptPage() {
   const [errMsg,    setErrMsg]    = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Para PERMANENT: puede subir imagen de firma O dibujarla
-  const [sigFile,    setSigFile]    = useState<File | null>(null);
-  const [sigPreview, setSigPreview] = useState<string | null>(null);
-  const [useCanvas,  setUseCanvas]  = useState(false);
+  // Para PERMANENT: solo firma dibujada en canvas
   const [canvasSig,  setCanvasSig]  = useState<string | null>(null);
 
   useEffect(() => {
@@ -166,19 +163,8 @@ export function AuthorityAcceptPage() {
       .catch((e) => { setPageState("error"); setErrMsg(e.message); });
   }, [token]);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSigFile(file);
-    setSigPreview(URL.createObjectURL(file));
-    setCanvasSig(null);
-    setUseCanvas(false);
-  }
-
   function handleCanvasConfirm(dataUrl: string) {
     setCanvasSig(dataUrl);
-    setSigFile(null);
-    setSigPreview(dataUrl);
   }
 
   async function handleSubmit() {
@@ -187,16 +173,11 @@ export function AuthorityAcceptPage() {
     try {
       let signatureUrl: string | undefined;
 
-      if (invite.type === "PERMANENT") {
-        if (sigFile) {
-          signatureUrl = await uploadAuthoritySignature(invite.id, sigFile);
-        } else if (canvasSig) {
-          // Convertir dataURL canvas a File y subir
-          const res  = await fetch(canvasSig);
-          const blob = await res.blob();
-          const file = new File([blob], "firma.png", { type: "image/png" });
-          signatureUrl = await uploadAuthoritySignature(invite.id, file);
-        }
+      if (invite.type === "PERMANENT" && canvasSig) {
+        const res  = await fetch(canvasSig);
+        const blob = await res.blob();
+        const file = new File([blob], "firma.png", { type: "image/png" });
+        signatureUrl = await uploadAuthoritySignature(invite.id, file);
       }
 
       await acceptAuthorityInvite(token, signatureUrl);
@@ -259,8 +240,8 @@ export function AuthorityAcceptPage() {
             <h1 className="text-2xl font-bold text-zinc-900">¡Todo listo!</h1>
             <p className="mt-2 text-sm text-zinc-500">
               {invite?.type === "PERMANENT"
-                ? "Tu firma quedó registrada. Ya podés cerrar esta página."
-                : "Aceptaste el rol de autoridad provisional. Recibirás el convenio para firmar próximamente."}
+                ? "Tu firma quedó registrada y tu rol como autoridad está activo."
+                : "Aceptaste el rol de autoridad provisional. Revisá tus contratos para firmarlo."}
             </p>
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
@@ -269,6 +250,14 @@ export function AuthorityAcceptPage() {
               Autoridad {invite?.type === "PERMANENT" ? "permanente" : "provisional"} activada
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/signatures")}
+            className="flex items-center justify-center gap-2 w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white hover:bg-zinc-700 transition"
+          >
+            <LayoutDashboard size={15} />
+            Ir a mis contratos
+          </button>
         </div>
       </div>
     );
@@ -278,7 +267,6 @@ export function AuthorityAcceptPage() {
   if (!invite) return null;
 
   const isPermanent = invite.type === "PERMANENT";
-  const hasSignature = !!(sigPreview || canvasSig);
 
   return (
     <div className="min-h-screen bg-zinc-50">
@@ -332,43 +320,22 @@ export function AuthorityAcceptPage() {
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
             <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Tu firma</p>
             <p className="text-sm text-zinc-500">
-              Cargá una imagen de tu firma o dibujala directamente.
+              Dibujá tu firma en el área de abajo.
             </p>
 
-            {/* Preview */}
-            {sigPreview && (
+            {/* Preview de firma confirmada */}
+            {canvasSig ? (
               <div className="relative rounded-xl border-2 border-emerald-200 bg-emerald-50 p-3 flex items-center justify-center" style={{ minHeight: 80 }}>
-                <img src={sigPreview} alt="firma" className="max-h-20 object-contain" />
+                <img src={canvasSig} alt="firma" className="max-h-20 object-contain" />
                 <button
                   type="button"
-                  onClick={() => { setSigFile(null); setSigPreview(null); setCanvasSig(null); }}
+                  onClick={() => setCanvasSig(null)}
                   className="absolute top-2 right-2 rounded-lg p-1 text-zinc-400 hover:bg-white hover:text-red-500 transition"
                 >
                   <Trash2 size={13} />
                 </button>
               </div>
-            )}
-
-            {!sigPreview && (
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-zinc-200 p-4 hover:border-zinc-400 transition text-center">
-                  <Upload size={20} className="text-zinc-400" />
-                  <span className="text-xs font-semibold text-zinc-500">Subir imagen</span>
-                  <span className="text-[10px] text-zinc-400">PNG, JPG, WebP</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setUseCanvas(!useCanvas)}
-                  className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition text-center ${useCanvas ? "border-zinc-900 bg-zinc-900 text-white" : "border-dashed border-zinc-200 hover:border-zinc-400"}`}
-                >
-                  <PenLine size={20} className={useCanvas ? "text-white" : "text-zinc-400"} />
-                  <span className="text-xs font-semibold">Dibujar firma</span>
-                </button>
-              </div>
-            )}
-
-            {useCanvas && !sigPreview && (
+            ) : (
               <SignatureCanvas onConfirm={handleCanvasConfirm} />
             )}
           </div>
@@ -381,7 +348,7 @@ export function AuthorityAcceptPage() {
         {/* CTA */}
         <Button
           onClick={handleSubmit}
-          disabled={submitting || (isPermanent && !hasSignature)}
+          disabled={submitting || (isPermanent && !canvasSig)}
           className="w-full h-12 text-base"
         >
           {submitting
@@ -390,9 +357,9 @@ export function AuthorityAcceptPage() {
           }
         </Button>
 
-        {isPermanent && !hasSignature && (
+        {isPermanent && !canvasSig && (
           <p className="text-center text-xs text-zinc-400">
-            Necesitás cargar o dibujar tu firma antes de continuar.
+            Dibujá tu firma antes de continuar.
           </p>
         )}
       </main>
