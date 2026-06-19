@@ -64,22 +64,38 @@ function mapRow(r: Record<string, unknown>): OrgAuthority {
 export async function getOrgAuthorities(organizationId: string): Promise<OrgAuthority[]> {
   const { data, error } = await supabase
     .from("organization_authorities")
-    .select("*, user:users!user_id(document_number, cuil_cuit, address)")
+    .select("*")
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map((r) => {
-    const row  = r as Record<string, unknown>;
-    const user = (row.user as Record<string, unknown>) ?? null;
-    const base = mapRow(row);
-    return {
-      ...base,
-      dni:       base.dni      ?? (user?.document_number as string) ?? null,
-      cuil:      base.cuil     ?? (user?.cuil_cuit as string)       ?? null,
-      domicilio: base.domicilio ?? (user?.address as string)        ?? null,
-    };
-  });
+  const authorities = (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+
+  // Enriquecer con datos del perfil de usuario (document_number=DNI, cuil_cuit, address)
+  const emails = authorities.map((a) => a.email).filter(Boolean);
+  if (emails.length > 0) {
+    const { data: userRows } = await supabase
+      .from("users")
+      .select("email, document_number, cuil_cuit, address")
+      .in("email", emails);
+
+    const userMap = new Map(
+      (userRows ?? []).map((u) => [u.email as string, u as Record<string, unknown>])
+    );
+
+    return authorities.map((a) => {
+      const u = userMap.get(a.email);
+      if (!u) return a;
+      return {
+        ...a,
+        dni:       a.dni       ?? (u.document_number as string) ?? null,
+        cuil:      a.cuil      ?? (u.cuil_cuit as string)       ?? null,
+        domicilio: a.domicilio ?? (u.address as string)         ?? null,
+      };
+    });
+  }
+
+  return authorities;
 }
 
 export async function inviteAuthority(input: {

@@ -62,6 +62,17 @@ function DocSig({ label, name, sub }: { label: string; name: string; sub: string
   );
 }
 
+function DocSigEmpty({ label }: { label: string }) {
+  return (
+    <div className="text-center">
+      <div className="border-t-2 border-zinc-300 pt-3 mt-14">
+        <p className="text-[11px] text-zinc-400 italic">{label}</p>
+        <p className="text-[11px] text-zinc-300">Firma pendiente</p>
+      </div>
+    </div>
+  );
+}
+
 function DocSignatures({ children }: { children: React.ReactNode }) {
   return (
     <div className="border-t-2 border-zinc-200 pt-6 mt-4 grid grid-cols-2 gap-12">
@@ -127,7 +138,7 @@ function FormacionDoc({ f, alumno }: { f: Record<string, string>; alumno: Alumno
       </DocClause>
       <DocSignatures>
         <DocSig label="Representante Legal" name="Escencial Consultora S.A.S." sub="CUIT 30-71234567-9" />
-        <DocSig label="El/La Alumno/a" name={alumno.nombre || "—"} sub={`DNI: ${alumno.dni || "—"}`} />
+        <DocSigEmpty label="El/La Alumno/a" />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -182,7 +193,7 @@ function InmuebleDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
       </DocClause>
       <DocSignatures>
         <DocSig label="Propietario/a" name={f.locador_nombre || "—"} sub={`DNI: ${f.locador_dni || "—"}`} />
-        <DocSig label="Locatario/a" name={alumno.nombre || "—"} sub={`DNI: ${alumno.dni || "—"}`} />
+        <DocSigEmpty label="Locatario/a" />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -236,7 +247,7 @@ function ReservaDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
       </DocClause>
       <DocSignatures>
         <DocSig label="Vendedor/a" name={f.vendedor_nombre || "—"} sub={`DNI: ${f.vendedor_dni || "—"}`} />
-        <DocSig label="Comprador/a" name={alumno.nombre || "—"} sub={`DNI: ${alumno.dni || "—"}`} />
+        <DocSigEmpty label="Comprador/a" />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -294,7 +305,7 @@ function SoftwareDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
       </DocClause>
       <DocSignatures>
         <DocSig label="Contratista" name="Escencial Consultora S.A.S." sub="CUIT 30-71234567-9" />
-        <DocSig label="Comitente" name={alumno.nombre || "—"} sub={`DNI: ${alumno.dni || "—"}`} />
+        <DocSigEmpty label="Comitente" />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -349,7 +360,7 @@ function SoporteDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
       </DocClause>
       <DocSignatures>
         <DocSig label="Prestadora" name="Escencial Consultora S.A.S." sub="CUIT 30-71234567-9" />
-        <DocSig label="Comitente" name={alumno.nombre || "—"} sub={`DNI: ${alumno.dni || "—"}`} />
+        <DocSigEmpty label="Comitente" />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>

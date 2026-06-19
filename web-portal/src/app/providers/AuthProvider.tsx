@@ -28,32 +28,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError]     = useState<string | null>(null);
 
   useEffect(() => {
-    // Safety timeout: force loading off after 10s to prevent blank screen
-    const safetyTimer = setTimeout(() => setLoading(false), 10000);
+    let mounted = true;
 
-    // Listen for Supabase auth state changes (fires INITIAL_SESSION immediately)
+    // Chequear sesión existente de forma inmediata (no esperar INITIAL_SESSION)
+    async function initialize() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (session?.user) {
+          const profile = await fetchProfile(session.user.id, session.user);
+          if (mounted) setUser(profile);
+        }
+      } catch {
+        // sesión inválida o sin conectividad — seguir sin usuario
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    void initialize();
+
+    // Escuchar cambios posteriores (login, logout, refresco de token)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        try {
+        if (!mounted) return;
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
           if (session?.user) {
-            const profile = await fetchProfile(session.user.id, session.user);
-            setUser(profile);
-          } else {
-            setUser(null);
+            try {
+              const profile = await fetchProfile(session.user.id, session.user);
+              if (mounted) setUser(profile);
+            } catch {
+              if (mounted) setUser(null);
+            }
           }
-        } catch {
-          setUser(null);
-        } finally {
-          // Mark loading done after the initial session check
-          if (event === "INITIAL_SESSION") {
-            setLoading(false);
-          }
+        } else if (event === "SIGNED_OUT") {
+          if (mounted) setUser(null);
         }
       }
     );
 
     return () => {
-      clearTimeout(safetyTimer);
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
