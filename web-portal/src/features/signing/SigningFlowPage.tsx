@@ -21,6 +21,7 @@ import {
   acceptConformity,
   executeSignature,
   getSigningRequest,
+  tryGenerateConsolidatedPdf,
 } from "../../shared/services/signing.service";
 import { supabase } from "../../shared/lib/supabase";
 import type { SignatureResult, SigningRequest } from "../../shared/types/signing";
@@ -622,7 +623,7 @@ export function SigningFlowPage() {
     setStep(2);
   }
 
-  // Step 2 → 3: firma confirmada → ejecutar y mostrar confirmación
+  // Step 2 → 3: firma confirmada → ejecutar, generar PDF si es el último, mostrar confirmación
   async function handleSignatureConfirmed(signatureDataUrl: string) {
     if (!request) return;
     setLoading(true); setError(null);
@@ -632,6 +633,9 @@ export function SigningFlowPage() {
         signedAt:      new Date().toISOString(),
         signatureData: signatureDataUrl,
       });
+      // Intentar generar PDF consolidado si el documento quedó COMPLETED
+      // (no bloquea el flujo si falla)
+      tryGenerateConsolidatedPdf(request.documentId);
       setResult(sig);
       setStep(3);
     } catch {

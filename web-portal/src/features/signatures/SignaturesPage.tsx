@@ -2,6 +2,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  Download,
   FileSignature,
   PenLine,
   ShieldCheck,
@@ -197,6 +198,16 @@ function ContractCard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Badge status={expired ? "EXPIRED" : r.status} />
+          {r.finalPdfUrl && (
+            <a
+              href={r.finalPdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition"
+            >
+              <Download size={12} /> PDF firmado
+            </a>
+          )}
           {canSign ? (
             <Button onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">
               <PenLine size={13} /> Firmar ahora

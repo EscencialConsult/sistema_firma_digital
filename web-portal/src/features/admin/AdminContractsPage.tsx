@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
+  Download,
   Eye,
   Files,
   Plus,
@@ -780,6 +781,17 @@ export function AdminContractsPage() {
                         >
                           <Send size={11} /> Enviar al tercero
                         </button>
+                      )}
+                      {c.finalPdfUrl && (
+                        <a
+                          href={c.finalPdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-100 transition"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Download size={11} /> PDF
+                        </a>
                       )}
                       <button
                         type="button"

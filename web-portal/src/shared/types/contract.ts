@@ -23,6 +23,8 @@ export interface Contract {
   totalSigners: number;
   /** Number of signers who have completed */
   completedSigners: number;
+  /** URL del PDF consolidado con todas las firmas (disponible cuando status=COMPLETED) */
+  finalPdfUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

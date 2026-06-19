@@ -25,6 +25,7 @@ function mapDocToContract(doc: Record<string, unknown>): Contract {
     fileName:         (v?.file_name as string) ?? "",
     totalSigners:     (doc.total_signers as number) ?? 0,
     completedSigners: (doc.completed_signers as number) ?? 0,
+    finalPdfUrl:      (doc.final_pdf_url as string) ?? null,
     createdAt:        doc.created_at as string,
     updatedAt:        doc.updated_at as string,
   };

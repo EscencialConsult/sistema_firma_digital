@@ -11,6 +11,8 @@ export interface SigningRequest {
   sha256Hash: string;
   fileName: string;
   pdfUrl: string | null;
+  /** URL del PDF consolidado con todas las firmas, disponible cuando el doc está COMPLETED */
+  finalPdfUrl: string | null;
   sentAt: string;
   expiresAt: string;
   /** Set when the document was created from a template in the admin panel */

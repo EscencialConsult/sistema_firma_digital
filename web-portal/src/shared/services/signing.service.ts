@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
 import type { SigningRequest, SignatureResult } from "../types/signing";
+import { generateSignedPdf } from "../utils/generateSignedPdf";
 
 // ─── Mapper ───────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ function mapRowToSigningRequest(
     sha256Hash:         (latestV.sha256_hash as string) ?? "",
     fileName:           (latestV.file_name as string) ?? "",
     pdfUrl,
+    finalPdfUrl:        (document.final_pdf_url as string) ?? null,
     sentAt:             sr.sent_at as string,
     expiresAt:          sr.expires_at as string,
     templateId:         (document.template_id as string) ?? undefined,
@@ -146,6 +148,75 @@ export async function executeSignature(
     signerName:   request.signerName,
     ipAddress:    "—",
   };
+}
+
+/**
+ * Después de que alguien firma, verifica si el documento quedó COMPLETED.
+ * Si es así y no tiene PDF consolidado, lo genera y lo sube a Storage.
+ * Se llama silenciosamente (no lanza error visible al usuario si falla).
+ */
+export async function tryGenerateConsolidatedPdf(documentId: string): Promise<void> {
+  try {
+    // 1. Chequear si el documento está COMPLETED y no tiene PDF aún
+    const { data: doc } = await supabase
+      .from("documents")
+      .select("title, status, final_pdf_url, organization_id")
+      .eq("id", documentId)
+      .single();
+
+    if (!doc || doc.status !== "COMPLETED" || doc.final_pdf_url) return;
+
+    // 2. Traer todos los signature_requests firmados
+    const { data: srs } = await supabase
+      .from("signature_requests")
+      .select("id, signer_name, signer_email")
+      .eq("document_id", documentId)
+      .eq("status", "SIGNED");
+
+    if (!srs?.length) return;
+
+    // 3. Traer las firmas (imágenes) de esos requests
+    const srIds = srs.map((sr) => sr.id as string);
+    const { data: sigs } = await supabase
+      .from("signatures")
+      .select("signature_request_id, signature_data, signed_at")
+      .in("signature_request_id", srIds);
+
+    const signers = srs.map((sr) => {
+      const sig = sigs?.find((s) => s.signature_request_id === sr.id);
+      return {
+        name:          sr.signer_name as string,
+        email:         sr.signer_email as string,
+        signedAt:      (sig?.signed_at as string) ?? new Date().toISOString(),
+        signatureData: (sig?.signature_data as string) ?? null,
+      };
+    });
+
+    // 4. Generar PDF
+    const pdfBlob = await generateSignedPdf(doc.title as string, documentId, signers);
+
+    // 5. Subir a Storage — path: {org_id}/{doc_id}/firmado.pdf
+    const orgId = (doc.organization_id as string) ?? "shared";
+    const path  = `${orgId}/${documentId}/firmado.pdf`;
+    const { error: uploadErr } = await supabase.storage
+      .from("signed-contracts")
+      .upload(path, pdfBlob, { contentType: "application/pdf", upsert: true });
+
+    if (uploadErr) {
+      console.warn("[pdf] Error subiendo PDF:", uploadErr.message);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("signed-contracts").getPublicUrl(path);
+
+    // 6. Guardar URL en el documento
+    await supabase
+      .from("documents")
+      .update({ final_pdf_url: urlData.publicUrl })
+      .eq("id", documentId);
+  } catch (err) {
+    console.warn("[pdf] Error generando PDF consolidado:", err);
+  }
 }
 
 /** Reject a signing request */
