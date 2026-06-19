@@ -18,15 +18,9 @@ import {
   revokeAuthority,
   buildInviteUrl,
   type OrgAuthority,
-  type AuthorityType,
 } from "../../shared/services/authorities.service";
 import type { Organization } from "../../shared/types/organization";
 import { OrgLogo } from "../../shared/components/ui/OrgLogo";
-
-const TYPE_LABEL: Record<AuthorityType, string> = {
-  PERMANENT:   "Permanente",
-  PROVISIONAL: "Provisional",
-};
 
 const STATUS_COLOR: Record<string, string> = {
   PENDING:  "bg-amber-100 text-amber-700",
@@ -46,16 +40,14 @@ function InviteModal({
   onClose: () => void;
   onCreated: (a: OrgAuthority) => void;
 }) {
-  const [fullName,       setFullName]       = useState("");
-  const [email,          setEmail]          = useState("");
-  const [cuil,           setCuil]           = useState("");
-  const [type,           setType]           = useState<AuthorityType>("PERMANENT");
-  const [notes,          setNotes]          = useState("");
-  const [convenioTitle,  setConvenioTitle]  = useState("");
-  const [saving,         setSaving]         = useState(false);
-  const [err,            setErr]            = useState<string | null>(null);
-  const [created,        setCreated]        = useState<OrgAuthority | null>(null);
-  const [copied,         setCopied]         = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [email,    setEmail]    = useState("");
+  const [cuil,     setCuil]     = useState("");
+  const [notes,    setNotes]    = useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [err,      setErr]      = useState<string | null>(null);
+  const [created,  setCreated]  = useState<OrgAuthority | null>(null);
+  const [copied,   setCopied]   = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -68,9 +60,8 @@ function InviteModal({
         fullName:       fullName.trim(),
         email:          email.trim(),
         cuil:           cuil.trim() || undefined,
-        type,
+        type:           "PERMANENT",
         notes:          notes.trim() || undefined,
-        convenioTitle:  type === "PROVISIONAL" ? convenioTitle.trim() : undefined,
       });
       setCreated(a);
       onCreated(a);
@@ -134,9 +125,7 @@ function InviteModal({
             </button>
 
             <p className="text-center text-xs text-zinc-400">
-              {created.type === "PERMANENT"
-                ? "Al abrir el link, la autoridad podrá cargar su firma y activar su acceso."
-                : "Al abrir el link, la autoridad aceptará el rol provisional."}
+              Al abrir el link, la autoridad podrá cargar su firma y activar su acceso permanente.
             </p>
           </div>
         ) : (
@@ -172,51 +161,11 @@ function InviteModal({
                 className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
               />
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Tipo de autoridad</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["PERMANENT", "PROVISIONAL"] as AuthorityType[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setType(t)}
-                    className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
-                      type === t
-                        ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
-                    }`}
-                  >
-                    {TYPE_LABEL[t]}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-2 text-[11px] text-zinc-400">
-                {type === "PERMANENT"
-                  ? "Habilitada indefinidamente. Su firma quedará guardada y disponible para todos los contratos."
-                  : "Habilitada para un convenio puntual. Le llegará el contrato vacío para que firme."}
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
+              <p className="text-[11px] text-blue-700">
+                Las autoridades permanentes se gestionan desde aquí. Para crear una autoridad provisional, usá la pestaña <strong>Convenios</strong> en Documentos.
               </p>
             </div>
-            {/* Campo de convenio — solo PROVISIONAL */}
-            {type === "PROVISIONAL" && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-3">
-                <p className="text-xs font-semibold text-amber-800">
-                  Convenio de firma provisional
-                </p>
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Título del convenio *</label>
-                  <input
-                    value={convenioTitle}
-                    onChange={(e) => setConvenioTitle(e.target.value)}
-                    placeholder="Ej: Convenio de representación OSPA 2026"
-                    required={type === "PROVISIONAL"}
-                    className="w-full rounded-xl border border-zinc-200 px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                  />
-                </div>
-                <p className="text-[11px] text-amber-700">
-                  Se creará un documento de convenio que la autoridad deberá firmar al aceptar la invitación.
-                </p>
-              </div>
-            )}
 
             <div>
               <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Notas internas</label>
@@ -234,7 +183,7 @@ function InviteModal({
 
             <button
               type="submit"
-              disabled={saving || !fullName.trim() || !email.trim() || (type === "PROVISIONAL" && !convenioTitle.trim())}
+              disabled={saving || !fullName.trim() || !email.trim()}
               className="w-full rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 transition disabled:opacity-50"
             >
               {saving ? <Loader2 size={15} className="animate-spin inline mr-1" /> : null}

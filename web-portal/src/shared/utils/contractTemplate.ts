@@ -184,21 +184,6 @@ export const CONTRACT_TEMPLATES: ContractTemplateDef[] = [
     },
   },
 
-  // 6. Convenio entre Terceros
-  {
-    id: "convenio_terceros",
-    name: "Convenio entre dos partes",
-    legalTitle: "Convenio Privado Bilateral",
-    category: "Acuerdos",
-    description: "Acuerdo genérico vinculante entre dos personas externas a la organización.",
-    accent: "blue",
-    requiredSigners: 2,
-    fields: {
-      objeto_convenio: { label: "Objeto del convenio", type: "textarea", placeholder: "Las partes acuerdan...", span: "full" },
-      clausulas_adicionales: { label: "Cláusulas adicionales", type: "textarea", placeholder: "Condiciones de pago, plazos, exclusiones...", span: "full" },
-      jurisdiccion: { label: "Jurisdicción", type: "text", placeholder: "Ciudad Autónoma de Buenos Aires", defaultValue: "Ciudad Autónoma de Buenos Aires" },
-    },
-  },
 ];
 
 // Legacy export kept for backward compat — maps to "formacion" template fields
