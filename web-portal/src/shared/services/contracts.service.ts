@@ -30,6 +30,7 @@ function mapDocToContract(doc: Record<string, unknown>): Contract {
   const versions = (doc.document_versions as Array<Record<string, unknown>>) ?? [];
   const v = latestVersion(versions);
   const owner = (doc.owner as Record<string, unknown>) ?? {};
+  const rawFields = doc.template_fields as Record<string, unknown> | null;
 
   return {
     id:               doc.id as string,
@@ -45,6 +46,10 @@ function mapDocToContract(doc: Record<string, unknown>): Contract {
     finalPdfUrl:      (doc.final_pdf_url as string) ?? null,
     createdAt:        doc.created_at as string,
     updatedAt:        doc.updated_at as string,
+    templateId:       (doc.template_id as string) ?? null,
+    templateFields:   rawFields
+      ? Object.fromEntries(Object.entries(rawFields).map(([k, v]) => [k, String(v ?? "")]))
+      : null,
   };
 }
 
@@ -312,10 +317,11 @@ export async function createContract(input: {
   return mapDocToContract(doc as Record<string, unknown>);
 }
 
-/** Assign a DRAFT contract to a user → creates signature_request and changes status to SENT */
+/** Assign a DRAFT contract to a user and set the authority who signs for Escencial SAS */
 export async function assignContractToUser(
   documentId: string,
-  user: { email: string; name: string; dni?: string | null; cuil?: string | null; domicilio?: string | null }
+  user: { email: string; name: string; dni?: string | null; cuil?: string | null; domicilio?: string | null },
+  authority: { fullName: string; cuil?: string | null; email: string; signatureUrl?: string | null }
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -342,12 +348,30 @@ export async function assignContractToUser(
     status:          "SENT",
     template_fields: {
       ...existing,
-      nombre_firmante:    user.name,
-      email_firmante:     user.email,
-      dni_firmante:       user.dni    ?? "",
-      cuil_firmante:      user.cuil   ?? "",
-      domicilio_firmante: user.domicilio ?? "",
+      // Destinatario (firma izquierda)
+      nombre_firmante:         user.name,
+      email_firmante:          user.email,
+      dni_firmante:            user.dni         ?? "",
+      cuil_firmante:           user.cuil        ?? "",
+      domicilio_firmante:      user.domicilio   ?? "",
+      // Autoridad firmante por Escencial SAS (firma derecha)
+      autoridad_nombre:        authority.fullName,
+      autoridad_cuil:          authority.cuil   ?? "",
+      autoridad_email:         authority.email,
+      autoridad_signature_url: authority.signatureUrl ?? "",
     },
   }).eq("id", documentId);
+}
+
+/** Update template fields of an existing DRAFT contract */
+export async function updateContractFields(
+  documentId: string,
+  templateFields: Record<string, string>
+): Promise<void> {
+  const { error } = await supabase
+    .from("documents")
+    .update({ template_fields: templateFields })
+    .eq("id", documentId);
+  if (error) throw new Error(error.message);
 }
 
