@@ -14,6 +14,8 @@ import { Toast } from "../../shared/components/ui/Toast";
 import { Button } from "../../shared/components/ui/Button";
 import { getAllContracts, createContract, sendDocumentToThirdParty } from "../../shared/services/contracts.service";
 import { getAllUsers } from "../../shared/services/admin.service";
+import { getOrgAuthorities } from "../../shared/services/authorities.service";
+import { getMyOrganization } from "../../shared/services/organizations.service";
 import type { Contract, ContractStatus } from "../../shared/types/contract";
 import type { AdminUserSummary } from "../../shared/types/user";
 import {
@@ -337,6 +339,7 @@ export function AdminContractsPage() {
   const [search, setSearch]       = useState("");
   const [viewContract, setViewContract]       = useState<Contract | null>(null);
   const [sendThirdParty, setSendThirdParty]   = useState<Contract | null>(null);
+  const [hasActiveAuthority, setHasActiveAuthority] = useState<boolean | null>(null);
 
   // ── Create flow state ──
   const [view, setView]           = useState<"list" | "create">("list");
@@ -354,6 +357,15 @@ export function AdminContractsPage() {
   useEffect(() => {
     getAllContracts().then((c) => { setContracts(c); setLoading(false); });
     getAllUsers().then((u) => setUsers(u));
+    // Verificar si hay autoridades activas en la org
+    getMyOrganization()
+      .then((org) => {
+        if (!org) { setHasActiveAuthority(false); return; }
+        return getOrgAuthorities(org.id).then((auths) => {
+          setHasActiveAuthority(auths.some((a) => a.status === "ACTIVE"));
+        });
+      })
+      .catch(() => setHasActiveAuthority(null));
   }, []);
 
   const filtered = useMemo(() => {
@@ -679,10 +691,26 @@ export function AdminContractsPage() {
               {contracts.length} contratos · {CONTRACT_TEMPLATES.length} templates legales disponibles.
             </p>
           </div>
-          <Button onClick={() => { resetCreate(); setView("create"); }} className="shrink-0 h-10 px-4 mt-1">
+          <Button
+            onClick={() => { resetCreate(); setView("create"); }}
+            disabled={hasActiveAuthority === false}
+            className="shrink-0 h-10 px-4 mt-1"
+            title={hasActiveAuthority === false ? "Necesitás configurar una autoridad firmante activa antes de emitir contratos" : undefined}
+          >
             <Plus size={15} /> Nuevo contrato
           </Button>
         </div>
+
+        {/* Alerta si no hay autoridad activa */}
+        {hasActiveAuthority === false && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+            <p className="font-semibold">Sin autoridad firmante activa</p>
+            <p className="mt-0.5 text-amber-700">
+              Para emitir contratos necesitás configurar al menos una autoridad firmante activa en la sección{" "}
+              <a href="/settings" className="underline hover:text-amber-900">Configuración → Autoridades</a>.
+            </p>
+          </div>
+        )}
 
         {/* Template quick-access row */}
         <div className="flex flex-wrap gap-2">

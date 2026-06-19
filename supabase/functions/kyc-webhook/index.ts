@@ -81,20 +81,34 @@ serve(async (req) => {
   }
 
   // ── GET: redirect del browser luego de que Didit finaliza ─────────────────
-  // Didit redirige al usuario a esta URL con ?verificationSessionId=...&status=...
-  // No es un webhook POST — es simplemente el browser llegando de vuelta.
-  // Lo redirigimos al frontend en la página correcta según el estado.
+  // Didit redirige al usuario a esta URL con ?status=...
+  // Si tiene ?signing=requestId, redirige al flujo de firma correspondiente.
+  // Sino, usa el flujo KYC estándar.
   if (req.method === "GET") {
     const url = new URL(req.url);
-    const status = url.searchParams.get("status") ?? "";
+    const status    = url.searchParams.get("status") ?? "";
+    const signingId = url.searchParams.get("signing") ?? "";
     let base = FRONTEND_URL || "https://faquqlnwniinqqfmonbv.supabase.co";
     if (base && !base.startsWith("http")) {
       base = `https://${base}`;
     }
 
-    let destination = `${base}/kyc/pending`;
-    if (status === "Approved") destination = `${base}/dashboard`;
-    else if (status === "Declined" || status === "Abandoned") destination = `${base}/kyc/rejected`;
+    let destination: string;
+    if (signingId) {
+      // Redirigir de vuelta al flujo de firma con el resultado
+      if (status === "Approved") {
+        destination = `${base}/signing/${signingId}?face_verified=ok`;
+      } else if (status === "Declined" || status === "Abandoned") {
+        destination = `${base}/signing/${signingId}?face_verified=failed`;
+      } else {
+        destination = `${base}/signing/${signingId}?face_verified=pending`;
+      }
+    } else {
+      // Flujo KYC estándar
+      destination = `${base}/kyc/pending`;
+      if (status === "Approved") destination = `${base}/dashboard`;
+      else if (status === "Declined" || status === "Abandoned") destination = `${base}/kyc/rejected`;
+    }
 
     return new Response(null, {
       status: 302,

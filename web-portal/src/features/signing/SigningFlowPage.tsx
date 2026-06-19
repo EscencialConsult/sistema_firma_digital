@@ -1,19 +1,18 @@
 import {
   ArrowLeft,
-  Camera,
   CheckCircle2,
+  ExternalLink,
   FileSignature,
   Hash,
   Printer,
   PenLine,
-  RefreshCw,
   Shield,
   ShieldCheck,
   Trash2,
   XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ContractDocument } from "../admin/components/ContractRenderer";
 import { Button } from "../../shared/components/ui/Button";
 import { Stepper } from "../../shared/components/ui/Stepper";
@@ -21,9 +20,9 @@ import {
   acceptConformity,
   executeSignature,
   getSigningRequest,
+  initiateFaceVerificationDIDIT,
   tryGenerateConsolidatedPdf,
 } from "../../shared/services/signing.service";
-import { supabase } from "../../shared/lib/supabase";
 import type { SignatureResult, SigningRequest } from "../../shared/types/signing";
 
 type StepIndex = 0 | 1 | 2 | 3;
@@ -159,213 +158,90 @@ function ConformityStep({
   );
 }
 
-// ─── Step 1: Face Verification ────────────────────────────────────────────────
+// ─── Step 1: Face Verification (DIDIT) ───────────────────────────────────────
 
-type FaceState = "idle" | "streaming" | "captured" | "verifying" | "verified" | "failed";
+function FaceVerificationStep({
+  requestId,
+  onVerified,
+  didFail,
+}: {
+  requestId: string;
+  onVerified: () => void;
+  didFail?: boolean;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState(didFail ? "La verificación falló o fue abandonada. Intentá de nuevo." : "");
 
-function FaceVerificationStep({ requestId, onVerified }: { requestId: string; onVerified: () => void }) {
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const canvasRef   = useRef<HTMLCanvasElement>(null);
-  const streamRef   = useRef<MediaStream | null>(null);
-  const [faceState, setFaceState] = useState<FaceState>("idle");
-  const [similarity, setSimilarity] = useState(0);
-  const [cameraError, setCameraError] = useState(false);
-
-  function stopStream() {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-  }
-
-  async function startCamera() {
-    setCameraError(false);
-    setFaceState("streaming");
+  async function handleStartDIDIT() {
+    setLoading(true);
+    setError("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-    } catch {
-      setCameraError(true);
-      setFaceState("idle");
-    }
-  }
-
-  function capturePhoto() {
-    const video  = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-    canvas.width  = video.videoWidth  || 480;
-    canvas.height = video.videoHeight || 360;
-    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    stopStream();
-    setFaceState("captured");
-  }
-
-  async function runVerification() {
-    setFaceState("verifying");
-    try {
-      const canvas = canvasRef.current;
-      if (!canvas) throw new Error("Sin canvas");
-
-      // Obtener la selfie como base64 puro (sin prefijo data:image/...)
-      const dataUrl     = canvas.toDataURL("image/jpeg", 0.85);
-      const selfieBase64 = dataUrl.split(",")[1];
-
-      const { data, error } = await supabase.functions.invoke("face-verify", {
-        body: { requestId, selfieBase64 },
-      });
-
-      if (error || !data?.ok) {
-        // Si la Edge Function no está deployada, fallback a mock aprobado
-        console.warn("[face-verify] Edge Function no disponible — usando mock:", error?.message ?? data?.error);
-        setSimilarity(95.1);
-        setFaceState("verified");
-        return;
-      }
-
-      setSimilarity(data.similarity as number);
-      setFaceState(data.verified ? "verified" : "failed");
+      const { url } = await initiateFaceVerificationDIDIT(requestId);
+      window.location.href = url;
     } catch (err) {
-      console.warn("[face-verify] Error:", err);
-      // Fallback: no bloquear el flujo si la cámara funcionó pero Rekognition falla
-      setSimilarity(95.0);
-      setFaceState("verified");
+      setError(err instanceof Error ? err.message : "Error al iniciar la verificación");
+      setLoading(false);
     }
   }
-
-  function reset() {
-    setFaceState("idle");
-    setSimilarity(0);
-    const canvas = canvasRef.current;
-    if (canvas) canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
-  }
-
-  useEffect(() => () => stopStream(), []);
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-zinc-950">Verificación facial</h2>
+        <h2 className="text-xl font-bold text-zinc-950">Verificación de identidad</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Tomate una selfie para confirmar tu identidad. Asegurate de tener buena iluminación.
+          Necesitamos confirmar tu identidad antes de que puedas firmar. El proceso se realiza a través de DIDIT y toma menos de un minuto.
         </p>
       </div>
 
-      {/* Camera / capture area */}
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-950 overflow-hidden aspect-[4/3] relative flex items-center justify-center">
-        {/* Video stream */}
-        <video
-          ref={videoRef}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${faceState === "streaming" ? "opacity-100" : "opacity-0"}`}
-          muted
-          playsInline
-        />
-
-        {/* Captured photo */}
-        <canvas
-          ref={canvasRef}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${["captured","verifying","verified","failed"].includes(faceState) ? "opacity-100" : "opacity-0"}`}
-        />
-
-        {/* Face guide overlay on streaming */}
-        {faceState === "streaming" && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="rounded-full border-4 border-white/60 w-48 h-48 sm:w-64 sm:h-64" />
+      {/* Visual del proceso */}
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-zinc-900">
+            <Shield size={18} className="text-white" />
           </div>
-        )}
+          <div>
+            <p className="font-semibold text-zinc-900 text-sm">Verificación biométrica DIDIT</p>
+            <p className="text-xs text-zinc-500">Liveness check + coincidencia con documento de identidad</p>
+          </div>
+        </div>
 
-        {/* Idle state */}
-        {faceState === "idle" && (
-          <div className="text-center space-y-3 px-6">
-            <div className="grid h-16 w-16 place-items-center rounded-full bg-zinc-800 mx-auto">
-              <Camera size={28} className="text-zinc-400" />
+        <div className="space-y-2 text-xs text-zinc-500">
+          {[
+            "Vas a ser redirigido a la plataforma de verificación DIDIT",
+            "Tomá una selfie con tu cámara o teléfono",
+            "DIDIT verifica que sos una persona real y coincidís con tu DNI",
+            "Al finalizar, vas a volver automáticamente a este paso",
+          ].map((step, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-bold text-zinc-600">
+                {i + 1}
+              </span>
+              <span>{step}</span>
             </div>
-            <p className="text-sm text-zinc-400">La cámara se activará al hacer click en "Abrir cámara"</p>
-          </div>
-        )}
-
-        {/* Verifying overlay */}
-        {faceState === "verifying" && (
-          <div className="absolute inset-0 bg-zinc-950/80 flex flex-col items-center justify-center gap-3">
-            <div className="grid h-14 w-14 place-items-center rounded-full bg-blue-900/50 border border-blue-700">
-              <Shield size={24} className="text-blue-400 animate-pulse" />
-            </div>
-            <p className="text-sm font-semibold text-white">Verificando identidad...</p>
-            <p className="text-xs text-zinc-400">Comparando con tu documento KYC</p>
-          </div>
-        )}
-
-        {/* Verified overlay */}
-        {faceState === "verified" && (
-          <div className="absolute inset-0 bg-emerald-950/80 flex flex-col items-center justify-center gap-3">
-            <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-900/50 border border-emerald-600">
-              <CheckCircle2 size={28} className="text-emerald-400" />
-            </div>
-            <p className="text-sm font-bold text-white">Identidad verificada</p>
-            <p className="text-xs text-emerald-300 font-mono">
-              Similitud: {similarity}% — por encima del umbral (90%)
-            </p>
-          </div>
-        )}
-
-        {/* Failed overlay */}
-        {faceState === "failed" && (
-          <div className="absolute inset-0 bg-red-950/80 flex flex-col items-center justify-center gap-3">
-            <XCircle size={32} className="text-red-400" />
-            <p className="text-sm font-bold text-white">No coincide</p>
-            <p className="text-xs text-red-300">Similitud {similarity}% — por debajo del umbral</p>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
-      {cameraError && (
+      {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          No se pudo acceder a la cámara. Verificá los permisos del navegador.
+          {error}
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex flex-col gap-3">
-        {faceState === "idle" && (
-          <Button onClick={startCamera} className="h-12 w-full text-base">
-            <Camera size={16} /> Abrir cámara
-          </Button>
+      <Button
+        onClick={handleStartDIDIT}
+        disabled={loading}
+        className="h-12 w-full text-base"
+      >
+        {loading ? (
+          "Iniciando verificación..."
+        ) : (
+          <><ExternalLink size={16} /> Verificar identidad con DIDIT</>
         )}
-
-        {faceState === "streaming" && (
-          <Button onClick={capturePhoto} className="h-12 w-full text-base bg-white text-zinc-900 border border-zinc-300 hover:bg-zinc-50">
-            <Camera size={16} /> Capturar foto
-          </Button>
-        )}
-
-        {faceState === "captured" && (
-          <div className="flex gap-3">
-            <Button onClick={reset} variant="secondary" className="h-11 flex-1 text-zinc-600">
-              <RefreshCw size={15} /> Repetir
-            </Button>
-            <Button onClick={runVerification} className="h-11 flex-1">
-              <Shield size={15} /> Verificar identidad
-            </Button>
-          </div>
-        )}
-
-        {faceState === "failed" && (
-          <Button onClick={reset} variant="secondary" className="h-11 w-full text-zinc-700">
-            <RefreshCw size={15} /> Intentar de nuevo
-          </Button>
-        )}
-
-        {faceState === "verified" && (
-          <Button onClick={onVerified} className="h-12 w-full text-base bg-emerald-600 hover:bg-emerald-700 text-white">
-            <CheckCircle2 size={16} /> Continuar a firma
-          </Button>
-        )}
-      </div>
+      </Button>
 
       <p className="text-center text-[11px] text-zinc-400">
-        La imagen se procesa de forma segura y no se almacena. · TODO:REKOGNITION
+        Verificación biométrica segura · Tecnología DIDIT · Ley 25.506
       </p>
     </div>
   );
@@ -590,18 +466,41 @@ function SuccessStep({ result }: { result: SignatureResult }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function SigningFlowPage() {
-  const { id }     = useParams<{ id: string }>();
-  const navigate   = useNavigate();
+  const { id }       = useParams<{ id: string }>();
+  const navigate     = useNavigate();
+  const location     = useLocation();
   const [request, setRequest]         = useState<SigningRequest | null>(null);
   const [result, setResult]           = useState<SignatureResult | null>(null);
   const [step, setStep]               = useState<StepIndex>(0);
   const [loading, setLoading]         = useState(false);
   const [initLoading, setInitLoading] = useState(true);
   const [error, setError]             = useState<string | null>(null);
+  const [faceDidFail, setFaceDidFail] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-    getSigningRequest(id).then((r) => { setRequest(r); setInitLoading(false); });
+    getSigningRequest(id).then((r) => {
+      setRequest(r);
+      setInitLoading(false);
+
+      // Detectar retorno desde DIDIT face verification
+      const params = new URLSearchParams(location.search);
+      const faceVerified = params.get("face_verified");
+      if (faceVerified === "ok" && r?.acceptedConformity) {
+        // Verificación exitosa → saltar directo al pad de firma
+        setStep(2);
+        // Limpiar el param de la URL sin navegar
+        navigate(`/signing/${id}`, { replace: true });
+      } else if (faceVerified === "failed" || faceVerified === "pending") {
+        // Verificación fallida o pendiente → mostrar step 1 con error
+        setStep(1);
+        setFaceDidFail(true);
+        navigate(`/signing/${id}`, { replace: true });
+      } else if (r?.acceptedConformity && r.status === "CONFORMITY_ACCEPTED") {
+        // Conformidad ya aceptada en sesión anterior → mostrar step 1
+        setStep(1);
+      }
+    });
   }, [id]);
 
   // Step 0 → 1: conformidad → verificación facial
@@ -751,7 +650,11 @@ export function SigningFlowPage() {
             <ConformityStep request={request} onAccept={handleAcceptConformity} loading={loading} />
           )}
           {step === 1 && (
-            <FaceVerificationStep requestId={request.id} onVerified={handleFaceVerified} />
+            <FaceVerificationStep
+              requestId={request.id}
+              onVerified={handleFaceVerified}
+              didFail={faceDidFail}
+            />
           )}
           {step === 2 && (
             <SignaturePadStep onConfirm={handleSignatureConfirmed} />

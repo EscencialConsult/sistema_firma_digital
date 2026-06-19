@@ -151,6 +151,23 @@ export async function executeSignature(
 }
 
 /**
+ * Inicia la verificación facial con DIDIT para el flujo de firma.
+ * Crea una sesión DIDIT y devuelve la URL a la que redirigir al usuario.
+ * Al terminar, DIDIT redirige a /signing/:id?face_verified=ok|failed
+ */
+export async function initiateFaceVerificationDIDIT(requestId: string): Promise<{ url: string }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const { data, error } = await supabase.functions.invoke("face-verify-signing", {
+    body: { requestId },
+    headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+  });
+  if (error || !data?.url) {
+    throw new Error(error?.message ?? "No se pudo iniciar la verificación DIDIT");
+  }
+  return { url: data.url as string };
+}
+
+/**
  * Después de que alguien firma, verifica si el documento quedó COMPLETED.
  * Si es así y no tiene PDF consolidado, lo genera y lo sube a Storage.
  * Se llama silenciosamente (no lanza error visible al usuario si falla).
