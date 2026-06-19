@@ -452,6 +452,7 @@ export function AdminContractsPage() {
     return Object.keys(selectedTemplate.fields).every((k) => {
       const def = selectedTemplate.fields[k];
       if (def.defaultValue !== undefined) return true;
+      if (def.type === "date") return true; // fechas son opcionales, se completan después
       return !!fields[k];
     });
   }
