@@ -467,6 +467,15 @@ function AuthorityRow({
   onRevoke: (id: string) => void;
   revoking: string | null;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopyLink() {
+    if (!a.inviteToken) return;
+    void navigator.clipboard.writeText(buildInviteUrl(a.inviteToken));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5">
       <div className="flex items-center gap-3">
@@ -489,6 +498,22 @@ function AuthorityRow({
         <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${STATUS_COLOR[a.status] ?? "bg-zinc-100 text-zinc-500"}`}>
           {a.status === "PENDING" ? "Pendiente" : a.status === "ACTIVE" ? "Activa" : a.status === "REVOKED" ? "Revocada" : "Expirada"}
         </span>
+        {/* Botón copiar enlace — solo autoridades pendientes */}
+        {a.status === "PENDING" && a.inviteToken && (
+          <button
+            onClick={handleCopyLink}
+            type="button"
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
+              copied
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+            }`}
+            title="Copiar enlace de invitación"
+          >
+            {copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+            {copied ? "Copiado" : "Copiar enlace"}
+          </button>
+        )}
         {a.status !== "REVOKED" && a.status !== "EXPIRED" && (
           <button
             onClick={() => onRevoke(a.id)}
