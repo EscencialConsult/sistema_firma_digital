@@ -35,11 +35,11 @@ interface SharedSidebarProps {
 }
 
 const USER_NAV = [
-  { path: "/dashboard", label: "Dashboard", icon: Gauge, end: true },
-  { path: "/signatures", label: "Por firmar", icon: PenLine },
-  { path: "/documents", label: "Mis documentos", icon: Files },
-  { path: "/audit", label: "Historial", icon: History },
-  { path: "/profile", label: "Perfil", icon: UserCircle },
+  { path: "/dashboard",  label: "Dashboard",     icon: Gauge,      end: true },
+  { path: "/signatures", label: "Mis contratos", icon: FileText },
+  { path: "/documents",  label: "Mis documentos",icon: Files },
+  { path: "/audit",      label: "Historial",     icon: History },
+  { path: "/profile",    label: "Perfil",        icon: UserCircle },
 ];
 
 const ADMIN_EXTRA = [{ path: "/admin", label: "Panel admin", icon: UsersRound }];

@@ -1,4 +1,12 @@
-import { AlertCircle, CheckCircle2, Clock, FileSignature, PenLine, XCircle } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  FileSignature,
+  PenLine,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -7,11 +15,13 @@ import { Button } from "../../shared/components/ui/Button";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
 import { getMySigningRequests } from "../../shared/services/signing.service";
+import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
+import { getMyOrganization } from "../../shared/services/organizations.service";
 import type { SigningRequest } from "../../shared/types/signing";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("es-AR", {
-    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+    day: "2-digit", month: "short", year: "numeric",
   });
 }
 
@@ -33,89 +43,170 @@ function StatusIcon({ r }: { r: SigningRequest }) {
   return <Clock size={16} className="text-amber-400" />;
 }
 
+const AUTHORITY_STATUS_LABEL: Record<string, string> = {
+  PENDING:  "Pendiente de aceptación",
+  ACTIVE:   "Activa",
+  REVOKED:  "Revocada",
+  EXPIRED:  "Expirada",
+};
+
+const AUTHORITY_STATUS_COLOR: Record<string, string> = {
+  PENDING:  "text-amber-700 bg-amber-50 border-amber-200",
+  ACTIVE:   "text-emerald-700 bg-emerald-50 border-emerald-200",
+  REVOKED:  "text-red-600 bg-red-50 border-red-200",
+  EXPIRED:  "text-zinc-500 bg-zinc-50 border-zinc-200",
+};
+
 export function SignaturesPage() {
-  const { user }  = useAuth();
-  const navigate  = useNavigate();
-  const [requests, setRequests] = useState<SigningRequest[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState<string | null>(null);
+  const { user }   = useAuth();
+  const navigate   = useNavigate();
+
+  const [requests,     setRequests]     = useState<SigningRequest[]>([]);
+  const [myAuthority,  setMyAuthority]  = useState<OrgAuthority | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.email) return;
-    getMySigningRequests(user.email)
-      .then(setRequests)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Error al cargar solicitudes"))
+
+    const loadRequests = getMySigningRequests(user.email).then(setRequests);
+
+    // Buscar si este usuario es autoridad en alguna org
+    const loadAuthority = getMyOrganization()
+      .then((org) => {
+        if (!org) return;
+        return getOrgAuthorities(org.id).then((auths) => {
+          const mine = auths.find((a) => a.email === user.email);
+          if (mine) setMyAuthority(mine);
+        });
+      })
+      .catch(() => null);
+
+    Promise.all([loadRequests, loadAuthority])
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Error al cargar contratos"))
       .finally(() => setLoading(false));
   }, [user?.email]);
 
+  const pending = requests.filter((r) => r.status !== "SIGNED" && r.status !== "REJECTED" && !isExpired(r));
+  const history = requests.filter((r) => r.status === "SIGNED" || r.status === "REJECTED" || isExpired(r));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
-        eyebrow="Flujo de firma"
-        title="Solicitudes de firma"
-        description="Documentos que requieren tu firma digital y conformidad legal."
+        eyebrow="Portal de firmas"
+        title="Mis contratos"
+        description="Documentos que requieren tu firma y tu rol como autoridad."
       />
 
-      {loading && (
-        <p className="text-sm text-zinc-500">Cargando solicitudes...</p>
-      )}
-
-      {error && (
-        <EmptyState icon={AlertCircle} title="Error al cargar" description={error} />
-      )}
-
-      {!loading && !error && requests.length === 0 && (
-        <EmptyState
-          icon={FileSignature}
-          title="Sin solicitudes asignadas"
-          description="Cuando un documento requiera tu firma, va a aparecer acá."
-        />
-      )}
-
-      <div className="grid gap-4">
-        {requests.map((r) => {
-          const expired = isExpired(r);
-          const canSign = r.status !== "SIGNED" && r.status !== "REJECTED" && !expired;
-
-          return (
-            <div
-              key={r.id}
-              className="rounded-2xl border border-zinc-200 bg-white p-5 hover:border-zinc-300 transition"
-            >
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="mt-0.5 shrink-0">
-                    <StatusIcon r={r} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-zinc-950 truncate">{r.documentTitle}</p>
-                    <p className="mt-1 text-xs text-zinc-400">{getStatusDetail(r)}</p>
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge status={expired ? "EXPIRED" : r.status} />
-                  {canSign ? (
-                    <Button
-                      onClick={() => navigate(`/signing/${r.id}`)}
-                      className="h-9 px-4 text-xs"
-                    >
-                      <PenLine size={13} /> Firmar ahora
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      onClick={() => navigate(`/signing/${r.id}`)}
-                      className="h-9 px-4 text-xs"
-                    >
-                      Ver detalles
-                    </Button>
-                  )}
-                </div>
-              </div>
+      {/* ─── Estado de autoridad ─────────────────────────────────────────────── */}
+      {myAuthority && (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={15} className="text-zinc-500" />
+            <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">
+              Tu rol como autoridad firmante
+            </p>
+          </div>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-zinc-900">{myAuthority.fullName}</p>
+              <p className="text-xs text-zinc-500">
+                {myAuthority.type === "PERMANENT" ? "Autoridad permanente" : "Autoridad provisional"}
+                {myAuthority.cuil ? ` · CUIL ${myAuthority.cuil}` : ""}
+              </p>
             </div>
-          );
-        })}
+            <span className={`self-start sm:self-auto rounded-lg border px-3 py-1 text-xs font-semibold ${AUTHORITY_STATUS_COLOR[myAuthority.status] ?? ""}`}>
+              {AUTHORITY_STATUS_LABEL[myAuthority.status] ?? myAuthority.status}
+            </span>
+          </div>
+          {myAuthority.status === "PENDING" && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Te invitaron a ser autoridad firmante de esta organización.
+              {myAuthority.type === "PERMANENT"
+                ? " Vas a recibir un enlace para cargar tu firma y habilitar tu acceso."
+                : " Vas a recibir el documento de convenio para que lo firmes."}
+            </div>
+          )}
+        </div>
+      )}
+
+      {loading && <p className="text-sm text-zinc-500">Cargando contratos...</p>}
+
+      {error && <EmptyState icon={AlertCircle} title="Error al cargar" description={error} />}
+
+      {/* ─── Pendientes de firmar ─────────────────────────────────────────────── */}
+      {!loading && !error && (
+        <>
+          {pending.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
+                Pendientes de firma
+              </p>
+              {pending.map((r) => (
+                <ContractCard key={r.id} r={r} navigate={navigate} />
+              ))}
+            </div>
+          )}
+
+          {/* ─── Historial ──────────────────────────────────────────────────── */}
+          {history.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
+                Historial
+              </p>
+              {history.map((r) => (
+                <ContractCard key={r.id} r={r} navigate={navigate} />
+              ))}
+            </div>
+          )}
+
+          {requests.length === 0 && !myAuthority && (
+            <EmptyState
+              icon={FileSignature}
+              title="Sin contratos asignados"
+              description="Cuando un documento requiera tu firma, va a aparecer acá."
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ContractCard({
+  r,
+  navigate,
+}: {
+  r: SigningRequest;
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const expired = isExpired(r);
+  const canSign = r.status !== "SIGNED" && r.status !== "REJECTED" && !expired;
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-5 hover:border-zinc-300 transition">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="mt-0.5 shrink-0">
+            <StatusIcon r={r} />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-zinc-950 truncate">{r.documentTitle}</p>
+            <p className="mt-1 text-xs text-zinc-400">{getStatusDetail(r)}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge status={expired ? "EXPIRED" : r.status} />
+          {canSign ? (
+            <Button onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">
+              <PenLine size={13} /> Firmar ahora
+            </Button>
+          ) : (
+            <Button variant="secondary" onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">
+              Ver detalles
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,98 @@
+import { supabase } from "../lib/supabase";
+
+export type AuthorityType   = "PERMANENT" | "PROVISIONAL";
+export type AuthorityStatus = "PENDING" | "ACTIVE" | "REVOKED" | "EXPIRED";
+
+export interface OrgAuthority {
+  id:             string;
+  organizationId: string;
+  userId:         string | null;
+  fullName:       string;
+  cuil:           string | null;
+  cuit:           string | null;
+  email:          string;
+  type:           AuthorityType;
+  status:         AuthorityStatus;
+  signatureUrl:   string | null;
+  notes:          string | null;
+  invitedAt:      string;
+  acceptedAt:     string | null;
+}
+
+function mapRow(r: Record<string, unknown>): OrgAuthority {
+  return {
+    id:             r.id as string,
+    organizationId: r.organization_id as string,
+    userId:         (r.user_id as string) ?? null,
+    fullName:       r.full_name as string,
+    cuil:           (r.cuil as string) ?? null,
+    cuit:           (r.cuit as string) ?? null,
+    email:          r.email as string,
+    type:           r.type as AuthorityType,
+    status:         r.status as AuthorityStatus,
+    signatureUrl:   (r.signature_url as string) ?? null,
+    notes:          (r.notes as string) ?? null,
+    invitedAt:      r.invited_at as string,
+    acceptedAt:     (r.accepted_at as string) ?? null,
+  };
+}
+
+export async function getOrgAuthorities(organizationId: string): Promise<OrgAuthority[]> {
+  const { data, error } = await supabase
+    .from("organization_authorities")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+}
+
+export async function inviteAuthority(input: {
+  organizationId: string;
+  fullName:        string;
+  email:           string;
+  cuil?:           string;
+  type:            AuthorityType;
+  notes?:          string;
+}): Promise<OrgAuthority> {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data, error } = await supabase
+    .from("organization_authorities")
+    .insert({
+      organization_id: input.organizationId,
+      full_name:       input.fullName,
+      email:           input.email,
+      cuil:            input.cuil ?? null,
+      type:            input.type,
+      status:          "PENDING",
+      authorized_by:   user?.id ?? null,
+      notes:           input.notes ?? null,
+    })
+    .select()
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Error al invitar autoridad");
+  return mapRow(data as Record<string, unknown>);
+}
+
+export async function revokeAuthority(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("organization_authorities")
+    .update({ status: "REVOKED", revoked_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function uploadAuthoritySignature(
+  authorityId: string,
+  file: File
+): Promise<string> {
+  const ext  = file.name.split(".").pop() ?? "png";
+  const path = `${authorityId}/signature.${ext}`;
+  const { error } = await supabase.storage
+    .from("authority-signatures")
+    .upload(path, file, { upsert: true });
+  if (error) throw new Error(error.message);
+  const { data } = supabase.storage.from("authority-signatures").getPublicUrl(path);
+  return data.publicUrl;
+}
