@@ -42,13 +42,18 @@ function mapRowToUser(row: Record<string, unknown>): AdminUserSummary {
     verificationStatus: row.verification_status as VerificationStatus,
     certificateStatus:  row.certificate_status as CertificateStatus,
     createdAt:          row.created_at as string,
+    documentNumber:     (row.document_number as string) ?? null,
+    cuilCuit:           (row.cuil_cuit as string)       ?? null,
+    address:            (row.address as string)         ?? null,
   };
 }
+
+const USER_SELECT = "id, email, full_name, role, verification_status, certificate_status, created_at, document_number, cuil_cuit, address";
 
 export async function getAllUsers(): Promise<AdminUserSummary[]> {
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, full_name, role, verification_status, certificate_status, created_at")
+    .select(USER_SELECT)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -58,7 +63,7 @@ export async function getAllUsers(): Promise<AdminUserSummary[]> {
 export async function getUserById(id: string): Promise<AdminUserSummary | null> {
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, full_name, role, verification_status, certificate_status, created_at")
+    .select(USER_SELECT)
     .eq("id", id)
     .maybeSingle();
 

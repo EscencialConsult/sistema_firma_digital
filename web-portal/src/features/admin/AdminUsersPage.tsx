@@ -431,6 +431,9 @@ export function AdminUsersPage() {
       verificationStatus: "PENDING",
       certificateStatus: "NONE",
       createdAt: new Date().toISOString(),
+      documentNumber: null,
+      cuilCuit:       null,
+      address:        null,
     }));
     setUsers((prev) => [...newUsers, ...prev]);
     setCsvImported(true);

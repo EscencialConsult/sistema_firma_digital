@@ -254,7 +254,7 @@ export async function sendDocumentToThirdParty(
     .eq("id", documentId);
 }
 
-/** Create a new contract document and its signature requests */
+/** Create a new contract document — if no signers, stays DRAFT until assignContractToUser is called */
 export async function createContract(input: {
   title: string;
   description: string;
@@ -265,11 +265,6 @@ export async function createContract(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  if (!input.signers || input.signers.length === 0) {
-    throw new Error("Se requiere al menos un firmante");
-  }
-
-  // 1. Insert document
   const { data: doc, error: docError } = await supabase
     .from("documents")
     .insert({
@@ -286,37 +281,73 @@ export async function createContract(input: {
 
   if (docError || !doc) throw new Error(docError?.message ?? "Error al crear el contrato");
 
-  // 2. Insert signature requests
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  
-  const srInserts = input.signers.map(s => ({
-    document_id:  doc.id,
-    signer_email: s.email,
-    signer_name:  s.name,
-    status:       "PENDING",
-    expires_at:   expiresAt,
-  }));
+  if (input.signers.length > 0) {
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const srInserts = input.signers.map((s) => ({
+      document_id:  doc.id,
+      signer_email: s.email,
+      signer_name:  s.name,
+      status:       "PENDING",
+      expires_at:   expiresAt,
+    }));
+    const { error: srError } = await supabase.from("signature_requests").insert(srInserts);
+    if (srError) throw new Error(srError.message);
 
-  const { error: srError } = await supabase.from("signature_requests").insert(srInserts);
-  if (srError) throw new Error(srError.message);
+    await supabase.from("documents").update({ status: "SENT" }).eq("id", doc.id);
 
-  // 3. Update status to SENT
-  await supabase.from("documents").update({ status: "SENT" }).eq("id", doc.id);
-
-  // 4. Notify all signers by email (Edge Function — requires deploy + RESEND_API_KEY)
-  for (const s of input.signers) {
-    supabase.functions
-      .invoke("send-signing-email", {
-        body: {
-          signerEmail:   s.email,
-          signerName:    s.name,
-          documentTitle: input.title,
-          requestId:     doc.id,
-        },
-      })
-      .catch((e: unknown) => console.warn(`[email] Edge Function no disponible para ${s.email}:`, e));
+    for (const s of input.signers) {
+      supabase.functions
+        .invoke("send-signing-email", {
+          body: {
+            signerEmail:   s.email,
+            signerName:    s.name,
+            documentTitle: input.title,
+            requestId:     doc.id,
+          },
+        })
+        .catch((e: unknown) => console.warn(`[email] Edge Function no disponible para ${s.email}:`, e));
+    }
   }
 
   return mapDocToContract(doc as Record<string, unknown>);
+}
+
+/** Assign a DRAFT contract to a user → creates signature_request and changes status to SENT */
+export async function assignContractToUser(
+  documentId: string,
+  user: { email: string; name: string; dni?: string | null; cuil?: string | null; domicilio?: string | null }
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: srErr } = await supabase.from("signature_requests").insert({
+    document_id:  documentId,
+    signer_email: user.email,
+    signer_name:  user.name,
+    signer_cuil:  user.cuil ?? null,
+    status:       "PENDING",
+    expires_at:   expiresAt,
+    signing_order: 0,
+  });
+  if (srErr) throw new Error(srErr.message);
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("template_fields")
+    .eq("id", documentId)
+    .single();
+
+  const existing = (doc?.template_fields as Record<string, string>) ?? {};
+  await supabase.from("documents").update({
+    total_signers:   1,
+    status:          "SENT",
+    template_fields: {
+      ...existing,
+      nombre_firmante:    user.name,
+      email_firmante:     user.email,
+      dni_firmante:       user.dni    ?? "",
+      cuil_firmante:      user.cuil   ?? "",
+      domicilio_firmante: user.domicilio ?? "",
+    },
+  }).eq("id", documentId);
 }
 

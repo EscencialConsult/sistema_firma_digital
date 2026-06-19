@@ -37,4 +37,7 @@ export interface AdminUserSummary {
   verificationStatus: VerificationStatus;
   certificateStatus: CertificateStatus;
   createdAt: string;
+  documentNumber: string | null;
+  cuilCuit:       string | null;
+  address:        string | null;
 }
