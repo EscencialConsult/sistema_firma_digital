@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
+  Copy,
   Download,
   Eye,
   FileText,
@@ -13,16 +14,15 @@ import {
   Send,
   ShieldCheck,
   Trash2,
+  User,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Toast } from "../../shared/components/ui/Toast";
 import { Button } from "../../shared/components/ui/Button";
 import {
   getAllContracts,
-  createContract,
+  sendContractFromTemplate,
   sendDocumentToThirdParty,
-  assignContractToUser,
-  updateContractFields,
 } from "../../shared/services/contracts.service";
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
 import { getMyOrganization } from "../../shared/services/organizations.service";
@@ -43,7 +43,7 @@ import { ContractDocument, ContractDetailModal } from "./components/ContractRend
 import { RichTextEditor } from "./components/RichTextEditor";
 import { AdminConveniosTab } from "./AdminConveniosTab";
 
-// ─── Status helpers ───────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function statusMeta(status: string) {
   switch (status) {
@@ -59,196 +59,18 @@ function statusMeta(status: string) {
   }
 }
 
-// ─── Assign User Modal ────────────────────────────────────────────────────────
-
-function AssignUserModal({
-  contract,
-  orgId,
-  onClose,
-  onAssigned,
-}: {
-  contract: Contract;
-  orgId: string;
-  onClose: () => void;
-  onAssigned: (contractId: string) => void;
-}) {
-  const [authorities, setAuthorities]   = useState<OrgAuthority[]>([]);
-  const [loadingAuth, setLoadingAuth]   = useState(true);
-  const [selectedAuth, setSelectedAuth] = useState<OrgAuthority | null>(null);
-  const [authSearch, setAuthSearch]     = useState("");
-
-  const [users, setUsers]               = useState<AdminUserSummary[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
-  const [userSearch, setUserSearch]     = useState("");
-
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone]             = useState(false);
-  const [error, setError]           = useState("");
-
-  useEffect(() => {
-    getOrgAuthorities(orgId)
-      .then((all) => setAuthorities(all.filter((a) => a.status === "ACTIVE" && a.type === "PERMANENT")))
-      .finally(() => setLoadingAuth(false));
-    getAllUsers().then(setUsers).finally(() => setLoadingUsers(false));
-  }, [orgId]);
-
-  const filteredAuth = useMemo(() => {
-    if (!authSearch) return authorities;
-    const q = authSearch.toLowerCase();
-    return authorities.filter((a) => a.fullName.toLowerCase().includes(q) || a.email.toLowerCase().includes(q));
-  }, [authorities, authSearch]);
-
-  const filteredUsers = useMemo(() => {
-    const base = users.filter((u) => u.role === "USER" || u.role === "ORG_ADMIN");
-    if (!userSearch) return base;
-    const q = userSearch.toLowerCase();
-    return base.filter((u) => u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-  }, [users, userSearch]);
-
-  async function handleAssign() {
-    if (!selectedAuth || !selectedUser) return;
-    setSubmitting(true);
-    setError("");
-    try {
-      await assignContractToUser(
-        contract.id,
-        {
-          email:     selectedUser.email,
-          name:      selectedUser.fullName,
-          dni:       selectedUser.documentNumber,
-          cuil:      selectedUser.cuilCuit,
-          domicilio: selectedUser.address,
-        },
-        {
-          fullName:     selectedAuth.fullName,
-          cuil:         selectedAuth.cuil ?? selectedAuth.cuit,
-          email:        selectedAuth.email,
-          signatureUrl: selectedAuth.signatureUrl,
-        }
-      );
-      setDone(true);
-      onAssigned(contract.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al asignar");
-    } finally {
-      setSubmitting(false);
-    }
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
-
-  const searchBox = "flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 focus-within:border-zinc-400 transition";
-  const inputBase = "w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-500 outline-none";
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
-        {done ? (
-          <div className="text-center py-10 px-6 space-y-3">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
-              <Check size={24} className="text-emerald-600" />
-            </div>
-            <p className="font-bold text-zinc-900">Contrato asignado</p>
-            <p className="text-sm text-zinc-500">
-              <strong>{selectedUser?.fullName}</strong> verá el contrato pendiente en su panel.
-              Firma por Escencial: <strong>{selectedAuth?.fullName}</strong>.
-            </p>
-            <Button onClick={onClose} className="h-10 px-6 mt-2">Cerrar</Button>
-          </div>
-        ) : (
-          <>
-            <div className="border-b border-zinc-100 px-6 py-4 shrink-0">
-              <h3 className="font-bold text-zinc-900">Asignar contrato</h3>
-              <p className="text-xs text-zinc-500 mt-0.5 truncate">"{contract.title}"</p>
-            </div>
-            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
-              {/* Autoridad */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
-                  <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">1. Autoridad firmante por Escencial SAS</p>
-                </div>
-                <div className={searchBox}>
-                  <Search size={14} className="text-zinc-400 shrink-0" />
-                  <input className={inputBase} placeholder="Buscar autoridad..." value={authSearch} onChange={(e) => setAuthSearch(e.target.value)} />
-                </div>
-                {loadingAuth ? (
-                  <div className="space-y-2">{Array(2).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-50" />)}</div>
-                ) : filteredAuth.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-zinc-400">{authorities.length === 0 ? "Sin autoridades PERMANENTES activas" : "Sin resultados"}</p>
-                ) : (
-                  <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-36 overflow-y-auto">
-                    {filteredAuth.map((a) => (
-                      <button key={a.id} type="button" onClick={() => setSelectedAuth(a)}
-                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-zinc-50 ${selectedAuth?.id === a.id ? "bg-emerald-50" : ""}`}>
-                        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-800 text-[10px] font-bold text-white">
-                          {a.fullName[0]?.toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-zinc-900 truncate">{a.fullName}</p>
-                          <p className="text-xs text-zinc-500 truncate">{a.cuil || a.email}</p>
-                        </div>
-                        {selectedAuth?.id === a.id && <Check size={13} className="text-emerald-600 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {selectedAuth && (
-                  <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                    <Check size={13} className="text-emerald-600 shrink-0" />
-                    <p className="text-xs font-semibold text-emerald-800 truncate">Seleccionado: {selectedAuth.fullName}</p>
-                  </div>
-                )}
-              </div>
-              {/* Destinatario */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Send size={13} className="text-zinc-500 shrink-0" />
-                  <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">2. Destinatario (quien firma)</p>
-                </div>
-                <div className={searchBox}>
-                  <Search size={14} className="text-zinc-400 shrink-0" />
-                  <input className={inputBase} placeholder="Buscar usuario..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} />
-                </div>
-                {loadingUsers ? (
-                  <div className="space-y-2">{Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-50" />)}</div>
-                ) : filteredUsers.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-zinc-400">Sin usuarios</p>
-                ) : (
-                  <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-40 overflow-y-auto">
-                    {filteredUsers.map((u) => (
-                      <button key={u.id} type="button" onClick={() => setSelectedUser(u)}
-                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-zinc-50 ${selectedUser?.id === u.id ? "bg-zinc-100" : ""}`}>
-                        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-zinc-800 text-[10px] font-bold text-white">
-                          {u.fullName[0]?.toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-zinc-900 truncate">{u.fullName}</p>
-                          <p className="text-xs text-zinc-500 truncate">{u.email}</p>
-                        </div>
-                        {selectedUser?.id === u.id && <Check size={13} className="text-emerald-600 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {selectedUser && (
-                  <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                    <Check size={13} className="text-emerald-600 shrink-0" />
-                    <p className="text-xs font-semibold text-zinc-700 truncate">Seleccionado: {selectedUser.fullName}</p>
-                  </div>
-                )}
-              </div>
-              {error && <p className="text-xs text-red-500">{error}</p>}
-            </div>
-            <div className="border-t border-zinc-100 px-6 py-4 flex gap-3 shrink-0">
-              <Button variant="secondary" onClick={onClose} className="flex-1 h-10 text-zinc-700">Cancelar</Button>
-              <Button onClick={handleAssign} disabled={!selectedAuth || !selectedUser || submitting} className="flex-1 h-10">
-                {submitting ? "Asignando..." : <><Send size={14} /> Asignar y enviar</>}
-              </Button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+    <button type="button" onClick={copy}
+      className="grid h-5 w-5 shrink-0 place-items-center rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition">
+      {copied ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
+    </button>
   );
 }
 
@@ -323,13 +145,10 @@ function SendThirdPartyModal({
 // ─── Template Card ────────────────────────────────────────────────────────────
 
 function TemplateCard({
-  template,
-  onUse,
-  onEdit,
-  onDelete,
+  template, onSend, onEdit, onDelete,
 }: {
   template: DbContractTemplate;
-  onUse:    () => void;
+  onSend:   () => void;
   onEdit:   () => void;
   onDelete: () => void;
 }) {
@@ -380,36 +199,415 @@ function TemplateCard({
         </div>
       )}
 
-      <Button onClick={onUse} className="mt-auto h-9 w-full text-xs">
-        <ChevronRight size={13} /> Usar esta plantilla
+      <Button onClick={onSend} className="mt-auto h-9 w-full text-xs bg-zinc-900 hover:bg-zinc-700">
+        <Send size={12} /> Enviar contrato
       </Button>
+    </div>
+  );
+}
+
+// ─── Sending Flow (multi-step) ────────────────────────────────────────────────
+
+function SendingFlow({
+  template,
+  orgId,
+  onDone,
+  onBack,
+}: {
+  template: DbContractTemplate;
+  orgId:    string;
+  onDone:   (contract: Contract) => void;
+  onBack:   () => void;
+}) {
+  const [step, setStep] = useState<0 | 1 | 2>(0); // 0=firmantes, 1=variables, 2=preview+done
+
+  // Authorities
+  const [authorities, setAuthorities]   = useState<OrgAuthority[]>([]);
+  const [loadingAuth, setLoadingAuth]   = useState(true);
+  const [selectedAuth, setSelectedAuth] = useState<OrgAuthority | null>(null);
+  const [authSearch, setAuthSearch]     = useState("");
+
+  // Users
+  const [users, setUsers]               = useState<AdminUserSummary[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
+  const [userSearch, setUserSearch]     = useState("");
+
+  // Variables
+  const allVars   = useMemo(() => extractVariables(template.contentHtml), [template]);
+  const adminVars = allVars.filter((v) => !AUTO_FILL_VARS.has(v));
+  const autoVars  = allVars.filter((v) =>  AUTO_FILL_VARS.has(v));
+
+  const [varValues, setVarValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    adminVars.forEach((v) => { init[v] = ""; });
+    return init;
+  });
+
+  // Auto-fill user vars when user changes
+  useEffect(() => {
+    if (!selectedUser) return;
+    setVarValues((prev) => ({
+      ...prev,
+      nombre_usuario:    selectedUser.fullName,
+      email_usuario:     selectedUser.email,
+      dni_usuario:       selectedUser.documentNumber  ?? "",
+      cuil_usuario:      selectedUser.cuilCuit        ?? "",
+      domicilio_usuario: selectedUser.address         ?? "",
+    }));
+  }, [selectedUser]);
+
+  // Sending
+  const [sending, setSending] = useState(false);
+  const [error, setError]     = useState("");
+  const [done, setDone]       = useState(false);
+  const [sentContract, setSentContract] = useState<Contract | null>(null);
+
+  useEffect(() => {
+    getOrgAuthorities(orgId)
+      .then((all) => setAuthorities(all.filter((a) => a.status === "ACTIVE" && a.type === "PERMANENT")))
+      .finally(() => setLoadingAuth(false));
+    getAllUsers().then(setUsers).finally(() => setLoadingUsers(false));
+  }, [orgId]);
+
+  const filteredAuth = useMemo(() => {
+    if (!authSearch) return authorities;
+    const q = authSearch.toLowerCase();
+    return authorities.filter((a) => a.fullName.toLowerCase().includes(q) || a.email.toLowerCase().includes(q));
+  }, [authorities, authSearch]);
+
+  const filteredUsers = useMemo(() => {
+    const base = users.filter((u) => u.role === "USER" || u.role === "ORG_ADMIN");
+    if (!userSearch) return base;
+    const q = userSearch.toLowerCase();
+    return base.filter((u) => u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  }, [users, userSearch]);
+
+  const allAdminFilled = adminVars.every((v) => !!varValues[v]?.trim());
+
+  const previewFields = useMemo(() => ({
+    _templateContent: template.contentHtml,
+    _legalTitle:      template.name,
+    _dbTemplateId:    template.id,
+    ...varValues,
+  }), [template, varValues]);
+
+  async function handleSend() {
+    if (!selectedAuth || !selectedUser) return;
+    setSending(true);
+    setError("");
+    try {
+      const templateFields: Record<string, string> = {
+        _templateContent: template.contentHtml,
+        _legalTitle:      template.name,
+        _dbTemplateId:    template.id,
+        ...varValues,
+      };
+      const contract = await sendContractFromTemplate({
+        title:          template.name,
+        description:    template.description || template.name,
+        templateFields,
+        user: {
+          email:     selectedUser.email,
+          name:      selectedUser.fullName,
+          dni:       selectedUser.documentNumber,
+          cuil:      selectedUser.cuilCuit,
+          domicilio: selectedUser.address,
+        },
+        authority: {
+          fullName:     selectedAuth.fullName,
+          cuil:         selectedAuth.cuil ?? selectedAuth.cuit,
+          email:        selectedAuth.email,
+          signatureUrl: selectedAuth.signatureUrl,
+        },
+      });
+      setSentContract(contract);
+      setDone(true);
+      onDone(contract);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al enviar");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const searchBox = "flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 focus-within:border-zinc-400 transition";
+  const inputBase = "w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-500 outline-none";
+
+  if (done && sentContract) {
+    return (
+      <div className="flex flex-col items-center py-20 text-center max-w-sm mx-auto gap-4">
+        <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
+          <Check size={36} className="text-emerald-600" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-zinc-900">Contrato enviado</h3>
+          <p className="text-sm text-zinc-500 mt-2">
+            <strong>{selectedUser?.fullName}</strong> verá el contrato pendiente en su panel.<br />
+            Firma por Escencial: <strong>{selectedAuth?.fullName}</strong>.
+          </p>
+        </div>
+        <Button onClick={onBack} className="h-10 px-6 mt-2">Ver contratos</Button>
+      </div>
+    );
+  }
+
+  // ── Step 0: Seleccionar firmantes ──
+  if (step === 0) {
+    return (
+      <div className="max-w-3xl space-y-6">
+        <p className="text-sm text-zinc-400">Elegí la autoridad que firma por Escencial SAS y el usuario que recibirá el contrato.</p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Autoridad */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
+              <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Autoridad firmante (Escencial SAS)</p>
+            </div>
+            <div className={searchBox}>
+              <Search size={14} className="text-zinc-400 shrink-0" />
+              <input className={inputBase} placeholder="Buscar autoridad..." value={authSearch} onChange={(e) => setAuthSearch(e.target.value)} />
+            </div>
+            {loadingAuth ? (
+              <div className="space-y-2">{Array(2).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-100" />)}</div>
+            ) : filteredAuth.length === 0 ? (
+              <p className="py-4 text-center text-xs text-zinc-400">{authorities.length === 0 ? "Sin autoridades PERMANENTES activas" : "Sin resultados"}</p>
+            ) : (
+              <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-52 overflow-y-auto">
+                {filteredAuth.map((a) => (
+                  <button key={a.id} type="button" onClick={() => setSelectedAuth(a)}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-zinc-50 ${selectedAuth?.id === a.id ? "bg-emerald-50" : ""}`}>
+                    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-800 text-[10px] font-bold text-white">
+                      {a.fullName[0]?.toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-zinc-900 truncate">{a.fullName}</p>
+                      <p className="text-xs text-zinc-500 truncate">{a.cuil || a.email}</p>
+                    </div>
+                    {selectedAuth?.id === a.id && <Check size={13} className="text-emerald-600 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedAuth && (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                <Check size={12} className="text-emerald-600 shrink-0" />
+                <p className="text-xs font-semibold text-emerald-800 truncate">{selectedAuth.fullName}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Destinatario */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <User size={13} className="text-zinc-500 shrink-0" />
+              <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Destinatario (quien firma)</p>
+            </div>
+            <div className={searchBox}>
+              <Search size={14} className="text-zinc-400 shrink-0" />
+              <input className={inputBase} placeholder="Buscar usuario..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} />
+            </div>
+            {loadingUsers ? (
+              <div className="space-y-2">{Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-100" />)}</div>
+            ) : filteredUsers.length === 0 ? (
+              <p className="py-4 text-center text-xs text-zinc-400">Sin usuarios</p>
+            ) : (
+              <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-52 overflow-y-auto">
+                {filteredUsers.map((u) => (
+                  <button key={u.id} type="button" onClick={() => setSelectedUser(u)}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-zinc-50 ${selectedUser?.id === u.id ? "bg-zinc-100" : ""}`}>
+                    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-zinc-800 text-[10px] font-bold text-white">
+                      {u.fullName[0]?.toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-zinc-900 truncate">{u.fullName}</p>
+                      <p className="text-xs text-zinc-500 truncate">{u.email}</p>
+                    </div>
+                    {selectedUser?.id === u.id && <Check size={13} className="text-emerald-600 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedUser && (
+              <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                <Check size={12} className="text-zinc-600 shrink-0" />
+                <p className="text-xs font-semibold text-zinc-700 truncate">{selectedUser.fullName}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-between">
+          <Button variant="secondary" onClick={onBack} className="h-10 px-5 text-zinc-700">
+            <ArrowLeft size={14} /> Volver
+          </Button>
+          <Button onClick={() => setStep(1)} disabled={!selectedAuth || !selectedUser} className="h-10 px-6">
+            Completar variables <ChevronRight size={14} />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step 1: Variables + datos del usuario ──
+  if (step === 1) {
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Variables a completar */}
+          <div className="space-y-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Variables del contrato</p>
+
+            {/* Auto-fill (usuario) */}
+            {autoVars.length > 0 && (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">Auto-completadas del usuario</p>
+                {autoVars.map((v) => (
+                  <div key={v} className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-mono text-emerald-700">{"{{"}{v}{"}}"}</span>
+                    <span className="text-[11px] text-emerald-800 font-semibold truncate max-w-[140px]">
+                      {varValues[v] || "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Admin vars */}
+            {adminVars.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Completar manualmente</p>
+                {adminVars.map((v) => {
+                  const isLong = v.includes("objeto") || v.includes("descripcion");
+                  const isDate = v.includes("fecha");
+                  const isNum  = v.includes("monto") || v.includes("cuotas");
+                  return (
+                    <div key={v}>
+                      <label className="mb-1 block text-xs font-semibold text-zinc-400">
+                        {VAR_LABELS[v] ?? v.replace(/_/g, " ")}
+                      </label>
+                      {isLong ? (
+                        <textarea value={varValues[v] ?? ""} rows={2} placeholder={`{{${v}}}`}
+                          onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
+                          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition resize-none" />
+                      ) : (
+                        <input type={isDate ? "date" : isNum ? "number" : "text"}
+                          value={varValues[v] ?? ""} placeholder={`{{${v}}}`}
+                          onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
+                          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-400">
+                No hay variables manuales — todo se auto-completa.
+              </div>
+            )}
+          </div>
+
+          {/* Datos del usuario (referencia) */}
+          <div className="space-y-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Datos del usuario</p>
+            {selectedUser && (
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-zinc-800 text-sm font-bold text-white">
+                    {selectedUser.fullName[0]?.toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-zinc-900 text-sm">{selectedUser.fullName}</p>
+                    <p className="text-xs text-zinc-500">{selectedUser.email}</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pt-1">
+                  {[
+                    { label: "Nombre completo", value: selectedUser.fullName },
+                    { label: "Email",           value: selectedUser.email },
+                    { label: "DNI",             value: selectedUser.documentNumber ?? "—" },
+                    { label: "CUIL/CUIT",       value: selectedUser.cuilCuit ?? "—" },
+                    { label: "Domicilio",       value: selectedUser.address ?? "—" },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-zinc-500 shrink-0">{label}</span>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="font-medium text-zinc-800 truncate">{value}</span>
+                        {value !== "—" && <CopyButton value={value} />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-zinc-400 pt-1">
+                  Los datos del usuario se mapean automáticamente a las variables del contrato marcadas en verde.
+                  Podés copiar cualquier dato para usarlo en una variable manual.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
+        <div className="flex justify-between">
+          <Button variant="secondary" onClick={() => setStep(0)} className="h-10 px-5 text-zinc-700">
+            <ArrowLeft size={14} /> Atrás
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setStep(2)} disabled={!allAdminFilled && adminVars.length > 0} className="h-10 px-5 text-zinc-700">
+              <Eye size={14} /> Vista previa
+            </Button>
+            <Button onClick={handleSend} disabled={(!allAdminFilled && adminVars.length > 0) || sending} className="h-10 px-6">
+              {sending ? "Enviando..." : <><Send size={14} /> Enviar contrato</>}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Step 2: Preview ──
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-zinc-400">Vista previa con todos los datos. Las variables en verde son del usuario.</p>
+        <Button variant="secondary" onClick={() => setStep(1)} className="h-8 px-3 text-xs text-zinc-700">
+          <Pencil size={11} /> Editar
+        </Button>
+      </div>
+      <ContractDocument templateId="custom" fields={previewFields} alumnos={[]} />
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <div className="flex justify-between">
+        <Button variant="secondary" onClick={() => setStep(1)} className="h-10 px-5 text-zinc-700">
+          <ArrowLeft size={14} /> Atrás
+        </Button>
+        <Button onClick={handleSend} disabled={sending} className="h-10 px-6 bg-emerald-600 hover:bg-emerald-700 text-white">
+          {sending ? "Enviando..." : <><Send size={14} /> Enviar contrato</>}
+        </Button>
+      </div>
     </div>
   );
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type PageView = "list" | "templates" | "editor" | "filling";
+type PageView = "list" | "templates" | "editor" | "sending";
 
 export function AdminContractsPage() {
   const [activeTab, setActiveTab] = useState<"contracts" | "convenios">("contracts");
   const [orgId, setOrgId]         = useState<string | null>(null);
-  const [hasActiveAuthority, setHasActiveAuthority] = useState<boolean | null>(null);
 
-  // Contract list state
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading]     = useState(true);
   const [filter, setFilter]       = useState<"all" | "pending" | "signed" | "rejected">("all");
   const [search, setSearch]       = useState("");
   const [viewContract, setViewContract]     = useState<Contract | null>(null);
   const [sendThirdParty, setSendThirdParty] = useState<Contract | null>(null);
-  const [assignTarget, setAssignTarget]     = useState<Contract | null>(null);
 
-  // DB Template state
   const [dbTemplates, setDbTemplates]           = useState<DbContractTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
 
-  // Page view
   const [view, setView] = useState<PageView>("list");
 
   // Editor state
@@ -419,39 +617,26 @@ export function AdminContractsPage() {
   const [tplHtml, setTplHtml] = useState("");
   const [savingTpl, setSavingTpl] = useState(false);
 
-  // Filling state
-  const [activeTemplate, setActiveTemplate]         = useState<DbContractTemplate | null>(null);
-  const [varValues, setVarValues]                   = useState<Record<string, string>>({});
-  const [showPreview, setShowPreview]               = useState(false);
-  const [editingContractId, setEditingContractId]   = useState<string | null>(null);
-  const [creatingContract, setCreatingContract]     = useState(false);
-  const [contractDone, setContractDone]             = useState(false);
+  // Sending state
+  const [sendingTemplate, setSendingTemplate] = useState<DbContractTemplate | null>(null);
 
-  // Toast
   const [toast, setToast] = useState({ visible: false, message: "" });
   const showToast = (message: string) => setToast({ visible: true, message });
 
-  const redirectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  // ── Init ──
   useEffect(() => {
     getAllContracts().then((c) => { setContracts(c); setLoading(false); });
     getMyOrganization().then((org) => {
-      if (!org) { setHasActiveAuthority(false); return; }
+      if (!org) return;
       setOrgId(org.id);
-      return getOrgAuthorities(org.id).then((auths) => {
-        setHasActiveAuthority(auths.some((a) => a.status === "ACTIVE"));
-      });
-    }).catch(() => setHasActiveAuthority(null));
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "contracts" || !orgId) return;
+    if (!orgId) return;
     setLoadingTemplates(true);
     getContractTemplates(orgId).then(setDbTemplates).finally(() => setLoadingTemplates(false));
-  }, [activeTab, orgId]);
+  }, [orgId]);
 
-  // ── Contract list filter ──
   const filtered = useMemo(() => {
     let list = contracts;
     if (filter === "pending") list = list.filter((c) => ["SENT","VIEWED","CONFORMITY_ACCEPTED"].includes(c.status));
@@ -503,98 +688,11 @@ export function AdminContractsPage() {
   }
 
   async function handleDeleteTemplate(id: string) {
-    if (!window.confirm("¿Eliminar esta plantilla? Los contratos ya creados no se ven afectados.")) return;
+    if (!window.confirm("¿Eliminar esta plantilla?")) return;
     await deleteContractTemplate(id);
     setDbTemplates((prev) => prev.filter((t) => t.id !== id));
     showToast("Plantilla eliminada.");
   }
-
-  // ── Contract creation from template ──
-
-  function useTemplate(tpl: DbContractTemplate) {
-    setActiveTemplate(tpl);
-    const vars = extractVariables(tpl.contentHtml);
-    const initial: Record<string, string> = {};
-    vars.filter((v) => !AUTO_FILL_VARS.has(v)).forEach((v) => { initial[v] = ""; });
-    setVarValues(initial);
-    setShowPreview(false);
-    setContractDone(false);
-    setEditingContractId(null);
-    setView("filling");
-  }
-
-  function editContractFilling(contract: Contract) {
-    const dbTplId = contract.templateFields?._dbTemplateId;
-    const tpl = dbTplId ? dbTemplates.find((t) => t.id === dbTplId) : null;
-    if (!tpl) return;
-    setActiveTemplate(tpl);
-    const vars = extractVariables(tpl.contentHtml);
-    const initial: Record<string, string> = {};
-    vars.filter((v) => !AUTO_FILL_VARS.has(v)).forEach((v) => {
-      initial[v] = contract.templateFields?.[v] ?? "";
-    });
-    setVarValues(initial);
-    setShowPreview(false);
-    setContractDone(false);
-    setEditingContractId(contract.id);
-    setView("filling");
-  }
-
-  const fillingVars = useMemo(() => activeTemplate ? extractVariables(activeTemplate.contentHtml) : [], [activeTemplate]);
-  const adminVars   = fillingVars.filter((v) => !AUTO_FILL_VARS.has(v));
-  const autoVars    = fillingVars.filter((v) => AUTO_FILL_VARS.has(v));
-  const allAdminFilled = adminVars.every((v) => !!varValues[v]?.trim());
-
-  const previewFields = useMemo(() => {
-    if (!activeTemplate) return {};
-    return {
-      _templateContent: activeTemplate.contentHtml,
-      _legalTitle:      activeTemplate.name,
-      _dbTemplateId:    activeTemplate.id,
-      ...varValues,
-    };
-  }, [activeTemplate, varValues]);
-
-  async function handleCreateContract() {
-    if (!activeTemplate) return;
-    setCreatingContract(true);
-    try {
-      const templateFields: Record<string, string> = {
-        _templateContent: activeTemplate.contentHtml,
-        _legalTitle:      activeTemplate.name,
-        _dbTemplateId:    activeTemplate.id,
-        ...varValues,
-      };
-      if (editingContractId) {
-        await updateContractFields(editingContractId, templateFields);
-        setContracts((prev) => prev.map((c) => c.id === editingContractId ? { ...c, templateFields } : c));
-        showToast("Cambios guardados.");
-      } else {
-        const newContract = await createContract({
-          title:          activeTemplate.name,
-          description:    activeTemplate.description || activeTemplate.name,
-          templateId:     "custom",
-          templateFields,
-          signers:        [],
-        });
-        setContracts((c) => [newContract, ...c]);
-        showToast("Contrato creado como borrador.");
-      }
-      setContractDone(true);
-      redirectTimer.current = setTimeout(() => {
-        setView("list");
-        setContractDone(false);
-        setActiveTemplate(null);
-        setEditingContractId(null);
-      }, 3000);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Error");
-    } finally {
-      setCreatingContract(false);
-    }
-  }
-
-  useEffect(() => () => clearTimeout(redirectTimer.current), []);
 
   // ─── Editor view ───────────────────────────────────────────────────────────
 
@@ -628,11 +726,8 @@ export function AdminContractsPage() {
           </div>
         </div>
 
-        <RichTextEditor
-          value={tplHtml}
-          onChange={setTplHtml}
-          placeholder="Redactá el contrato aquí. Usá las variables del panel derecho para insertar datos dinámicos..."
-        />
+        <RichTextEditor value={tplHtml} onChange={setTplHtml}
+          placeholder="Redactá el contrato. Usá las variables del panel derecho para insertar datos dinámicos..." />
 
         <div className="flex justify-between">
           <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-5 text-zinc-700">
@@ -678,7 +773,7 @@ export function AdminContractsPage() {
             </div>
             <div>
               <p className="font-semibold text-zinc-700">Sin plantillas</p>
-              <p className="text-sm text-zinc-400 mt-1">Creá tu primera plantilla de contrato con el editor.</p>
+              <p className="text-sm text-zinc-400 mt-1">Creá tu primera plantilla para poder enviar contratos.</p>
             </div>
             <Button onClick={openNewTemplate} className="h-10 px-5">
               <Plus size={14} /> Crear primera plantilla
@@ -690,7 +785,7 @@ export function AdminContractsPage() {
               <TemplateCard
                 key={tpl.id}
                 template={tpl}
-                onUse={() => useTemplate(tpl)}
+                onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
                 onEdit={() => openEditTemplate(tpl)}
                 onDelete={() => handleDeleteTemplate(tpl.id)}
               />
@@ -703,115 +798,31 @@ export function AdminContractsPage() {
     );
   }
 
-  // ─── Filling view ──────────────────────────────────────────────────────────
+  // ─── Sending view ──────────────────────────────────────────────────────────
 
-  if (view === "filling" && activeTemplate) {
+  if (view === "sending" && sendingTemplate && orgId) {
     return (
       <div className="min-h-screen space-y-6">
         <div className="flex items-center gap-4">
-          <button type="button" onClick={() => { setView("templates"); setShowPreview(false); }}
+          <button type="button" onClick={() => setView("templates")}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition">
             <ArrowLeft size={15} />
           </button>
           <div>
-            <p className="text-xs text-zinc-600">Admin · Contratos · {editingContractId ? "Editar" : "Nuevo"}</p>
-            <h2 className="font-bold text-zinc-900">{activeTemplate.name}</h2>
+            <p className="text-xs text-zinc-600">Admin · Plantillas · Enviar</p>
+            <h2 className="font-bold text-zinc-900">{sendingTemplate.name}</h2>
           </div>
         </div>
 
-        {contractDone ? (
-          <div className="flex flex-col items-center py-20 text-center max-w-sm mx-auto gap-4">
-            <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
-              <Check size={36} className="text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-zinc-900">{editingContractId ? "Cambios guardados" : "Contrato creado"}</h3>
-              <p className="text-sm text-zinc-500 mt-2">
-                {editingContractId
-                  ? "Los campos del contrato fueron actualizados."
-                  : "Borrador guardado. Asignalo a un usuario desde la lista."}
-              </p>
-            </div>
-            <Button onClick={() => { setView("list"); setContractDone(false); }} className="h-10 px-5">
-              Ver contratos
-            </Button>
-          </div>
-        ) : showPreview ? (
-          <div className="space-y-5 max-w-3xl">
-            <p className="text-sm text-zinc-400">
-              Las variables en verde se completan al asignar. Los datos del firmante y la autoridad se cargan en ese paso.
-            </p>
-            <ContractDocument templateId="custom" fields={previewFields} alumnos={[]} />
-            <div className="flex justify-between pt-2">
-              <Button variant="secondary" onClick={() => setShowPreview(false)} className="h-10 px-5 text-zinc-700">
-                <ArrowLeft size={14} /> Volver
-              </Button>
-              <Button onClick={handleCreateContract} disabled={creatingContract} className="h-10 px-6 bg-emerald-600 hover:bg-emerald-700 text-white">
-                {creatingContract ? "Guardando..." : <><Check size={14} /> {editingContractId ? "Guardar cambios" : "Guardar borrador"}</>}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="max-w-2xl space-y-6">
-            {adminVars.length > 0 ? (
-              <div className="space-y-4">
-                <p className="text-sm font-semibold text-zinc-700">Completá los datos del contrato:</p>
-                <div className="grid grid-cols-2 gap-4">
-                  {adminVars.map((v) => {
-                    const isLong = v.includes("objeto") || v.includes("descripcion");
-                    const isDate = v.includes("fecha");
-                    const isNum  = v.includes("monto") || v.includes("cuotas");
-                    return (
-                      <div key={v} className={isLong ? "col-span-2" : ""}>
-                        <label className="mb-1 block text-xs font-semibold text-zinc-400">
-                          {VAR_LABELS[v] ?? v.replace(/_/g, " ")}
-                        </label>
-                        {isLong ? (
-                          <textarea value={varValues[v] ?? ""} rows={3} placeholder={`{{${v}}}`}
-                            onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
-                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition resize-none" />
-                        ) : (
-                          <input
-                            type={isDate ? "date" : isNum ? "number" : "text"}
-                            value={varValues[v] ?? ""} placeholder={`{{${v}}}`}
-                            onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
-                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 text-sm text-zinc-500">
-                Esta plantilla no tiene variables para completar.
-              </div>
-            )}
-
-            {autoVars.length > 0 && (
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 space-y-2">
-                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Variables automáticas</p>
-                <p className="text-xs text-emerald-600">Se completan al asignar a un usuario:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {autoVars.map((v) => (
-                    <span key={v} className="rounded-full border border-emerald-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                      {"{{"}{v}{"}}"} — {VAR_LABELS[v] ?? v}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between pt-2">
-              <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-5 text-zinc-700">
-                <ArrowLeft size={14} /> Cambiar plantilla
-              </Button>
-              <Button onClick={() => setShowPreview(true)} disabled={!allAdminFilled && adminVars.length > 0} className="h-10 px-6">
-                Ver contrato <ChevronRight size={14} />
-              </Button>
-            </div>
-          </div>
-        )}
+        <SendingFlow
+          template={sendingTemplate}
+          orgId={orgId}
+          onDone={(contract) => {
+            setContracts((prev) => [contract, ...prev]);
+            showToast("Contrato enviado exitosamente.");
+          }}
+          onBack={() => setView("list")}
+        />
 
         <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
       </div>
@@ -826,17 +837,6 @@ export function AdminContractsPage() {
       {sendThirdParty && (
         <SendThirdPartyModal contract={sendThirdParty} onClose={() => setSendThirdParty(null)}
           onSent={(id) => setContracts((prev) => prev.map((x) => x.id === id ? { ...x, status: "SENT", totalSigners: x.totalSigners + 1 } : x))} />
-      )}
-      {assignTarget && orgId && (
-        <AssignUserModal
-          contract={assignTarget}
-          orgId={orgId}
-          onClose={() => setAssignTarget(null)}
-          onAssigned={(id) => {
-            setContracts((prev) => prev.map((x) => x.id === id ? { ...x, status: "SENT", totalSigners: 1 } : x));
-            setAssignTarget(null);
-          }}
-        />
       )}
 
       <div className="space-y-6">
@@ -862,30 +862,14 @@ export function AdminContractsPage() {
         {activeTab === "contracts" && (
           <>
             <div className="flex items-start justify-between gap-4">
-              <p className="text-sm text-zinc-500">{contracts.length} contratos</p>
-              <div className="flex gap-2 shrink-0">
-                <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-4 text-zinc-700">
-                  <LayoutTemplate size={14} /> Plantillas
-                  {dbTemplates.length > 0 && (
-                    <span className="ml-1 rounded-full bg-zinc-200 text-zinc-700 text-[10px] px-1.5 py-0.5 font-bold">{dbTemplates.length}</span>
-                  )}
-                </Button>
-                <Button onClick={() => setView("templates")} disabled={hasActiveAuthority === false} className="h-10 px-4"
-                  title={hasActiveAuthority === false ? "Configurá una autoridad firmante primero" : undefined}>
-                  <Plus size={15} /> Nuevo contrato
-                </Button>
-              </div>
+              <p className="text-sm text-zinc-500">{contracts.filter((c) => c.status !== "DRAFT").length} contratos enviados</p>
+              <Button onClick={() => setView("templates")} className="h-10 px-4 shrink-0">
+                <LayoutTemplate size={14} /> Plantillas y envío
+                {dbTemplates.length > 0 && (
+                  <span className="ml-1 rounded-full bg-white/20 text-white text-[10px] px-1.5 py-0.5 font-bold">{dbTemplates.length}</span>
+                )}
+              </Button>
             </div>
-
-            {hasActiveAuthority === false && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
-                <p className="font-semibold">Sin autoridad firmante activa</p>
-                <p className="mt-0.5 text-amber-700">
-                  Configurá al menos una autoridad PERMANENTE activa en{" "}
-                  <a href="/settings" className="underline hover:text-amber-900">Configuración → Autoridades</a>.
-                </p>
-              </div>
-            )}
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <div className="flex flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 focus-within:border-zinc-300">
@@ -912,13 +896,14 @@ export function AdminContractsPage() {
                   <Files size={32} className="text-zinc-700 mx-auto mb-2" />
                   <p className="text-sm text-zinc-500">Sin contratos en este estado</p>
                   <button type="button" onClick={() => setView("templates")}
-                    className="mt-3 text-xs text-zinc-500 underline hover:text-zinc-700">Crear el primero</button>
+                    className="mt-3 text-xs text-zinc-500 underline hover:text-zinc-700">
+                    Ir a Plantillas para enviar
+                  </button>
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-100">
                   {filtered.map((c) => {
                     const { label, className } = statusMeta(c.status);
-                    const isCustom = !!(c.templateFields?._dbTemplateId || c.templateFields?._templateContent);
                     return (
                       <div key={c.id}
                         className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-50 transition sm:flex-row sm:items-center sm:justify-between group">
@@ -929,7 +914,7 @@ export function AdminContractsPage() {
                           <div className="min-w-0">
                             <p className="font-semibold text-zinc-900 truncate">{c.title}</p>
                             <p className="text-xs text-zinc-500 mt-0.5">
-                              {c.ownerEmail} · v{c.versionNumber} · {new Date(c.updatedAt).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })}
+                              {c.ownerEmail} · {new Date(c.updatedAt).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })}
                             </p>
                           </div>
                         </div>
@@ -938,19 +923,6 @@ export function AdminContractsPage() {
                             <span className="text-xs text-zinc-600 hidden sm:inline">{c.completedSigners}/{c.totalSigners} firmas</span>
                           )}
                           <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${className}`}>{label}</span>
-
-                          {c.status === "DRAFT" && isCustom && (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); editContractFilling(c); }}
-                              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 transition">
-                              <Pencil size={11} /> Editar
-                            </button>
-                          )}
-                          {c.status === "DRAFT" && (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); setAssignTarget(c); }}
-                              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-white hover:bg-zinc-700 transition">
-                              <Send size={11} /> Asignar
-                            </button>
-                          )}
                           {c.status === "COMPLETED" && (
                             <button type="button" onClick={(e) => { e.stopPropagation(); setSendThirdParty(c); }}
                               className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-100 transition">
