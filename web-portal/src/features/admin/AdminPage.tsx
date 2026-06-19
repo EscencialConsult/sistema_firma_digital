@@ -17,7 +17,7 @@ function UsersListModal({ onClose, onSelectUser }: UsersListModalProps) {
   const { data: users, loading, error } = useApiResource(adminApi.listUsers, []);
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-zinc-950/20 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-40 grid place-items-center bg-white/20 p-4 backdrop-blur-[2px]">
       <div className="w-full max-w-2xl rounded-2xl border border-zinc-200/50 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         <header className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 bg-white sticky top-0 z-10">
           <div>
@@ -114,7 +114,7 @@ function UserDetailsModal({ userId, onClose }: UserDetailsModalProps) {
   }, [userId]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/20 p-4 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-white/20 p-4 backdrop-blur-[2px]">
       <div className="w-full max-w-xl rounded-2xl border border-zinc-200/50 bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         <header className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 bg-white sticky top-0 z-10">
           <div>
@@ -142,7 +142,7 @@ function UserDetailsModal({ userId, onClose }: UserDetailsModalProps) {
               {/* Profile card summary */}
               <div className="rounded-2xl border border-zinc-200/50 bg-zinc-50/20 p-5 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-900 text-white font-bold text-sm">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-white text-zinc-900 font-bold text-sm">
                     {details.user.full_name.slice(0, 2).toUpperCase()}
                   </div>
                   <div>

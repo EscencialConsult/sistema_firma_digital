@@ -86,13 +86,22 @@ function ConformityStep({
             <ContractDocument
               templateId={request.templateId}
               fields={request.templateFields}
-              alumno={{
-                nombre:    request.signerName,
-                email:     request.signerEmail,
-                dni:       request.templateFields.dni_firmante      ?? request.templateFields.documento_numero ?? "",
-                cuil:      request.templateFields.cuil_firmante     ?? request.templateFields.cuil_cuit        ?? "",
-                domicilio: request.templateFields.domicilio_firmante ?? "",
-              }}
+              alumnos={[
+                {
+                  nombre:    request.templateFields.nombre_firmante || request.signerName,
+                  email:     request.templateFields.email_firmante || request.signerEmail,
+                  dni:       request.templateFields.dni_firmante || request.templateFields.documento_numero || "",
+                  cuil:      request.templateFields.cuil_firmante || request.templateFields.cuil_cuit || "",
+                  domicilio: request.templateFields.domicilio_firmante || "",
+                },
+                {
+                  nombre:    request.templateFields.nombre_firmante_2 || "",
+                  email:     request.templateFields.email_firmante_2 || "",
+                  dni:       request.templateFields.dni_firmante_2 || "",
+                  cuil:      request.templateFields.cuil_firmante_2 || "",
+                  domicilio: request.templateFields.domicilio_firmante_2 || "",
+                }
+              ]}
             />
           </div>
         ) : (

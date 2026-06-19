@@ -24,10 +24,10 @@ function formatDate(iso: string | null) {
 
 function statusBadge(status: string) {
   switch (status) {
-    case "VERIFIED":  return "text-emerald-400 bg-emerald-900/30 border-emerald-800";
-    case "IN_REVIEW": return "text-amber-400 bg-amber-900/30 border-amber-800";
-    case "REJECTED":  return "text-red-400 bg-red-900/30 border-red-800";
-    default:          return "text-zinc-400 bg-zinc-800 border-zinc-700";
+    case "VERIFIED":  return "text-emerald-700 bg-emerald-50 border-emerald-200";
+    case "IN_REVIEW": return "text-amber-700 bg-amber-50 border-amber-200";
+    case "REJECTED":  return "text-red-600 bg-red-900/30 border-red-200";
+    default:          return "text-zinc-400 bg-zinc-50 border-zinc-200";
   }
 }
 
@@ -36,13 +36,13 @@ function statusBadge(status: string) {
 function DocImage({ url, label }: { url?: string; label: string }) {
   if (!url) {
     return (
-      <div className="flex items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-800 text-zinc-600 text-xs" style={{ minHeight: 158 }}>
+      <div className="flex items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-600 text-xs" style={{ minHeight: 158 }}>
         Sin imagen
       </div>
     );
   }
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-zinc-800" style={{ minHeight: 158 }}>
+    <div className="relative overflow-hidden rounded-2xl bg-zinc-50" style={{ minHeight: 158 }}>
       <img
         src={url}
         alt={label}
@@ -50,7 +50,7 @@ function DocImage({ url, label }: { url?: string; label: string }) {
         style={{ minHeight: 158, maxHeight: 260 }}
       />
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
-        <p className="text-[8px] font-bold tracking-widest text-white/70 uppercase">{label}</p>
+        <p className="text-[8px] font-bold tracking-widest text-zinc-900/70 uppercase">{label}</p>
       </div>
     </div>
   );
@@ -92,19 +92,19 @@ function VerificationCard({
   const selfieDoc = verification.documents.find((d) => d.type === "SELFIE");
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
       {/* Header */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left hover:bg-zinc-800/40 transition"
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left hover:bg-zinc-50/40 transition"
         type="button"
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-800">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-50">
             <IdCard size={16} className="text-zinc-400" />
           </div>
           <div className="min-w-0">
-            <p className="font-semibold text-zinc-100 truncate">{pd?.fullName ?? "Sin nombre"}</p>
+            <p className="font-semibold text-zinc-900 truncate">{pd?.fullName ?? "Sin nombre"}</p>
             <p className="text-xs text-zinc-500">
               DNI {pd?.documentNumber ?? "—"} · Enviado {formatDate(verification.submittedAt)}
             </p>
@@ -120,7 +120,7 @@ function VerificationCard({
 
       {/* Expanded details */}
       {expanded && (
-        <div className="border-t border-zinc-800 px-5 py-5 space-y-6">
+        <div className="border-t border-zinc-200 px-5 py-5 space-y-6">
 
           {/* Personal data grid */}
           {pd && (
@@ -135,7 +135,7 @@ function VerificationCard({
               ] as [string, string][]).map(([label, value]) => (
                 <div key={label}>
                   <p className="text-xs text-zinc-600">{label}</p>
-                  <p className="font-medium text-zinc-300">{value}</p>
+                  <p className="font-medium text-zinc-700">{value}</p>
                 </div>
               ))}
             </div>
@@ -168,7 +168,7 @@ function VerificationCard({
               {rejectMode ? (
                 <div className="space-y-2">
                   <textarea
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-sm text-zinc-300 placeholder:text-zinc-600 outline-none focus:border-zinc-500 resize-none"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700 placeholder:text-zinc-600 outline-none focus:border-zinc-500 resize-none"
                     placeholder="Motivo del rechazo (visible para el usuario)..."
                     rows={3}
                     value={reason}
@@ -200,8 +200,8 @@ function VerificationCard({
           )}
 
           {verification.status === "REJECTED" && verification.rejectionReason && (
-            <div className="rounded-xl border border-red-900 bg-red-900/20 p-4">
-              <p className="text-xs font-semibold text-red-400 mb-1">Motivo del rechazo:</p>
+            <div className="rounded-xl border border-red-900 bg-red-50 p-4">
+              <p className="text-xs font-semibold text-red-600 mb-1">Motivo del rechazo:</p>
               <p className="text-sm text-red-300 leading-relaxed">{verification.rejectionReason}</p>
             </div>
           )}
@@ -241,7 +241,7 @@ export function AdminKycReviewPage() {
     <div className="space-y-6">
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-zinc-600">Admin</p>
-        <h1 className="mt-1 text-2xl font-bold text-white">Verificaciones KYC</h1>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-900">Verificaciones KYC</h1>
         <p className="mt-1 text-sm text-zinc-500">
           Revisá la documentación de identidad y aprobá o rechazá cada solicitud.
         </p>
@@ -259,8 +259,8 @@ export function AdminKycReviewPage() {
             type="button"
             className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
               filter === key
-                ? "border-zinc-400 bg-zinc-700 text-white"
-                : "border-zinc-700 bg-transparent text-zinc-500 hover:border-zinc-600 hover:text-zinc-400"
+                ? "border-zinc-400 bg-zinc-700 text-zinc-900"
+                : "border-zinc-200 bg-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-400"
             }`}
           >
             {label}
@@ -271,7 +271,7 @@ export function AdminKycReviewPage() {
       {loading ? (
         <div className="space-y-4">
           {Array(2).fill(null).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-zinc-800" />
+            <div key={i} className="h-20 animate-pulse rounded-2xl bg-zinc-50" />
           ))}
         </div>
       ) : filtered.length === 0 ? (

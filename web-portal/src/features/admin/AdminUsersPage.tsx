@@ -30,10 +30,10 @@ import {
 
 function verBadge(status: string) {
   switch (status) {
-    case "VERIFIED":  return "text-emerald-400 bg-emerald-900/30 border-emerald-800";
-    case "IN_REVIEW": return "text-amber-400 bg-amber-900/30 border-amber-800";
-    case "REJECTED":  return "text-red-400 bg-red-900/30 border-red-800";
-    default:          return "text-zinc-400 bg-zinc-800 border-zinc-700";
+    case "VERIFIED":  return "text-emerald-700 bg-emerald-50 border-emerald-200";
+    case "IN_REVIEW": return "text-amber-700 bg-amber-50 border-amber-200";
+    case "REJECTED":  return "text-red-700 bg-red-50 border-red-200";
+    default:          return "text-zinc-600 bg-zinc-100 border-zinc-200";
   }
 }
 
@@ -47,8 +47,8 @@ function verLabel(status: string) {
 
 function roleBadge(role: string) {
   return role === "ADMIN"
-    ? "text-purple-400 bg-purple-900/20 border-purple-800"
-    : "text-zinc-400 bg-zinc-800 border-zinc-700";
+    ? "text-purple-700 bg-purple-50 border-purple-200"
+    : "text-zinc-600 bg-zinc-100 border-zinc-200";
 }
 
 function VerIcon({ status }: { status: string }) {
@@ -76,7 +76,7 @@ function Field({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition"
+        className="w-full rounded-[var(--radius-button)] border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-500 transition"
       />
     </div>
   );
@@ -181,18 +181,18 @@ function AssignContractModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="page-transition-enter relative w-full max-w-2xl rounded-[var(--radius-card)] border border-zinc-200 bg-white shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
           <div>
             <p className="text-xs text-zinc-500">Asignar contrato a</p>
-            <p className="font-semibold text-white">{user.fullName}</p>
+            <p className="font-semibold text-zinc-900">{user.fullName}</p>
           </div>
           <button
             onClick={onClose}
             type="button"
-            className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+            className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition"
           >
             <X size={15} />
           </button>
@@ -200,18 +200,18 @@ function AssignContractModal({
 
         {/* Step indicator */}
         {!sent && (
-          <div className="flex gap-1 border-b border-zinc-800 px-6 py-3">
+          <div className="flex gap-1 border-b border-zinc-200 px-6 py-3 bg-zinc-50/50">
             {["Contrato", "Datos alumno", "Vista previa"].map((s, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
                   i < step ? "bg-emerald-500 text-white" :
-                  i === step ? "bg-white text-zinc-900" :
-                  "bg-zinc-800 text-zinc-500"
+                  i === step ? "bg-zinc-900 text-white" :
+                  "bg-zinc-200 text-zinc-500"
                 }`}>
                   {i < step ? <Check size={9} /> : i + 1}
                 </span>
-                <span className={`text-xs ${i === step ? "text-white font-medium" : "text-zinc-600"}`}>{s}</span>
-                {i < 2 && <ChevronRight size={11} className="text-zinc-700 ml-1" />}
+                <span className={`text-xs ${i === step ? "text-zinc-900 font-medium" : "text-zinc-500"}`}>{s}</span>
+                {i < 2 && <ChevronRight size={11} className="text-zinc-300 ml-1" />}
               </div>
             ))}
           </div>
@@ -221,12 +221,12 @@ function AssignContractModal({
         <div className="p-6">
           {sent ? (
             <div className="flex flex-col items-center py-8 text-center">
-              <div className="mb-4 grid h-16 w-16 place-items-center rounded-full bg-emerald-900/30 border border-emerald-700">
-                <Check size={28} className="text-emerald-400" />
+              <div className="mb-4 grid h-16 w-16 place-items-center rounded-full bg-emerald-50 border border-emerald-200">
+                <Check size={28} className="text-emerald-600" />
               </div>
-              <p className="font-bold text-white">¡Contrato enviado!</p>
+              <p className="font-bold text-zinc-900">¡Contrato enviado!</p>
               <p className="mt-1 text-sm text-zinc-500">
-                Se notificó a <strong className="text-zinc-300">{user.email}</strong> para firmar.
+                Se notificó a <strong className="text-zinc-800">{user.email}</strong> para firmar.
               </p>
               <Button onClick={onClose} className="mt-6 h-9 px-5">Cerrar</Button>
             </div>
@@ -257,12 +257,12 @@ function AssignContractModal({
               {/* Step 1: alumno data */}
               {step === 1 && (
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center gap-3">
-                    <div className="grid h-8 w-8 place-items-center rounded-full bg-zinc-700 text-sm font-bold text-zinc-300">
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 flex items-center gap-3">
+                    <div className="grid h-8 w-8 place-items-center rounded-full bg-zinc-200 text-sm font-bold text-zinc-700">
                       {user.fullName[0]?.toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-zinc-200">{user.fullName}</p>
+                      <p className="text-sm font-medium text-zinc-900">{user.fullName}</p>
                       <p className="text-xs text-zinc-500">{user.email}</p>
                     </div>
                   </div>
@@ -453,22 +453,22 @@ export function AdminUsersPage() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-600">Admin</p>
-          <h1 className="mt-1 text-2xl font-bold text-white">Usuarios</h1>
+          <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Admin</p>
+          <h1 className="mt-1 text-2xl font-bold text-zinc-900">Usuarios</h1>
           <p className="mt-1 text-sm text-zinc-500">Gestión completa de usuarios del sistema.</p>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1">
+        <div className="flex gap-1 rounded-[var(--radius-button)] border border-zinc-200 bg-white p-1">
           {tabConfig.map(({ key, label, icon }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               type="button"
-              className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold transition ${
                 tab === key
-                  ? "bg-zinc-700 text-white shadow"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  ? "bg-zinc-100 text-zinc-900 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50"
               }`}
             >
               {icon}
@@ -481,16 +481,16 @@ export function AdminUsersPage() {
         {tab === "list" && (
           <div className="space-y-4">
             {/* Search */}
-            <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900 px-3.5 py-2.5 focus-within:border-zinc-600">
-              <Search size={15} className="shrink-0 text-zinc-600" />
+            <div className="flex items-center gap-2.5 rounded-[var(--radius-button)] border border-zinc-200 bg-white px-3.5 py-2.5 focus-within:border-zinc-400 focus-within:ring-2 focus-within:ring-zinc-100 transition">
+              <Search size={15} className="shrink-0 text-zinc-400" />
               <input
-                className="w-full bg-transparent text-sm text-zinc-300 outline-none placeholder:text-zinc-600"
+                className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
                 placeholder="Buscar por nombre o email..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search && (
-                <button onClick={() => setSearch("")} type="button" className="text-zinc-600 hover:text-zinc-400">
+                <button onClick={() => setSearch("")} type="button" className="text-zinc-400 hover:text-zinc-600">
                   <X size={14} />
                 </button>
               )}
@@ -505,8 +505,8 @@ export function AdminUsersPage() {
                   type="button"
                   className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
                     filter === key
-                      ? "border-zinc-400 bg-zinc-700 text-white"
-                      : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+                      ? "border-zinc-300 bg-zinc-100 text-zinc-900"
+                      : "border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50"
                   }`}
                 >
                   {label}
@@ -524,10 +524,10 @@ export function AdminUsersPage() {
             </div>
 
             {/* User list */}
-            <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
-              <div className="flex items-center gap-2 border-b border-zinc-800 px-5 py-3">
-                <Users size={14} className="text-zinc-600" />
-                <p className="text-xs font-semibold text-zinc-400">
+            <div className="overflow-hidden rounded-[var(--radius-card)] border border-zinc-200 bg-white">
+              <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 bg-zinc-50/50">
+                <Users size={14} className="text-zinc-500" />
+                <p className="text-xs font-semibold text-zinc-500">
                   {loading ? "Cargando..." : `${filtered.length} usuario${filtered.length !== 1 ? "s" : ""}`}
                 </p>
               </div>
@@ -535,27 +535,27 @@ export function AdminUsersPage() {
               {loading ? (
                 <div className="space-y-3 p-5">
                   {Array(4).fill(null).map((_, i) => (
-                    <div key={i} className="h-14 animate-pulse rounded-xl bg-zinc-800" />
+                    <div key={i} className="h-14 animate-pulse rounded-xl bg-zinc-100" />
                   ))}
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="py-14 text-center">
-                  <Users size={30} className="text-zinc-700 mx-auto mb-2" />
+                  <Users size={30} className="text-zinc-300 mx-auto mb-2" />
                   <p className="text-sm text-zinc-500">Sin resultados</p>
                 </div>
               ) : (
-                <div className="divide-y divide-zinc-800">
+                <div className="divide-y divide-zinc-100">
                   {filtered.map((u) => (
                     <div
                       key={u.id}
-                      className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-800/40 transition sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-50/50 transition sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-800 text-sm font-bold text-zinc-400">
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-100 text-sm font-bold text-zinc-600">
                           {u.fullName[0]?.toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-zinc-100 truncate">{u.fullName}</p>
+                          <p className="font-semibold text-zinc-900 truncate">{u.fullName}</p>
                           <p className="text-xs text-zinc-500 truncate">{u.email}</p>
                         </div>
                       </div>
@@ -571,7 +571,7 @@ export function AdminUsersPage() {
                           <button
                             type="button"
                             onClick={() => setAssignUser(u)}
-                            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 hover:bg-zinc-50 transition"
                           >
                             <FileText size={11} /> Asignar contrato
                           </button>
@@ -593,10 +593,10 @@ export function AdminUsersPage() {
             </p>
 
             {addSuccess ? (
-              <div className="rounded-2xl border border-emerald-800 bg-emerald-900/20 p-6 text-center">
-                <Check size={28} className="text-emerald-400 mx-auto mb-3" />
-                <p className="font-semibold text-white">Usuario agregado</p>
-                <p className="mt-1 text-sm text-zinc-400">
+              <div className="rounded-[var(--radius-card)] border border-emerald-200 bg-emerald-50 p-6 text-center">
+                <Check size={28} className="text-emerald-600 mx-auto mb-3" />
+                <p className="font-semibold text-emerald-900">Usuario agregado</p>
+                <p className="mt-1 text-sm text-emerald-700">
                   Quedó registrado como pendiente de verificación KYC.
                 </p>
                 <Button
@@ -629,11 +629,11 @@ export function AdminUsersPage() {
                   onChange={(v) => setAddForm((f) => ({ ...f, password: v }))}
                 />
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-zinc-400">Rol</label>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-500">Rol</label>
                   <select
                     value={addForm.role}
                     onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value as "USER" | "ADMIN" }))}
-                    className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-zinc-200 outline-none focus:border-zinc-500 transition"
+                    className="w-full rounded-[var(--radius-button)] border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100 transition"
                   >
                     <option value="USER">Alumno / Usuario</option>
                     <option value="ADMIN">Administrador</option>
@@ -641,7 +641,7 @@ export function AdminUsersPage() {
                 </div>
 
                 {addError && (
-                  <p className="rounded-xl border border-red-800 bg-red-900/20 px-4 py-2.5 text-sm text-red-400">
+                  <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600">
                     {addError}
                   </p>
                 )}
@@ -657,9 +657,9 @@ export function AdminUsersPage() {
         {/* ── Tab: Importar CSV ── */}
         {tab === "import" && (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-              <p className="text-xs font-semibold text-zinc-400 mb-1">Formato esperado (primera fila = encabezados):</p>
-              <code className="block rounded-lg bg-zinc-800 px-4 py-3 text-[11px] font-mono text-zinc-400">
+            <div className="rounded-[var(--radius-card)] border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-xs font-semibold text-zinc-500 mb-1">Formato esperado (primera fila = encabezados):</p>
+              <code className="block rounded-lg bg-zinc-100 px-4 py-3 text-[11px] font-mono text-zinc-600">
                 nombre_completo,email,rol,dni,empresa
                 <br />
                 María González,maria@gmail.com,USER,40123456,Empresa SA
@@ -675,15 +675,15 @@ export function AdminUsersPage() {
                 onDragOver={(e) => { e.preventDefault(); setCsvDrag(true); }}
                 onDragLeave={() => setCsvDrag(false)}
                 onClick={() => csvRef.current?.click()}
-                className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed cursor-pointer py-14 transition ${
+                className={`flex flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border-2 border-dashed cursor-pointer py-14 transition ${
                   csvDrag
-                    ? "border-zinc-500 bg-zinc-800/60"
-                    : "border-zinc-700 hover:border-zinc-600 hover:bg-zinc-900/60"
+                    ? "border-zinc-400 bg-zinc-50"
+                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
                 }`}
               >
-                <Upload size={28} className="text-zinc-600" />
-                <p className="text-sm font-medium text-zinc-400">Arrastrá un archivo CSV o hacé click para seleccionar</p>
-                <p className="text-xs text-zinc-600">.csv · UTF-8</p>
+                <Upload size={28} className="text-zinc-400" />
+                <p className="text-sm font-medium text-zinc-600">Arrastrá un archivo CSV o hacé click para seleccionar</p>
+                <p className="text-xs text-zinc-400">.csv · UTF-8</p>
                 <input
                   ref={csvRef}
                   type="file"
@@ -698,22 +698,22 @@ export function AdminUsersPage() {
             {csvRows.length > 0 && !csvImported && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-zinc-400">
-                    <strong className="text-white">{csvRows.length}</strong> registros encontrados
+                  <p className="text-sm text-zinc-500">
+                    <strong className="text-zinc-900">{csvRows.length}</strong> registros encontrados
                   </p>
                   <button
                     type="button"
                     onClick={() => setCsvRows([])}
-                    className="text-xs text-zinc-600 hover:text-zinc-400 underline"
+                    className="text-xs text-zinc-500 hover:text-zinc-700 underline"
                   >
                     Cambiar archivo
                   </button>
                 </div>
 
-                <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+                <div className="overflow-x-auto rounded-[var(--radius-card)] border border-zinc-200">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-zinc-800 bg-zinc-900">
+                      <tr className="border-b border-zinc-200 bg-zinc-50">
                         {Object.keys(csvRows[0]).map((h) => (
                           <th key={h} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
                             {h}
@@ -721,18 +721,18 @@ export function AdminUsersPage() {
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800 bg-zinc-950">
+                    <tbody className="divide-y divide-zinc-100 bg-white">
                       {csvRows.slice(0, 8).map((row, i) => (
-                        <tr key={i} className="hover:bg-zinc-900/60">
+                        <tr key={i} className="hover:bg-zinc-50/50">
                           {Object.values(row).map((v, j) => (
-                            <td key={j} className="px-4 py-3 text-zinc-300">{v}</td>
+                            <td key={j} className="px-4 py-3 text-zinc-700">{v}</td>
                           ))}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {csvRows.length > 8 && (
-                    <div className="border-t border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-600">
+                    <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-2 text-xs text-zinc-500">
                       + {csvRows.length - 8} filas más
                     </div>
                   )}
@@ -746,10 +746,10 @@ export function AdminUsersPage() {
 
             {/* Success */}
             {csvImported && (
-              <div className="rounded-2xl border border-emerald-800 bg-emerald-900/20 p-6 text-center">
-                <Check size={28} className="text-emerald-400 mx-auto mb-3" />
-                <p className="font-semibold text-white">{csvRows.length} usuarios importados</p>
-                <p className="mt-1 text-sm text-zinc-400">
+              <div className="rounded-[var(--radius-card)] border border-emerald-200 bg-emerald-50 p-6 text-center">
+                <Check size={28} className="text-emerald-600 mx-auto mb-3" />
+                <p className="font-semibold text-emerald-900">{csvRows.length} usuarios importados</p>
+                <p className="mt-1 text-sm text-emerald-700">
                   Aparecen en la lista con estado "Pendiente" — deberán completar el KYC.
                 </p>
                 <div className="flex justify-center gap-3 mt-4">

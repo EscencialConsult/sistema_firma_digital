@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal de firma</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    
+    <!-- Preload de fuentes críticas para evitar destellos (FOUT) -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"></noscript>
+    
+    <!-- Preconnect para Supabase APIs -->
+    <link rel="preconnect" href="https://faquqlnwniinqqfmonbv.supabase.co" crossorigin>
   </head>
   <body>
     <div id="root"></div>
