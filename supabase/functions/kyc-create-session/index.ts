@@ -39,7 +39,17 @@ serve(async (req) => {
 
     const payloadBase64 = token.split(".")[1];
     const payload = JSON.parse(atob(payloadBase64));
-    const organization_id = payload.organization_id;
+    let organization_id: string | null = payload.organization_id ?? null;
+
+    // Fallback: JWT claim absent → query users table
+    if (!organization_id) {
+      const { data: userRow } = await supabase
+        .from("users")
+        .select("organization_id")
+        .eq("id", user.id)
+        .single();
+      organization_id = userRow?.organization_id ?? null;
+    }
 
     if (!organization_id) {
       return new Response(

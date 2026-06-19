@@ -11,14 +11,21 @@ export function VerifiedGuard() {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+
+  // Admins y super admins no necesitan pasar por KYC
+  if (["ADMIN", "ORG_ADMIN", "SUPER_ADMIN"].includes(user.role)) {
+    return <Outlet />;
+  }
+
   switch (user.verificationStatus) {
     case "PENDING":
-      return <Navigate to="/kyc" replace />;
-    case "REJECTED":
-      return <Navigate to="/kyc/rejected" replace />;
     case "EXPIRED":
       return <Navigate to="/kyc" replace />;
-    default:
+    case "IN_REVIEW":
+      return <Navigate to="/kyc/pending" replace />;
+    case "REJECTED":
+      return <Navigate to="/kyc/rejected" replace />;
+    default: // VERIFIED
       return <Outlet />;
   }
 }

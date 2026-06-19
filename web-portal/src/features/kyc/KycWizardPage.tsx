@@ -274,7 +274,7 @@ function ProviderVerificationStep({
     } else if (currentStatus === "IN_REVIEW") {
       await syncSessionVerificationProfile(verification, "IN_REVIEW");
       updateUser({ verificationStatus: "IN_REVIEW" });
-      navigate("/dashboard", { replace: true });
+      navigate("/kyc/pending", { replace: true });
     } else if (currentStatus === "REJECTED") {
       await syncSessionVerificationProfile(verification, "REJECTED");
       updateUser({ verificationStatus: "REJECTED" });
@@ -347,10 +347,15 @@ function ProviderVerificationStep({
         </div>
       ) : (
         <div className="rounded-2xl border border-zinc-200 bg-zinc-50/30 p-6 text-center space-y-4">
-          <Loader2 size={48} className="animate-spin text-blue-500 mx-auto" />
-          <p className="text-sm text-zinc-700 font-medium">
-            Iniciando verificación...
-          </p>
+          <Loader2 size={40} className="animate-spin text-zinc-400 mx-auto" />
+          <div>
+            <p className="text-sm font-semibold text-zinc-700">
+              No hay sesión activa de DIDIT
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Hacé clic en <span className="font-bold">Recargar</span> para generar una nueva sesión de verificación.
+            </p>
+          </div>
         </div>
       )}
     </div>
@@ -403,7 +408,7 @@ export function KycWizardPage() {
           if (existing.status === "IN_REVIEW") {
             await syncSessionVerificationProfile(existing, "IN_REVIEW");
             updateUser({ verificationStatus: "IN_REVIEW" });
-            navigate("/dashboard", { replace: true });
+            navigate("/kyc/pending", { replace: true });
             return;
           }
           if (existing.status === "REJECTED") {
