@@ -426,6 +426,38 @@ function ConvenioDoc({ f, alumnos }: { f: Record<string, string>; alumnos: Alumn
   );
 }
 
+// ─── Custom Template Renderer ─────────────────────────────────────────────────
+
+function CustomDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoData }) {
+  let content = f._templateContent || "Sin contenido.";
+  
+  // Replace tags with fields
+  Object.keys(f).forEach(key => {
+    if (key !== "_templateContent" && key !== "_legalTitle") {
+      const regex = new RegExp(`{{${key}}}`, "g");
+      content = content.replace(regex, f[key] ? `<strong class="text-blue-700">${f[key]}</strong>` : `{{${key}}}`);
+    }
+  });
+
+  return (
+    <DocWrapper>
+      <DocTitle
+        title={f._legalTitle || "Contrato"}
+        subtitle="Escencial Consultora S.A.S."
+      />
+      <div 
+        className="whitespace-pre-wrap font-serif text-[13px] leading-7"
+        dangerouslySetInnerHTML={{ __html: content }} 
+      />
+      <DocSignatures>
+        <DocSig label="Firma Autorizada" name={f.autoridad_nombre || "—"} sub={`CUIL/CUIT: ${f.autoridad_cuil || "—"}`} />
+        <DocSigEmpty label={alumno.nombre || "Firmante"} />
+      </DocSignatures>
+      <DocFooter />
+    </DocWrapper>
+  );
+}
+
 // ─── Main export: router ─────────────────────────────────────────────────────
 
 export function ContractDocument({
@@ -438,6 +470,11 @@ export function ContractDocument({
   alumnos: AlumnoData[];
 }) {
   const alumno = alumnos[0] ?? { nombre: "", dni: "", cuil: "", email: "", domicilio: "" };
+
+  // If we have a custom template content saved in fields, render CustomDoc
+  if (fields._templateContent) {
+    return <CustomDoc f={fields} alumno={alumno} />;
+  }
 
   switch (templateId) {
     case "formacion": return <FormacionDoc f={fields} alumno={alumno} />;
