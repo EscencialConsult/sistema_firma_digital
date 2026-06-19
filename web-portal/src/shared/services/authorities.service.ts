@@ -68,16 +68,42 @@ export async function getOrgAuthorities(organizationId: string): Promise<OrgAuth
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+
+  const authorities = (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
+
+  // Enriquecer con datos de DIDIT (identity_verifications) para los que ya verificaron
+  const userIds = authorities.map((a) => a.userId).filter(Boolean) as string[];
+  if (userIds.length > 0) {
+    const { data: ivs } = await supabase
+      .from("identity_verifications")
+      .select("user_id, document_number, cuil_cuit, address, city, province")
+      .in("user_id", userIds)
+      .eq("status", "APPROVED");
+
+    const ivMap = new Map((ivs ?? []).map((iv) => [iv.user_id as string, iv]));
+
+    return authorities.map((a) => {
+      if (!a.userId) return a;
+      const iv = ivMap.get(a.userId);
+      if (!iv) return a;
+      const domicilioRaw = [iv.address, iv.city, iv.province].filter(Boolean).join(", ");
+      return {
+        ...a,
+        dni:       a.dni      ?? (iv.document_number as string) ?? null,
+        cuil:      a.cuil     ?? (iv.cuil_cuit as string)       ?? null,
+        domicilio: a.domicilio ?? domicilioRaw                   ?? null,
+      };
+    });
+  }
+
+  return authorities;
 }
 
 export async function inviteAuthority(input: {
   organizationId:  string;
   fullName:        string;
   email:           string;
-  dni?:            string;
   cuil?:           string;
-  domicilio?:      string;
   type:            AuthorityType;
   notes?:          string;
   // Solo para PROVISIONAL: datos del convenio
@@ -94,9 +120,7 @@ export async function inviteAuthority(input: {
       organization_id: input.organizationId,
       full_name:       input.fullName,
       email:           input.email,
-      dni:             input.dni ?? null,
       cuil:            input.cuil ?? null,
-      domicilio:       input.domicilio ?? null,
       type:            input.type,
       status:          "PENDING",
       authorized_by:   user?.id ?? null,
@@ -118,9 +142,7 @@ export async function inviteAuthority(input: {
       ...(input.templateFields ?? {}),
       nombre_firmante:    input.fullName,
       email_firmante:     input.email,
-      dni_firmante:       input.dni ?? "",
       cuil_firmante:      input.cuil ?? "",
-      domicilio_firmante: input.domicilio ?? "",
     };
 
     const { data: doc, error: docErr } = await supabase
