@@ -7,8 +7,10 @@ import {
   Link2,
   Loader2,
   Pencil,
+  Plus,
   Save,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
@@ -19,8 +21,10 @@ import {
   updateOrganization,
   uploadOrgLogo,
 } from "../../shared/services/organizations.service";
+import { createAdminUser } from "../../shared/services/admin.service";
 import type { Organization, OrganizationStats } from "../../shared/types/organization";
 import { OrgLogo } from "../../shared/components/ui/OrgLogo";
+import { APP_CONFIG } from "../../shared/config/app";
 
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: number; icon: React.ElementType; color: string }) {
@@ -45,6 +49,42 @@ export function OrganizationDetailPage() {
   const [error, setError]     = useState<string | null>(null);
 
   const [copied, setCopied]           = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminName, setAdminName]     = useState("");
+  const [adminEmail, setAdminEmail]   = useState("");
+  const [adminPass, setAdminPass]     = useState("");
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminSuccess, setAdminSuccess] = useState(false);
+  const [adminError, setAdminError]   = useState<string | null>(null);
+
+  async function handleCreateAdmin(e: FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+    setAdminSaving(true);
+    setAdminError(null);
+    try {
+      await createAdminUser({
+        fullName: adminName.trim(),
+        email: adminEmail.trim(),
+        password: adminPass,
+        role: "ORG_ADMIN",
+        organization_id: id,
+      });
+      setAdminSuccess(true);
+      setAdminName(""); setAdminEmail(""); setAdminPass("");
+    } catch (err) {
+      setAdminError(err instanceof Error ? err.message : "Error al crear el admin");
+    } finally {
+      setAdminSaving(false);
+    }
+  }
+
+  function closeAdminModal() {
+    setShowAdminModal(false);
+    setAdminSuccess(false);
+    setAdminError(null);
+    setAdminName(""); setAdminEmail(""); setAdminPass("");
+  }
   const [diditUnlocked, setDiditUnlocked] = useState(false);
   const [showDiditInput, setShowDiditInput] = useState(false);
   const [diditInput, setDiditInput]   = useState("");
@@ -91,6 +131,11 @@ export function OrganizationDetailPage() {
           setName(o.name);
           setMaxUsers(o.maxUsers);
           setContactEmail(o.contactEmail ?? "");
+          if (!o.diditWorkflowId && id) {
+            updateOrganization(id, { diditWorkflowId: APP_CONFIG.defaultDiditWorkflowId })
+              .then(() => setOrg((prev) => prev ? { ...prev, diditWorkflowId: APP_CONFIG.defaultDiditWorkflowId } : prev))
+              .catch(() => {});
+          }
         }
       })
       .catch((e) => setError(e.message))
@@ -177,6 +222,13 @@ export function OrganizationDetailPage() {
           <p className="mt-0.5 text-sm text-zinc-500">/{org.slug}</p>
         </div>
         <div className="flex gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowAdminModal(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 transition"
+          >
+            <Plus size={13} /> Crear admin
+          </button>
           <button
             type="button"
             onClick={toggleActive}
@@ -420,6 +472,62 @@ export function OrganizationDetailPage() {
           </>
         )}
       </form>
+
+      {/* Modal crear admin */}
+      {showAdminModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white">Crear administrador</h2>
+                <p className="mt-0.5 text-xs text-zinc-500">{org.name}</p>
+              </div>
+              <button type="button" onClick={closeAdminModal} className="text-zinc-600 hover:text-white transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            {adminSuccess ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-emerald-800 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-400">
+                  ✓ Admin creado correctamente. Compartí las credenciales con la empresa.
+                </div>
+                <button type="button" onClick={closeAdminModal} className="w-full rounded-xl bg-white py-2.5 text-sm font-semibold text-zinc-950 hover:bg-zinc-100 transition">
+                  Cerrar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateAdmin} className="space-y-4">
+                {adminError && (
+                  <div className="rounded-xl border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+                    {adminError}
+                  </div>
+                )}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-zinc-400">Nombre completo *</label>
+                  <input type="text" required value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Juan García"
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-zinc-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-zinc-400">Email *</label>
+                  <input type="email" required value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@empresa.com"
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-zinc-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-zinc-400">Contraseña temporal *</label>
+                  <input type="password" required minLength={8} value={adminPass} onChange={(e) => setAdminPass(e.target.value)} placeholder="Mínimo 8 caracteres"
+                    className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-zinc-500 focus:outline-none" />
+                </div>
+                <button type="submit" disabled={adminSaving}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white py-2.5 text-sm font-semibold text-zinc-950 hover:bg-zinc-100 transition disabled:opacity-50">
+                  {adminSaving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                  {adminSaving ? "Creando..." : "Crear administrador"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

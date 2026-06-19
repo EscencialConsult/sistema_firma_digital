@@ -79,10 +79,11 @@ export async function updateUserRole(id: string, role: UserRole): Promise<void> 
  * Requires deploy: supabase functions deploy admin-create-user
  */
 export async function createAdminUser(input: {
-  fullName: string;
-  email:    string;
-  password: string;
-  role:     UserRole;
+  fullName:        string;
+  email:           string;
+  password:        string;
+  role:            UserRole;
+  organization_id?: string;
 }): Promise<AdminUserSummary> {
   const { data, error } = await supabase.functions.invoke("admin-create-user", { body: input });
   if (error) throw new Error(error.message);

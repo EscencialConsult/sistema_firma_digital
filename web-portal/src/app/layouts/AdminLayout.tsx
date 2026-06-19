@@ -10,9 +10,12 @@ import {
   UsersRound,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../providers/AuthProvider";
+import { getMyOrganization } from "../../shared/services/organizations.service";
+import type { Organization } from "../../shared/types/organization";
+import { OrgLogo } from "../../shared/components/ui/OrgLogo";
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Panel de Administración",
@@ -32,16 +35,24 @@ const ADMIN_NAV = [
 export function AdminLayout() {
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [org, setOrg] = useState<Organization | null>(null);
+
+  useEffect(() => {
+    getMyOrganization().then(setOrg).catch(() => setOrg(null));
+  }, []);
 
   const sidebar = (
     <>
       <div className="mb-8 flex items-center gap-3 px-2">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-zinc-900 border border-zinc-200">
-          <ShieldCheck size={20} className="text-zinc-100" />
-        </div>
+        <OrgLogo
+          logoDarkUrl={org?.logoDarkUrl}
+          logoLightUrl={org?.logoLightUrl}
+          variant="light"
+          size={40}
+        />
         <div>
-          <p className="text-sm font-bold text-zinc-900 leading-none">Admin Panel</p>
-          <p className="mt-0.5 text-[11px] text-zinc-500">Firma Digital</p>
+          <p className="text-sm font-bold text-zinc-900 leading-none truncate">{org?.name ?? "Admin Panel"}</p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">Panel de administración</p>
         </div>
       </div>
 
