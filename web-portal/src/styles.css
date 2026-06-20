@@ -71,33 +71,42 @@
 
   /* UI Tokens */
   .primary-action {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] bg-zinc-900 px-4 text-sm font-medium text-white transition-all duration-200 hover:bg-zinc-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] bg-zinc-900 px-4 text-sm font-medium text-white transition-all duration-300 hover:bg-zinc-800 active:scale-[0.96] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2;
     min-height: 44px; /* Apple HIG standard for touch targets */
     touch-action: manipulation;
   }
 
   .secondary-action {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition-all duration-200 hover:bg-zinc-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:text-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-200 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 transition-all duration-300 hover:bg-zinc-50 active:scale-[0.96] disabled:cursor-not-allowed disabled:text-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-200 focus-visible:ring-offset-2;
     min-height: 44px;
     touch-action: manipulation;
   }
 
   .card-premium {
-    @apply rounded-[var(--radius-card)] border border-zinc-200/50 bg-white shadow-[var(--shadow-card)];
+    @apply rounded-[var(--radius-card)] border border-zinc-200/50 bg-white shadow-[var(--shadow-card)] transition-all duration-300;
+  }
+
+  .glass-premium {
+    @apply bg-white/70 backdrop-blur-md border-t border-zinc-200/60 shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.04)];
   }
 
   .hover-lift {
-    @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-hover)];
+    @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-hover)] hover:border-zinc-300/60;
     transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* Page Transitions */
+  /* Page Transitions & Animations */
   .page-transition-enter {
-    animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: fade-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Tap active state for mobile buttons */
+  .mobile-tap-effect {
+    @apply active:scale-[0.95] active:bg-zinc-100/80 transition-all duration-200;
   }
 
   @keyframes fade-in-up {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 }
