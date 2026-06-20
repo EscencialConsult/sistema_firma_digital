@@ -401,36 +401,41 @@ function ProviderVerificationStep({
   // Polling: arranca ni bien se carga el iframe, sin esperar postMessage
   useEffect(() => {
     if (status !== "PENDING") return;
-    if (providerCompleted) return;
 
     let cancelled = false;
 
     async function poll() {
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        if (cancelled) return;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+      let attempts = 0;
+      while (!cancelled) {
+        // Poll every 3 seconds for the first 3 minutes (60 attempts), then slow down to 10 seconds
+        const delay = attempts < 60 ? 3000 : 10000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
         if (cancelled) return;
 
-        const updated = user?.id ? await kycService.getMyVerification(user.id) : null;
-        if (!updated || updated.status === "PENDING") continue;
+        attempts += 1;
 
-        if (!cancelled) {
-          setProviderCompleted(true);
-          setPollingError(false);
-          await handleProviderStatus(updated.status);
-          setPollingDone(true);
+        try {
+          const updated = user?.id ? await kycService.getMyVerification(user.id) : null;
+          if (updated && updated.status !== "PENDING") {
+            if (!cancelled) {
+              setProviderCompleted(true);
+              setPollingError(false);
+              await handleProviderStatus(updated.status);
+              setPollingDone(true);
+            }
+            return;
+          }
+        } catch (err) {
+          console.error("Error polling KYC status:", err);
         }
-        return;
-      }
-      if (!cancelled) {
-        setPollingDone(true);
-        setPollingError(true);
       }
     }
 
     void poll();
-    return () => { cancelled = true; };
-  }, [status, user?.id, handleProviderStatus, providerCompleted]);
+    return () => {
+      cancelled = true;
+    };
+  }, [status, user?.id, handleProviderStatus]);
 
   // postMessage: respaldo por si el webhook redirige acá
   useEffect(() => {
@@ -831,6 +836,7 @@ export function KycWizardPage() {
         )}
         {step === 2 && verification && (
           <ProviderVerificationStep
+            key={verification.providerSessionId || verification.id}
             verification={verification}
             onBack={() => setStep(1)}
             onVerified={(verifiedVerification) => {
