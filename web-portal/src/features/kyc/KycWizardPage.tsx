@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, CheckCircle, FileText, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle, FileText, Loader2, RefreshCw, Clock, RotateCcw } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -305,6 +305,84 @@ function FinalReviewStep({
   );
 }
 
+function KycPendingView({
+  onReset,
+}: {
+  onReset: () => Promise<void>;
+}) {
+  const [resetting, setResetting] = useState(false);
+
+  async function handleResetClick() {
+    setResetting(true);
+    try {
+      await onReset();
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="mb-6 grid h-20 w-20 place-items-center rounded-full bg-amber-100">
+        <Clock size={36} className="text-amber-600" />
+      </div>
+      <h1 className="text-2xl font-bold text-zinc-950">Verificación en proceso</h1>
+      <p className="mt-3 max-w-sm text-sm text-zinc-500 leading-relaxed">
+        Recibimos tu documentación y estamos revisándola. Esto puede demorar hasta{" "}
+        <span className="font-semibold text-zinc-700">48 horas hábiles</span>.
+        Te notificaremos por email cuando esté lista.
+      </p>
+
+      <div className="mt-10 w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 text-left space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Estado del proceso</p>
+        {[
+          { label: "Documentos recibidos", done: true },
+          { label: "Revisión en curso", done: false, active: true },
+          { label: "Aprobación final", done: false },
+        ].map(({ label, done, active }) => (
+          <div key={label} className="flex items-center gap-3">
+            <div
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                done ? "bg-emerald-500" : active ? "animate-pulse bg-amber-500" : "bg-zinc-200"
+              }`}
+            />
+            <p className={`text-sm ${done || active ? "text-zinc-900 font-medium" : "text-zinc-400"}`}>
+              {label}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-6 text-xs text-zinc-400">
+        Esta página se actualiza automáticamente cuando tu verificación es aprobada.
+      </p>
+
+      <p className="mt-2 text-xs text-zinc-400">
+        ¿Tenés dudas?{" "}
+        <a href="mailto:soporte@escencial.com" className="font-semibold text-zinc-700 hover:underline">
+          Contactanos
+        </a>
+      </p>
+
+      <div className="mt-10 w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 text-left">
+        <p className="text-sm font-semibold text-zinc-800">¿La verificación quedó trabada?</p>
+        <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+          Si la sesión de DIDIT no se completó o fue cancelada, podés reiniciar el proceso desde cero.
+        </p>
+        <Button
+          variant="secondary"
+          className="mt-4 w-full"
+          onClick={handleResetClick}
+          disabled={resetting}
+        >
+          <RotateCcw size={14} />
+          {resetting ? "Reiniciando..." : "Reiniciar verificación"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ProviderVerificationStep({
   verification,
   onBack,
@@ -333,20 +411,14 @@ function ProviderVerificationStep({
 
     const authStatus = user?.verificationStatus;
 
-    if (currentStatus === "VERIFIED") {
+    if (currentStatus === "VERIFIED" || currentStatus === "IN_REVIEW") {
       const updated = await kycService.getMyVerification(userId);
-      const verified = updated ?? { ...verification, status: "VERIFIED" as const };
-      await syncSessionVerificationProfile(verified, "VERIFIED");
-      if (authStatus !== "VERIFIED") {
-        updateUser({ verificationStatus: "VERIFIED" });
+      const verified = updated ?? { ...verification, status: currentStatus };
+      await syncSessionVerificationProfile(verified, currentStatus);
+      if (authStatus !== currentStatus) {
+        updateUser({ verificationStatus: currentStatus });
       }
       setVerifiedData(verified);
-    } else if (currentStatus === "IN_REVIEW") {
-      await syncSessionVerificationProfile(verification, "IN_REVIEW");
-      if (authStatus !== "IN_REVIEW") {
-        updateUser({ verificationStatus: "IN_REVIEW" });
-      }
-      navigate("/kyc/pending", { replace: true });
     } else if (currentStatus === "REJECTED") {
       await syncSessionVerificationProfile(verification, "REJECTED");
       if (authStatus !== "REJECTED") {
@@ -497,9 +569,13 @@ function ProviderVerificationStep({
               <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-emerald-600 text-white">
                 <CheckCircle size={28} />
               </div>
-              <h3 className="text-xl font-bold text-emerald-700">Verificación exitosa</h3>
+              <h3 className="text-xl font-bold text-emerald-700">
+                {verifiedData.status === "VERIFIED" ? "Verificación exitosa" : "Verificación completada"}
+              </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">
-                Tu identidad fue verificada correctamente.
+                {verifiedData.status === "VERIFIED" 
+                  ? "Tu identidad fue verificada correctamente." 
+                  : "Tu documentación fue cargada y está lista para revisión final."}
               </p>
               <Button onClick={handleContinueToReview} className="mt-6 h-11 px-8">
                 Continuar a Revisión Final
@@ -577,6 +653,7 @@ export function KycWizardPage() {
   const [termsAccepted, setTermsAccepted] = useState(Boolean(user?.termsAcceptedAt));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPending, setShowPending] = useState(false);
 
   useEffect(() => {
     setTermsAccepted(Boolean(user?.termsAcceptedAt));
@@ -640,7 +717,10 @@ export function KycWizardPage() {
             if (user.verificationStatus !== "IN_REVIEW") {
               updateUser({ verificationStatus: "IN_REVIEW" });
             }
-            navigate("/kyc/pending", { replace: true });
+            setVerification(existing);
+            const normalizedPersonalData = personalDataFromVerification(existing, user.fullName);
+            if (normalizedPersonalData) setPersonalData(normalizedPersonalData);
+            setShowPending(true);
             return;
           }
           if (existing.status === "REJECTED") {
@@ -793,9 +873,92 @@ export function KycWizardPage() {
     }
   }
 
+  // Suscribirse a cambios en tiempo real si el estado de verificación es IN_REVIEW
+  useEffect(() => {
+    if (!user?.id || !verification || verification.status !== "IN_REVIEW") return;
+
+    const channel = supabase
+      .channel(`kyc_pending_realtime_${verification.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "identity_verifications",
+          filter: `id=eq.${verification.id}`,
+        },
+        async (payload) => {
+          const newStatus = payload.new.status as string;
+          if (newStatus === "VERIFIED") {
+            const updated = await kycService.getMyVerification(user.id);
+            const verified = updated ?? { ...verification, status: "VERIFIED" as const };
+            await syncSessionVerificationProfile(verified, "VERIFIED");
+            updateUser({ verificationStatus: "VERIFIED" });
+            setVerification(verified);
+            setShowPending(false);
+            setStep(3);
+          } else if (newStatus === "REJECTED") {
+            const updated = await kycService.getMyVerification(user.id);
+            const rejected = updated ?? { ...verification, status: "REJECTED" as const };
+            await syncSessionVerificationProfile(rejected, "REJECTED");
+            updateUser({ verificationStatus: "REJECTED" });
+            navigate("/kyc/rejected", { replace: true });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user, verification, updateUser, navigate]);
+
+  async function handleResetVerification() {
+    if (!user?.id) return;
+    try {
+      await supabase
+        .from("identity_verifications")
+        .update({
+          status: "PENDING",
+          provider_session_id: null,
+          provider_session_url: null,
+          provider_session_token: null,
+        })
+        .eq("user_id", user.id)
+        .in("status", ["IN_REVIEW", "PENDING", "EXPIRED"]);
+
+      await updateSessionUser({ verificationStatus: "PENDING" });
+      updateUser({ verificationStatus: "PENDING" });
+      
+      setVerification(null);
+      setShowPending(false);
+      setStep(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al reiniciar la verificación.");
+    }
+  }
+
   async function handleFinish() {
     setLoading(true);
-    navigate("/dashboard", { replace: true });
+    if (user?.verificationStatus === "IN_REVIEW") {
+      setShowPending(true);
+      setLoading(false);
+    } else {
+      navigate("/dashboard", { replace: true });
+    }
+  }
+
+  if (showPending) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 font-medium">
+            {error}
+          </div>
+        )}
+        <KycPendingView onReset={handleResetVerification} />
+      </div>
+    );
   }
 
   return (

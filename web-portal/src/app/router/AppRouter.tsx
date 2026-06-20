@@ -23,9 +23,7 @@ const RegisterPage = lazy(() =>
 const KycWizardPage = lazy(() =>
   import("../../features/kyc/KycWizardPage").then((m) => ({ default: m.KycWizardPage }))
 );
-const KycPendingPage = lazy(() =>
-  import("../../features/kyc/KycPendingPage").then((m) => ({ default: m.KycPendingPage }))
-);
+
 const KycRejectedPage = lazy(() =>
   import("../../features/kyc/KycRejectedPage").then((m) => ({ default: m.KycRejectedPage }))
 );
@@ -195,7 +193,7 @@ export function AppRouter() {
           {/* KYC (usuarios sin verificar) */}
           <Route element={<KycLayout />}>
             <Route path="/kyc"          element={<KycWizardPage />} />
-            <Route path="/kyc/pending"  element={<KycPendingPage />} />
+
             <Route path="/kyc/rejected" element={<KycRejectedPage />} />
           </Route>
 

@@ -333,7 +333,7 @@ serve(async (req) => {
       "Kyc Expired": "declined",
     };
 
-    const mappedStatus = STATUS_MAP[decision.status as string] ?? "pending_review";
+    const mappedStatus = STATUS_MAP[decision.status as string] ?? "pending";
 
     if (mappedStatus === "approved") {
       const idVer = decision.id_verifications?.[0];
