@@ -346,6 +346,7 @@ function ProviderVerificationStep({
       if (authStatus !== "IN_REVIEW") {
         updateUser({ verificationStatus: "IN_REVIEW" });
       }
+      navigate("/kyc/pending", { replace: true });
     } else if (currentStatus === "REJECTED") {
       await syncSessionVerificationProfile(verification, "REJECTED");
       if (authStatus !== "REJECTED") {
@@ -634,10 +635,7 @@ export function KycWizardPage() {
             if (user.verificationStatus !== "IN_REVIEW") {
               updateUser({ verificationStatus: "IN_REVIEW" });
             }
-            setVerification(existing);
-            const normalizedPersonalData = personalDataFromVerification(existing, user.fullName);
-            if (normalizedPersonalData) setPersonalData(normalizedPersonalData);
-            setStep(2);
+            navigate("/kyc/pending", { replace: true });
             return;
           }
           if (existing.status === "REJECTED") {
