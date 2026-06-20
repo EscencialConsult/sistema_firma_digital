@@ -1,7 +1,7 @@
 import { supabase } from "../../../shared/lib/supabase";
 import type { IdentityVerification, IdentityDocument, IdentityAuditLog, PersonalData } from "../types/identity.types";
 
-const IDENTITY_BUCKET = "identity-documents";
+const IDENTITY_BUCKET = "kyc-documents";
 
 function mapRow(row: any): IdentityVerification {
   const docRows = row.identity_documents ?? row.documents ?? [];

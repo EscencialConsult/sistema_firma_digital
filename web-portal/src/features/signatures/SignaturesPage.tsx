@@ -3,7 +3,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
-  Download,
+  Eye,
   FileSignature,
   PenLine,
   ShieldCheck,
@@ -16,7 +16,11 @@ import { Badge } from "../../shared/components/ui/Badge";
 import { Button } from "../../shared/components/ui/Button";
 import { EmptyState } from "../../shared/components/ui/EmptyState";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
-import { getMySigningRequests } from "../../shared/services/signing.service";
+import {
+  generateConsolidatedPdfBlob,
+  getMySigningRequests,
+  tryGenerateConsolidatedPdf,
+} from "../../shared/services/signing.service";
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
 import { getMyOrganization } from "../../shared/services/organizations.service";
 import type { SigningRequest } from "../../shared/types/signing";
@@ -32,7 +36,7 @@ function isExpired(r: SigningRequest) {
 }
 
 function getStatusDetail(r: SigningRequest): string {
-  if (r.status === "SIGNED")   return `Firmado el ${formatDate(r.sentAt)}`;
+  if (r.status === "SIGNED")   return `Firmado el ${formatDate(r.signedAt ?? r.sentAt)}`;
   if (r.status === "REJECTED") return "Rechazado";
   if (isExpired(r))            return `Expiró el ${formatDate(r.expiresAt)}`;
   return `Recibido el ${formatDate(r.sentAt)} · vence el ${new Date(r.expiresAt).toLocaleDateString("es-AR")}`;
@@ -192,8 +196,37 @@ function ContractCard({
   r: SigningRequest;
   navigate: ReturnType<typeof useNavigate>;
 }) {
+  const [refreshingPdf, setRefreshingPdf] = useState(false);
   const expired = isExpired(r);
   const canSign = r.status !== "SIGNED" && r.status !== "REJECTED" && !expired;
+
+  async function openDocument() {
+    setRefreshingPdf(true);
+    try {
+      let url: string | null = r.finalPdfUrl ?? r.pdfUrl;
+      if (r.status === "SIGNED") {
+        const pdfBlob = await generateConsolidatedPdfBlob(r.documentId);
+        if (pdfBlob) {
+          url = URL.createObjectURL(pdfBlob);
+          void tryGenerateConsolidatedPdf(r.documentId);
+        } else {
+          url = null;
+        }
+      }
+      if (!url) {
+        window.alert("No se pudo preparar el PDF completo. Intentá de nuevo en unos segundos.");
+        return;
+      }
+      if (url.startsWith("blob:")) {
+        window.open(url, "_blank", "noopener,noreferrer");
+      } else {
+        const separator = url.includes("?") ? "&" : "?";
+        window.open(`${url}${separator}v=${Date.now()}`, "_blank", "noopener,noreferrer");
+      }
+    } finally {
+      setRefreshingPdf(false);
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-5 hover:border-zinc-300 transition">
@@ -209,19 +242,13 @@ function ContractCard({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Badge status={expired ? "EXPIRED" : r.status} />
-          {r.finalPdfUrl && (
-            <a
-              href={r.finalPdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition"
-            >
-              <Download size={12} /> PDF firmado
-            </a>
-          )}
           {canSign ? (
             <Button onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">
               <PenLine size={13} /> Firmar ahora
+            </Button>
+          ) : r.status === "SIGNED" ? (
+            <Button onClick={openDocument} disabled={refreshingPdf} className="h-9 px-4 text-xs">
+              <Eye size={13} /> {refreshingPdf ? "Preparando..." : "Ver PDF completo"}
             </Button>
           ) : (
             <Button variant="secondary" onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">

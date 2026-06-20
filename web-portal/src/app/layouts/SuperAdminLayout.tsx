@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { SharedSidebar } from "../../shared/components/ui/SharedSidebar";
 import { SharedHeader } from "../../shared/components/ui/SharedHeader";
+import { OnboardingTour } from "../../shared/components/onboarding/OnboardingTour";
 
 export function SuperAdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -19,7 +20,7 @@ export function SuperAdminLayout() {
         <SharedHeader 
           variant="super-admin" 
           onMobileOpen={() => setMobileOpen(true)} 
-          showSearch={false} 
+          showSearch={true} 
         />
 
         <main className="min-h-[calc(100vh-3.5rem)] px-4 py-6 md:px-6">
@@ -28,6 +29,8 @@ export function SuperAdminLayout() {
           </div>
         </main>
       </div>
+
+      {location.pathname === "/super-admin" && <OnboardingTour variant="super-admin" />}
     </div>
   );
 }

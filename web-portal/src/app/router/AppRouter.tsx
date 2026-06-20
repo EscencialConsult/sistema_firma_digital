@@ -199,6 +199,11 @@ export function AppRouter() {
             <Route path="/kyc/rejected" element={<KycRejectedPage />} />
           </Route>
 
+          {/* App principal (con sidebar) - accesible sin verificación KYC */}
+          <Route element={<AppLayout />}>
+            <Route path="/profile"          element={<ProfilePage />} />
+          </Route>
+
           {/* ── Requieren verificación KYC ── */}
           <Route element={<VerifiedGuard />}>
 
@@ -215,7 +220,6 @@ export function AppRouter() {
               <Route path="/identity"         element={<IdentityPage />} />
               <Route path="/certificates"     element={<CertificatesPage />} />
               <Route path="/audit"            element={<AuditPage />} />
-              <Route path="/profile"          element={<ProfilePage />} />
             </Route>
 
             {/* ── Solo admins (ADMIN / ORG_ADMIN) ── */}

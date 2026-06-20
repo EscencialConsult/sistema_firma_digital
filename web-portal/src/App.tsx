@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode, useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./app/providers/AuthProvider";
 import { AppRouter } from "./app/router/AppRouter";
@@ -47,6 +47,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export function App() {
+  useEffect(() => {
+    if (window.top && window.top !== window.self) {
+      try {
+        window.top.location.href = window.self.location.href;
+      } catch (err) {
+        console.error("Iframe breakout failed:", err);
+      }
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>

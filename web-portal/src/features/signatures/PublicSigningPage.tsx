@@ -5,6 +5,7 @@ import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
 import { supabase } from "../../shared/lib/supabase";
 import { useAuth } from "../../app/providers/AuthProvider";
+import { OtpInput } from "../../shared/components/ui/OtpInput";
 
 
 interface SignatureRequestDetails {
@@ -62,6 +63,11 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
   const [acceptedConformity, setAcceptedConformity] = useState(false);
   const [conformityCheckbox, setConformityCheckbox] = useState(false);
   const [acceptingConformity, setAcceptingConformity] = useState(false);
+
+  // OTP states
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCodeInput, setOtpCodeInput] = useState("");
+  const [sendingOtp, setSendingOtp] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
@@ -140,7 +146,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
 
   // Drag handlers
   function handleMouseDown(e: MouseEvent<HTMLDivElement>) {
-    if (signed) return;
+    if (signed || otpSent) return;
     isDragging.current = true;
     document.body.style.cursor = "grabbing";
     document.body.style.userSelect = "none";
@@ -187,7 +193,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
   }
 
   function handleSignatureKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (signed || !containerRef.current) return;
+    if (signed || otpSent || !containerRef.current) return;
     const step = event.shiftKey ? 10 : 2;
     const delta = {
       ArrowLeft: { x: -step, y: 0 },
@@ -251,8 +257,41 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     }
   }
 
+  async function handleRequestOtp() {
+    if (!request) return;
+    setSendingOtp(true);
+    setError(null);
+    try {
+      const docTitle = request.document?.title || request.documents?.[0]?.title || "Documento";
+      const { data, error: invokeError } = await supabase.functions.invoke("send-signing-email", {
+        body: {
+          signerEmail: request.signer_email,
+          signerName: request.signer_name,
+          documentTitle: docTitle,
+          requestId: request.id,
+          isOtpRequest: true,
+        },
+      });
+
+      if (invokeError) throw new Error(invokeError.message);
+      if (data && !data.ok) throw new Error(data.error || "Error al enviar el código OTP");
+
+      setOtpSent(true);
+      setOtpCodeInput(""); // Reset any previous input
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || "Ocurrió un error al enviar el código de verificación.");
+    } finally {
+      setSendingOtp(false);
+    }
+  }
+
   async function handleSign() {
     if (!request) return;
+    if (!otpCodeInput || otpCodeInput.length !== 6) {
+      setError("Por favor, ingresá el código de verificación de 6 dígitos.");
+      return;
+    }
     setSigning(true);
     setError(null);
 
@@ -268,14 +307,15 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     const pdfH = Math.round((size.height / containerH) * pdfPageH);
 
     try {
-      const { error: signError } = await supabase.functions.invoke("sign-document", {
+      const { data, error: signError } = await supabase.functions.invoke("sign-document", {
         body: {
           ...(token ? { token } : { requestId: id }),
-          otp: "000000", // OTP será manejado en flujo separado
+          otp: otpCodeInput,
           metadata: { x: pdfX, y: pdfY, width: pdfW, height: pdfH, page },
         },
       });
       if (signError) throw new Error(signError.message);
+      if (data && !data.ok && data.error) throw new Error(data.error);
       setSigned(true);
       if (onComplete) {
         onComplete();
@@ -434,7 +474,9 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
               {!signed && !rejected ? (
                 <div
                   ref={dragRef}
-                  className="absolute cursor-grab active:cursor-grabbing border border-dashed border-emerald-500 bg-emerald-500/10 backdrop-blur-[1px] rounded-xl p-3 text-[10px] font-bold text-emerald-950 shadow-[0_8px_30px_rgba(16,185,129,0.12)] select-none flex flex-col justify-center transition-transform duration-200 hover:scale-102"
+                  className={`absolute border border-dashed border-emerald-500 bg-emerald-500/10 backdrop-blur-[1px] rounded-xl p-3 text-[10px] font-bold text-emerald-950 shadow-[0_8px_30px_rgba(16,185,129,0.12)] select-none flex flex-col justify-center transition-transform duration-200 hover:scale-102 ${
+                    otpSent ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+                  }`}
                   style={{
                     left: `${pos.x}px`,
                     top: `${pos.y}px`,
@@ -447,12 +489,16 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                   tabIndex={0}
                   aria-label="Ubicación del sello de firma. Use las flechas para moverlo."
                 >
-                  <div className="absolute top-2.5 right-2.5 text-emerald-600">
-                    <Move size={12} />
-                  </div>
+                  {!otpSent && (
+                    <div className="absolute top-2.5 right-2.5 text-emerald-600">
+                      <Move size={12} />
+                    </div>
+                  )}
                   <span className="text-emerald-700 tracking-widest text-[8px] uppercase font-mono font-bold">FIRMA DIGITAL · PÁG {page}</span>
                   <span className="truncate text-zinc-900 mt-1 font-semibold text-[9px]">{request?.signer_name || request?.signer_email}</span>
-                  <span className="text-zinc-400 mt-0.5 text-[8px] font-normal">Arrastra para ubicar</span>
+                  <span className="text-zinc-400 mt-0.5 text-[8px] font-normal">
+                    {otpSent ? "Posición confirmada" : "Arrastra para ubicar"}
+                  </span>
                 </div>
               ) : signed ? (
                 // Signed status indicator at the location
@@ -574,6 +620,54 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                         {rejecting ? "Procesando..." : "Rechazar firma"}
                       </button>
                     </div>
+                  ) : otpSent ? (
+                    <div className="space-y-4">
+                      <div className="rounded-xl bg-zinc-50 border border-zinc-100 p-3.5 text-xs text-zinc-600 leading-relaxed">
+                        Hemos enviado un código de verificación de 6 dígitos a <strong>{request?.signer_email}</strong>.
+                      </div>
+
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block text-center">
+                          Código de verificación
+                        </label>
+                        <OtpInput
+                          length={6}
+                          onComplete={(code) => setOtpCodeInput(code)}
+                          onChange={(code) => setOtpCodeInput(code)}
+                          disabled={signing}
+                          error={!!error}
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <Button
+                          variant="secondary"
+                          className="w-1/2 justify-center"
+                          onClick={() => setOtpSent(false)}
+                          disabled={signing}
+                        >
+                          Atrás
+                        </Button>
+                        <Button
+                          className="w-1/2 justify-center bg-emerald-600 hover:bg-emerald-700 text-white"
+                          onClick={handleSign}
+                          disabled={signing || otpCodeInput.length !== 6}
+                        >
+                          {signing ? "Firmando..." : "Confirmar y Firmar"}
+                        </Button>
+                      </div>
+
+                      <div className="text-center pt-2">
+                        <button
+                          type="button"
+                          className="text-xs text-zinc-500 hover:text-zinc-800 font-semibold underline disabled:opacity-50 transition"
+                          onClick={handleRequestOtp}
+                          disabled={sendingOtp || signing}
+                        >
+                          {sendingOtp ? "Enviando código..." : "¿No recibiste el código? Reenviar"}
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <>
                       <div className="flex gap-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 text-xs text-emerald-800 font-semibold items-center">
@@ -652,10 +746,10 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
 
                       <Button 
                         className="w-full justify-center bg-emerald-600 hover:bg-emerald-700 text-white mt-2"
-                        onClick={handleSign}
-                        disabled={signing}
+                        onClick={handleRequestOtp}
+                        disabled={sendingOtp}
                       >
-                        <FileSignature size={16} /> {signing ? "Procesando firma..." : "Firmar Documento"}
+                        <FileSignature size={16} /> {sendingOtp ? "Solicitando código..." : "Firmar Documento"}
                       </Button>
 
                       <button

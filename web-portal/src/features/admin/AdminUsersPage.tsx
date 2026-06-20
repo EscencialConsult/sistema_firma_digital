@@ -30,10 +30,10 @@ import {
 
 function verBadge(status: string) {
   switch (status) {
-    case "VERIFIED":  return "text-emerald-700 bg-emerald-50 border-emerald-200";
-    case "IN_REVIEW": return "text-amber-700 bg-amber-50 border-amber-200";
-    case "REJECTED":  return "text-red-700 bg-red-50 border-red-200";
-    default:          return "text-zinc-600 bg-zinc-100 border-zinc-200";
+    case "VERIFIED":  return "text-emerald-700 bg-emerald-50/60 border-emerald-200/60";
+    case "IN_REVIEW": return "text-amber-700 bg-amber-50/60 border-amber-200/60";
+    case "REJECTED":  return "text-rose-700 bg-rose-50/60 border-rose-200/60";
+    default:          return "text-zinc-550 bg-zinc-50 border-zinc-200/60";
   }
 }
 
@@ -45,10 +45,11 @@ function verLabel(status: string) {
   return map[status] ?? status;
 }
 
+// Ensure all admin roles containing ADMIN (SUPER_ADMIN, ORG_ADMIN, etc) are indigo
 function roleBadge(role: string) {
-  return role === "ADMIN"
-    ? "text-purple-700 bg-purple-50 border-purple-200"
-    : "text-zinc-600 bg-zinc-100 border-zinc-200";
+  return role.toUpperCase().includes("ADMIN")
+    ? "text-indigo-750 bg-indigo-50/60 border-indigo-200/60"
+    : "text-zinc-550 bg-zinc-50 border-zinc-200/60";
 }
 
 function VerIcon({ status }: { status: string }) {
@@ -69,14 +70,14 @@ function Field({
   onChange: (v: string) => void;
 }) {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-semibold text-zinc-400">{label}</label>
+    <div className="space-y-1.5">
+      <label className="block text-xs font-bold text-zinc-500 tracking-wide uppercase">{label}</label>
       <input
         type={type}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-[var(--radius-button)] border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-500 transition"
+        className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-955 focus:ring-1 focus:ring-zinc-955 transition-all duration-200 shadow-sm"
       />
     </div>
   );
@@ -182,17 +183,17 @@ function AssignContractModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="page-transition-enter relative w-full max-w-2xl rounded-[var(--radius-card)] border border-zinc-200 bg-white shadow-2xl">
+      <div className="page-transition-enter relative w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
           <div>
-            <p className="text-xs text-zinc-500">Asignar contrato a</p>
-            <p className="font-semibold text-zinc-900">{user.fullName}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Asignar contrato a</p>
+            <p className="font-bold text-zinc-950 text-base tracking-tight">{user.fullName}</p>
           </div>
           <button
             onClick={onClose}
             type="button"
-            className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition"
+            className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
           >
             <X size={15} />
           </button>
@@ -200,17 +201,17 @@ function AssignContractModal({
 
         {/* Step indicator */}
         {!sent && (
-          <div className="flex gap-1 border-b border-zinc-200 px-6 py-3 bg-zinc-50/50">
+          <div className="flex gap-1 border-b border-zinc-150 px-6 py-3 bg-zinc-50/50">
             {["Contrato", "Datos alumno", "Vista previa"].map((s, i) => (
               <div key={i} className="flex items-center gap-1.5">
-                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                  i < step ? "bg-emerald-500 text-white" :
-                  i === step ? "bg-zinc-900 text-white" :
+                <span className={`flex h-5 w-5 items-center justify-center rounded-lg text-[10px] font-bold ${
+                  i < step ? "bg-emerald-600 text-white" :
+                  i === step ? "bg-zinc-955 text-white" :
                   "bg-zinc-200 text-zinc-500"
                 }`}>
                   {i < step ? <Check size={9} /> : i + 1}
                 </span>
-                <span className={`text-xs ${i === step ? "text-zinc-900 font-medium" : "text-zinc-500"}`}>{s}</span>
+                <span className={`text-xs font-bold tracking-tight ${i === step ? "text-zinc-955" : "text-zinc-400"}`}>{s}</span>
                 {i < 2 && <ChevronRight size={11} className="text-zinc-300 ml-1" />}
               </div>
             ))}
@@ -221,12 +222,12 @@ function AssignContractModal({
         <div className="p-6">
           {sent ? (
             <div className="flex flex-col items-center py-8 text-center">
-              <div className="mb-4 grid h-16 w-16 place-items-center rounded-full bg-emerald-50 border border-emerald-200">
-                <Check size={28} className="text-emerald-600" />
+              <div className="mb-4 grid h-14 w-14 place-items-center rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 shadow-sm">
+                <Check size={24} />
               </div>
-              <p className="font-bold text-zinc-900">¡Contrato enviado!</p>
-              <p className="mt-1 text-sm text-zinc-500">
-                Se notificó a <strong className="text-zinc-800">{user.email}</strong> para firmar.
+              <p className="font-bold text-zinc-955 text-base">¡Contrato enviado!</p>
+              <p className="mt-1 text-sm text-zinc-500 font-medium">
+                Se notificó a <strong className="text-zinc-850">{user.email}</strong> para firmar.
               </p>
               <Button onClick={onClose} className="mt-6 h-9 px-5">Cerrar</Button>
             </div>
@@ -257,13 +258,13 @@ function AssignContractModal({
               {/* Step 1: alumno data */}
               {step === 1 && (
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 flex items-center gap-3">
-                    <div className="grid h-8 w-8 place-items-center rounded-full bg-zinc-200 text-sm font-bold text-zinc-700">
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-3 flex items-center gap-3 shadow-sm">
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-200 text-sm font-bold text-zinc-700">
                       {user.fullName[0]?.toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-zinc-900">{user.fullName}</p>
-                      <p className="text-xs text-zinc-500">{user.email}</p>
+                      <p className="text-sm font-bold text-zinc-900">{user.fullName}</p>
+                      <p className="text-xs text-zinc-500 font-medium">{user.email}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -362,7 +363,7 @@ export function AdminUsersPage() {
   // ── Filtered users ──
   const filtered = useMemo(() => {
     let list = users;
-    if (filter === "admin")     list = list.filter((u) => u.role === "ADMIN");
+    if (filter === "admin")     list = list.filter((u) => u.role.toUpperCase().includes("ADMIN"));
     else if (filter !== "all") {
       const statusMap: Record<Exclude<Filter, "all" | "admin">, string> = {
         verified: "VERIFIED", in_review: "IN_REVIEW", pending: "PENDING", rejected: "REJECTED",
@@ -455,27 +456,27 @@ export function AdminUsersPage() {
 
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Admin</p>
-          <h1 className="mt-1 text-2xl font-bold text-zinc-900">Usuarios</h1>
-          <p className="mt-1 text-sm text-zinc-500">Gestión completa de usuarios del sistema.</p>
+        <div className="border-b border-zinc-100 pb-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Admin</p>
+          <h1 className="mt-1 text-3xl font-black text-zinc-955 tracking-tight">Usuarios</h1>
+          <p className="mt-1.5 text-sm text-zinc-500 font-medium">Gestión completa de usuarios del sistema.</p>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 rounded-[var(--radius-button)] border border-zinc-200 bg-white p-1">
+        <div className="flex gap-1.5 bg-zinc-100 p-1.5 rounded-xl w-fit border border-zinc-200/50 shadow-inner">
           {tabConfig.map(({ key, label, icon }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               type="button"
-              className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold transition ${
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all duration-200 ${
                 tab === key
-                  ? "bg-zinc-100 text-zinc-900 shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50"
+                  ? "bg-white text-zinc-955 shadow-sm border border-zinc-200/30"
+                  : "text-zinc-500 hover:text-zinc-800"
               }`}
             >
               {icon}
-              {label}
+              <span>{label}</span>
             </button>
           ))}
         </div>
@@ -484,7 +485,7 @@ export function AdminUsersPage() {
         {tab === "list" && (
           <div className="space-y-4">
             {/* Search */}
-            <div className="flex items-center gap-2.5 rounded-[var(--radius-button)] border border-zinc-200 bg-white px-3.5 py-2.5 focus-within:border-zinc-400 focus-within:ring-2 focus-within:ring-zinc-100 transition">
+            <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm focus-within:border-zinc-955 focus-within:ring-1 focus-within:ring-zinc-955 transition-all duration-300">
               <Search size={15} className="shrink-0 text-zinc-400" />
               <input
                 className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400"
@@ -493,7 +494,7 @@ export function AdminUsersPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search && (
-                <button onClick={() => setSearch("")} type="button" className="text-zinc-400 hover:text-zinc-600">
+                <button onClick={() => setSearch("")} type="button" className="text-zinc-400 hover:text-zinc-650 transition-colors">
                   <X size={14} />
                 </button>
               )}
@@ -506,17 +507,21 @@ export function AdminUsersPage() {
                   key={key}
                   onClick={() => setFilter(key)}
                   type="button"
-                  className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
+                  className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-all duration-200 ${
                     filter === key
-                      ? "border-zinc-300 bg-zinc-100 text-zinc-900"
-                      : "border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50"
+                      ? "border-zinc-955 bg-zinc-955 text-white shadow-sm"
+                      : "border-zinc-200 bg-white text-zinc-550 hover:border-zinc-300 hover:text-zinc-955"
                   }`}
                 >
-                  {label}
+                  <span>{label}</span>
                   {key !== "all" && (
-                    <span className="ml-1.5 text-zinc-600">
+                    <span className={`ml-1.5 rounded-md px-1.5 py-0.5 text-[9px] font-extrabold transition-all duration-200 ${
+                      filter === key 
+                        ? "bg-white/20 text-white" 
+                        : "bg-zinc-100 text-zinc-500"
+                    }`}>
                       {users.filter((u) => {
-                        if (key === "admin") return u.role === "ADMIN";
+                        if (key === "admin") return u.role.toUpperCase().includes("ADMIN");
                         const m: Record<string, string> = { verified:"VERIFIED", in_review:"IN_REVIEW", pending:"PENDING", rejected:"REJECTED" };
                         return u.verificationStatus === m[key];
                       }).length}
@@ -527,10 +532,10 @@ export function AdminUsersPage() {
             </div>
 
             {/* User list */}
-            <div className="overflow-hidden rounded-[var(--radius-card)] border border-zinc-200 bg-white">
-              <div className="flex items-center gap-2 border-b border-zinc-100 px-5 py-3 bg-zinc-50/50">
+            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+              <div className="flex items-center gap-2 border-b border-zinc-100 px-6 py-4 bg-zinc-50/30">
                 <Users size={14} className="text-zinc-500" />
-                <p className="text-xs font-semibold text-zinc-500">
+                <p className="text-xs font-semibold text-zinc-555">
                   {loading ? "Cargando..." : `${filtered.length} usuario${filtered.length !== 1 ? "s" : ""}`}
                 </p>
               </div>
@@ -544,39 +549,40 @@ export function AdminUsersPage() {
               ) : filtered.length === 0 ? (
                 <div className="py-14 text-center">
                   <Users size={30} className="text-zinc-300 mx-auto mb-2" />
-                  <p className="text-sm text-zinc-500">Sin resultados</p>
+                  <p className="text-sm font-semibold text-zinc-555">Sin resultados</p>
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-100">
                   {filtered.map((u) => (
                     <div
                       key={u.id}
-                      className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-50/50 transition sm:flex-row sm:items-center sm:justify-between"
+                      className="group flex flex-col gap-3 px-6 py-5 hover:bg-zinc-50/40 transition-all duration-300 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-zinc-100 text-sm font-bold text-zinc-600">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-zinc-100 text-sm font-bold text-zinc-650 border border-zinc-200/40 group-hover:bg-zinc-200/40 transition-colors duration-300">
                           {u.fullName[0]?.toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-zinc-900 truncate">{u.fullName}</p>
-                          <p className="text-xs text-zinc-500 truncate">{u.email}</p>
+                          <p className="font-bold text-zinc-955 text-sm tracking-tight truncate group-hover:text-zinc-900 transition-colors">{u.fullName}</p>
+                          <p className="text-xs text-zinc-500 font-medium truncate mt-0.5">{u.email}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                        <span className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${verBadge(u.verificationStatus)}`}>
+                      <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                        <span className={`flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-bold tracking-wide ${verBadge(u.verificationStatus)}`}>
                           <VerIcon status={u.verificationStatus} />
-                          {verLabel(u.verificationStatus)}
+                          <span>{verLabel(u.verificationStatus)}</span>
                         </span>
-                        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${roleBadge(u.role)}`}>
+                        <span className={`rounded-full border px-3 py-1 text-[11px] font-bold tracking-wide ${roleBadge(u.role)}`}>
                           {u.role}
                         </span>
                         {u.verificationStatus === "VERIFIED" && (
                           <button
                             type="button"
                             onClick={() => setAssignUser(u)}
-                            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 hover:bg-zinc-50 transition"
+                            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-bold text-zinc-600 hover:border-zinc-400 hover:text-zinc-955 hover:bg-zinc-50 transition-all duration-200 active:scale-[0.98] shadow-sm"
                           >
-                            <FileText size={11} /> Asignar contrato
+                            <FileText size={12} className="text-zinc-500" />
+                            <span>Asignar contrato</span>
                           </button>
                         )}
                       </div>
@@ -590,21 +596,26 @@ export function AdminUsersPage() {
 
         {/* ── Tab: Agregar usuario ── */}
         {tab === "add" && (
-          <div className="max-w-md space-y-5">
-            <p className="text-sm text-zinc-400">
-              Agregá un usuario manualmente. Recibirá sus credenciales por email.
-            </p>
+          <div className="max-w-md bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm space-y-5">
+            <div>
+              <h2 className="text-base font-bold text-zinc-955">Nuevo Usuario</h2>
+              <p className="text-xs text-zinc-400 mt-1">
+                Agregá un usuario manualmente. Recibirá sus credenciales por email.
+              </p>
+            </div>
 
             {addSuccess ? (
-              <div className="rounded-[var(--radius-card)] border border-emerald-200 bg-emerald-50 p-6 text-center">
-                <Check size={28} className="text-emerald-600 mx-auto mb-3" />
-                <p className="font-semibold text-emerald-900">Usuario agregado</p>
-                <p className="mt-1 text-sm text-emerald-700">
+              <div className="rounded-xl border border-emerald-250 bg-emerald-50/50 p-6 text-center">
+                <div className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-emerald-600 mx-auto">
+                  <Check size={24} />
+                </div>
+                <p className="font-bold text-emerald-955">Usuario agregado</p>
+                <p className="mt-1 text-sm text-emerald-700 font-medium">
                   Quedó registrado como pendiente de verificación KYC.
                 </p>
                 <Button
                   onClick={() => setAddSuccess(false)}
-                  className="mt-4 h-9 px-5"
+                  className="mt-5 h-9 px-5 w-full sm:w-auto"
                 >
                   Agregar otro
                 </Button>
@@ -631,12 +642,12 @@ export function AdminUsersPage() {
                   placeholder="Mínimo 6 caracteres"
                   onChange={(v) => setAddForm((f) => ({ ...f, password: v }))}
                 />
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-zinc-500">Rol</label>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-zinc-500 tracking-wide uppercase">Rol</label>
                   <select
                     value={addForm.role}
                     onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value as "USER" | "ADMIN" }))}
-                    className="w-full rounded-[var(--radius-button)] border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-100 transition"
+                    className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-955 focus:ring-1 focus:ring-zinc-955 transition-all duration-200 shadow-sm cursor-pointer"
                   >
                     <option value="USER">Alumno / Usuario</option>
                     <option value="ADMIN">Administrador</option>
@@ -644,12 +655,12 @@ export function AdminUsersPage() {
                 </div>
 
                 {addError && (
-                  <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600">
+                  <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-655 font-semibold">
                     {addError}
                   </p>
                 )}
 
-                <Button type="submit" className="w-full h-10">
+                <Button type="submit" className="w-full h-10 mt-2">
                   <UserPlus size={14} /> Crear usuario
                 </Button>
               </form>
@@ -659,10 +670,17 @@ export function AdminUsersPage() {
 
         {/* ── Tab: Importar CSV ── */}
         {tab === "import" && (
-          <div className="space-y-5">
-            <div className="rounded-[var(--radius-card)] border border-zinc-200 bg-zinc-50 p-4">
-              <p className="text-xs font-semibold text-zinc-500 mb-1">Formato esperado (primera fila = encabezados):</p>
-              <code className="block rounded-lg bg-zinc-100 px-4 py-3 text-[11px] font-mono text-zinc-600">
+          <div className="max-w-2xl bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm space-y-5">
+            <div>
+              <h2 className="text-base font-bold text-zinc-955">Importar Usuarios</h2>
+              <p className="text-xs text-zinc-400 mt-1">
+                Subí un archivo CSV con la lista de usuarios para cargarlos en lote.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Formato esperado:</p>
+              <code className="block rounded-lg bg-zinc-100 border border-zinc-200 px-4 py-3 text-[11px] font-mono text-zinc-650 leading-relaxed overflow-x-auto">
                 nombre_completo,email,rol,dni,empresa
                 <br />
                 María González,maria@gmail.com,USER,40123456,Empresa SA
@@ -678,15 +696,19 @@ export function AdminUsersPage() {
                 onDragOver={(e) => { e.preventDefault(); setCsvDrag(true); }}
                 onDragLeave={() => setCsvDrag(false)}
                 onClick={() => csvRef.current?.click()}
-                className={`flex flex-col items-center justify-center gap-3 rounded-[var(--radius-card)] border-2 border-dashed cursor-pointer py-14 transition ${
+                className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed cursor-pointer py-14 transition-all duration-300 ${
                   csvDrag
-                    ? "border-zinc-400 bg-zinc-50"
-                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+                    ? "border-zinc-955 bg-zinc-50"
+                    : "border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50/50"
                 }`}
               >
-                <Upload size={28} className="text-zinc-400" />
-                <p className="text-sm font-medium text-zinc-600">Arrastrá un archivo CSV o hacé click para seleccionar</p>
-                <p className="text-xs text-zinc-400">.csv · UTF-8</p>
+                <div className="grid h-12 w-12 place-items-center rounded-xl bg-zinc-50 text-zinc-500 border border-zinc-200 shadow-sm">
+                  <Upload size={20} />
+                </div>
+                <div className="text-center space-y-1">
+                  <p className="text-sm font-bold text-zinc-850">Arrastrá un archivo CSV o hacé click para seleccionar</p>
+                  <p className="text-xs text-zinc-400 font-medium">Soporta formato .csv codificado en UTF-8</p>
+                </div>
                 <input
                   ref={csvRef}
                   type="file"
@@ -701,24 +723,24 @@ export function AdminUsersPage() {
             {csvRows.length > 0 && !csvImported && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-zinc-500">
-                    <strong className="text-zinc-900">{csvRows.length}</strong> registros encontrados
+                  <p className="text-sm text-zinc-500 font-medium">
+                    Se encontraron <strong className="text-zinc-955 font-bold">{csvRows.length}</strong> registros
                   </p>
                   <button
                     type="button"
                     onClick={() => setCsvRows([])}
-                    className="text-xs text-zinc-500 hover:text-zinc-700 underline"
+                    className="text-xs font-semibold text-zinc-500 hover:text-zinc-955 underline transition-colors"
                   >
                     Cambiar archivo
                   </button>
                 </div>
 
-                <div className="overflow-x-auto rounded-[var(--radius-card)] border border-zinc-200">
+                <div className="overflow-x-auto rounded-xl border border-zinc-200 shadow-sm">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-zinc-200 bg-zinc-50">
                         {Object.keys(csvRows[0]).map((h) => (
-                          <th key={h} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
+                          <th key={h} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-zinc-555 border-r border-zinc-200/50 last:border-0">
                             {h}
                           </th>
                         ))}
@@ -726,22 +748,22 @@ export function AdminUsersPage() {
                     </thead>
                     <tbody className="divide-y divide-zinc-100 bg-white">
                       {csvRows.slice(0, 8).map((row, i) => (
-                        <tr key={i} className="hover:bg-zinc-50/50">
+                        <tr key={i} className="hover:bg-zinc-50/30 transition-colors">
                           {Object.values(row).map((v, j) => (
-                            <td key={j} className="px-4 py-3 text-zinc-700">{v}</td>
+                            <td key={j} className="px-4 py-3 text-zinc-700 font-medium text-xs border-r border-zinc-100 last:border-0">{v}</td>
                           ))}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {csvRows.length > 8 && (
-                    <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-2 text-xs text-zinc-500">
+                    <div className="border-t border-zinc-150 bg-zinc-50 px-4 py-2.5 text-xs font-semibold text-zinc-955">
                       + {csvRows.length - 8} filas más
                     </div>
                   )}
                 </div>
 
-                <Button onClick={handleCsvImport} className="h-10 px-6">
+                <Button onClick={handleCsvImport} className="h-10 px-6 w-full sm:w-auto">
                   <Upload size={14} /> Importar {csvRows.length} usuarios
                 </Button>
               </div>
@@ -749,13 +771,15 @@ export function AdminUsersPage() {
 
             {/* Success */}
             {csvImported && (
-              <div className="rounded-[var(--radius-card)] border border-emerald-200 bg-emerald-50 p-6 text-center">
-                <Check size={28} className="text-emerald-600 mx-auto mb-3" />
-                <p className="font-semibold text-emerald-900">{csvRows.length} usuarios importados</p>
-                <p className="mt-1 text-sm text-emerald-700">
-                  Aparecen en la lista con estado "Pendiente" — deberán completar el KYC.
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-6 text-center">
+                <div className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-emerald-600 mx-auto">
+                  <Check size={24} />
+                </div>
+                <p className="font-bold text-emerald-955">¡{csvRows.length} usuarios importados con éxito!</p>
+                <p className="mt-1 text-sm text-emerald-700 font-medium">
+                  Aparecen en la lista con estado "Pendiente" y deberán completar el KYC.
                 </p>
-                <div className="flex justify-center gap-3 mt-4">
+                <div className="flex justify-center gap-3 mt-5">
                   <Button onClick={() => { setCsvRows([]); setCsvImported(false); }} variant="secondary" className="h-9 px-4 text-zinc-700">
                     Importar otro
                   </Button>

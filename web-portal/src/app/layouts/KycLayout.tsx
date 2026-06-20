@@ -5,11 +5,6 @@ import { useAuth } from "../providers/AuthProvider";
 export function KycLayout() {
   const { user, logout } = useAuth();
 
-  // Verified users, and users already waiting for review, don't need to stay in KYC.
-  if (user?.verificationStatus === "VERIFIED" || user?.verificationStatus === "IN_REVIEW") {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   return (
     <div className="min-h-screen bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white px-4 py-4">

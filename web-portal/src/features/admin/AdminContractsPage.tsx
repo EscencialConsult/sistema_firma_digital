@@ -24,6 +24,7 @@ import {
   sendContractFromTemplate,
   sendDocumentToThirdParty,
 } from "../../shared/services/contracts.service";
+import { generateConsolidatedPdfBlob, tryGenerateConsolidatedPdf } from "../../shared/services/signing.service";
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
 import { getMyOrganization } from "../../shared/services/organizations.service";
 import { getAllUsers } from "../../shared/services/admin.service";
@@ -604,6 +605,7 @@ export function AdminContractsPage() {
   const [search, setSearch]       = useState("");
   const [viewContract, setViewContract]     = useState<Contract | null>(null);
   const [sendThirdParty, setSendThirdParty] = useState<Contract | null>(null);
+  const [preparingPdfId, setPreparingPdfId] = useState<string | null>(null);
 
   const [dbTemplates, setDbTemplates]           = useState<DbContractTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -692,6 +694,27 @@ export function AdminContractsPage() {
     await deleteContractTemplate(id);
     setDbTemplates((prev) => prev.filter((t) => t.id !== id));
     showToast("Plantilla eliminada.");
+  }
+
+  async function openSignedPdf(contract: Contract) {
+    setPreparingPdfId(contract.id);
+    try {
+      const pdfBlob = await generateConsolidatedPdfBlob(contract.id);
+      if (!pdfBlob) {
+        if (contract.finalPdfUrl) {
+          window.open(`${contract.finalPdfUrl}${contract.finalPdfUrl.includes("?") ? "&" : "?"}v=${Date.now()}`, "_blank", "noopener,noreferrer");
+          return;
+        }
+        window.alert("No se pudo preparar el PDF completo. Verificá que el documento tenga firmas registradas y una versión PDF original.");
+        return;
+      }
+
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      void tryGenerateConsolidatedPdf(contract.id);
+    } finally {
+      setPreparingPdfId(null);
+    }
   }
 
   // ─── Editor view ───────────────────────────────────────────────────────────
@@ -904,6 +927,8 @@ export function AdminContractsPage() {
                 <div className="divide-y divide-zinc-100">
                   {filtered.map((c) => {
                     const { label, className } = statusMeta(c.status);
+                    const hasSignedPdf = c.status === "SIGNED" || c.status === "COMPLETED" || c.completedSigners > 0;
+                    const isPreparingPdf = preparingPdfId === c.id;
                     return (
                       <div key={c.id}
                         className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-50 transition sm:flex-row sm:items-center sm:justify-between group">
@@ -929,17 +954,23 @@ export function AdminContractsPage() {
                               <Send size={11} /> Enviar al tercero
                             </button>
                           )}
-                          {c.finalPdfUrl && (
-                            <a href={c.finalPdfUrl} target="_blank" rel="noopener noreferrer"
+                          {hasSignedPdf && (
+                            <button type="button"
                               className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-100 transition"
-                              onClick={(e) => e.stopPropagation()}>
-                              <Download size={11} /> PDF
-                            </a>
+                              disabled={isPreparingPdf}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void openSignedPdf(c);
+                              }}>
+                              <Download size={11} /> {isPreparingPdf ? "Preparando..." : "PDF firmado"}
+                            </button>
                           )}
-                          <button type="button" onClick={() => setViewContract(c)}
-                            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
-                            <Eye size={11} /> Ver
-                          </button>
+                          {!hasSignedPdf && (
+                            <button type="button" onClick={() => setViewContract(c)}
+                              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
+                              <Eye size={11} /> Ver
+                            </button>
+                          )}
                         </div>
                       </div>
                     );

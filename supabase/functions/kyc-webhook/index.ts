@@ -73,6 +73,64 @@ function verifySignature(body: Record<string, unknown>, headers: Headers): boole
   return false;
 }
 
+async function saveDiditImage(
+  supabase: any,
+  imageUrl: string,
+  verificationId: string,
+  userId: string,
+  orgId: string,
+  type: "DOCUMENT_FRONT" | "DOCUMENT_BACK" | "SELFIE",
+  fileName: string
+) {
+  try {
+    console.log(`[saveDiditImage] Downloading ${type} from ${imageUrl}...`);
+    const res = await fetch(imageUrl);
+    if (!res.ok) {
+      console.error(`[saveDiditImage] Failed to download image from ${imageUrl}: ${res.statusText}`);
+      return;
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    const fileSize = arrayBuffer.byteLength;
+
+    const ext = contentType.split("/")[1] || "jpg";
+    const storagePath = `${orgId}/${userId}/${verificationId}/${type.toLowerCase()}.${ext}`;
+
+    console.log(`[saveDiditImage] Uploading ${type} to Supabase Storage at kyc-documents/${storagePath}...`);
+    const { error: uploadError } = await supabase.storage
+      .from("kyc-documents")
+      .upload(storagePath, arrayBuffer, {
+        contentType,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error(`[saveDiditImage] Failed to upload ${type} to storage:`, uploadError);
+      return;
+    }
+
+    console.log(`[saveDiditImage] Upserting record in identity_documents table for ${type}...`);
+    const { error: dbError } = await supabase
+      .from("identity_documents")
+      .upsert({
+        verification_id: verificationId,
+        type,
+        file_name: fileName,
+        mime_type: contentType,
+        file_size: fileSize,
+        storage_path: storagePath,
+      }, { onConflict: "verification_id,type" });
+
+    if (dbError) {
+      console.error(`[saveDiditImage] Failed to upsert ${type} in database:`, dbError);
+    } else {
+      console.log(`[saveDiditImage] Successfully saved ${type} image.`);
+    }
+  } catch (error) {
+    console.error(`[saveDiditImage] Error saving ${type} image from DIDIT:`, error);
+  }
+}
+
 const FRONTEND_URL = (Deno.env.get("FRONTEND_URL") ?? Deno.env.get("APP_URL") ?? "").replace(/\/+$/, "");
 
 serve(async (req) => {
@@ -80,22 +138,40 @@ serve(async (req) => {
     return new Response("ok", { headers: CORS_HEADERS });
   }
 
-  // ── GET: redirect del browser luego de que Didit finaliza ─────────────────
-  // Didit redirige al usuario a esta URL con ?status=...
-  // Si tiene ?signing=requestId, redirige al flujo de firma correspondiente.
-  // Sino, usa el flujo KYC estándar.
+  // ── GET: Didit redirige al browser acá con los resultados ─────────────────
+  // Necesitamos actualizar la DB para que el frontend (polling/Realtime) detecte
+  // el cambio, porque el POST callback de Didit no siempre llega (entorno local).
   if (req.method === "GET") {
     const url = new URL(req.url);
     const status    = url.searchParams.get("status") ?? "";
     const signingId = url.searchParams.get("signing") ?? "";
+    const sessionId = url.searchParams.get("session_id") ?? url.searchParams.get("sessionId") ?? "";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+    if (sessionId && !signingId && (status === "Approved" || status === "Declined" || status === "Abandoned")) {
+      const { data: verification } = await supabase
+        .from("identity_verifications")
+        .select("id, status")
+        .eq("provider_session_id", sessionId)
+        .maybeSingle();
+
+      // Solo actualizar si el POST handler todavía no lo procesó (status sigue PENDING)
+      if (verification && verification.status === "PENDING") {
+        const newStatus = status === "Approved" ? "VERIFIED" : "REJECTED";
+        await supabase
+          .from("identity_verifications")
+          .update({ status: newStatus, submitted_at: new Date().toISOString() })
+          .eq("id", verification.id);
+      }
+    }
+
     let base = FRONTEND_URL || "https://faquqlnwniinqqfmonbv.supabase.co";
     if (base && !base.startsWith("http")) {
       base = `https://${base}`;
     }
 
-    let destination: string;
     if (signingId) {
-      // Redirigir de vuelta al flujo de firma con el resultado
+      let destination: string;
       if (status === "Approved") {
         destination = `${base}/signing/${signingId}?face_verified=ok`;
       } else if (status === "Declined" || status === "Abandoned") {
@@ -103,16 +179,15 @@ serve(async (req) => {
       } else {
         destination = `${base}/signing/${signingId}?face_verified=pending`;
       }
-    } else {
-      // Flujo KYC estándar
-      destination = `${base}/kyc/pending`;
-      if (status === "Approved") destination = `${base}/dashboard`;
-      else if (status === "Declined" || status === "Abandoned") destination = `${base}/kyc/rejected`;
+      return new Response(null, {
+        status: 302,
+        headers: { ...CORS_HEADERS, Location: destination },
+      });
     }
 
-    return new Response(null, {
-      status: 302,
-      headers: { ...CORS_HEADERS, Location: destination },
+    return new Response("OK", {
+      status: 200,
+      headers: { "Content-Type": "text/plain" },
     });
   }
 
@@ -138,7 +213,7 @@ serve(async (req) => {
 
     const { data: verification } = await supabase
       .from("identity_verifications")
-      .select("*")
+      .select("*, user:users!user_id(organization_id)")
       .eq("provider_session_id", sessionId)
       .maybeSingle();
 
@@ -188,6 +263,67 @@ serve(async (req) => {
       .update({ provider_response: decision })
       .eq("id", verification.id);
 
+    // Guardar fotos de DNI y Selfie si están disponibles
+    try {
+      const userObj = verification.user as { organization_id?: string | null } | undefined;
+      const orgId = userObj?.organization_id || "default";
+      const userId = verification.user_id;
+      const verificationId = verification.id;
+
+      const idVer = decision.id_verifications?.[0];
+      const frontImage = idVer?.full_front_image;
+      const backImage = idVer?.full_back_image;
+      const selfieImage = decision.liveness_checks?.[0]?.reference_image;
+
+      const imagePromises = [];
+      if (frontImage) {
+        imagePromises.push(
+          saveDiditImage(
+            supabase,
+            frontImage,
+            verificationId,
+            userId,
+            orgId,
+            "DOCUMENT_FRONT",
+            "document_front.jpg"
+          )
+        );
+      }
+      if (backImage) {
+        imagePromises.push(
+          saveDiditImage(
+            supabase,
+            backImage,
+            verificationId,
+            userId,
+            orgId,
+            "DOCUMENT_BACK",
+            "document_back.jpg"
+          )
+        );
+      }
+      if (selfieImage) {
+        imagePromises.push(
+          saveDiditImage(
+            supabase,
+            selfieImage,
+            verificationId,
+            userId,
+            orgId,
+            "SELFIE",
+            "selfie.jpg"
+          )
+        );
+      }
+
+      if (imagePromises.length > 0) {
+        console.log(`[kyc-webhook] Processing ${imagePromises.length} image downloads from DIDIT...`);
+        await Promise.all(imagePromises);
+      }
+    } catch (err) {
+      console.error("[kyc-webhook] Error processing images:", err);
+    }
+
     const STATUS_MAP: Record<string, string> = {
       Approved: "approved",
       Declined: "declined",
@@ -204,14 +340,18 @@ serve(async (req) => {
       const faceMatch = decision.face_matches?.[0];
       const score = faceMatch?.score ?? decision.liveness_checks?.[0]?.score ?? 0;
 
+      const updateFields: Record<string, unknown> = {
+        status: score >= KYC_AUTO_APPROVE_THRESHOLD ? "VERIFIED" : "IN_REVIEW",
+        submitted_at: new Date().toISOString(),
+      };
+
+      // No pisar datos que el usuario ya cargó en Step 0 si Didit no los devuelve
+      if (idVer?.full_name != null) updateFields.full_name = idVer.full_name;
+      if (idVer?.document_number != null) updateFields.document_number = idVer.document_number;
+
       await supabase
         .from("identity_verifications")
-        .update({
-          full_name: idVer?.full_name ?? null,
-          document_number: idVer?.document_number ?? null,
-          status: score >= KYC_AUTO_APPROVE_THRESHOLD ? "VERIFIED" : "IN_REVIEW",
-          submitted_at: new Date().toISOString(),
-        })
+        .update(updateFields)
         .eq("id", verification.id);
 
       await supabase.from("audit_logs").insert({

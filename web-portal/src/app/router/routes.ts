@@ -2,7 +2,6 @@ import {
   BadgeCheck,
   FileClock,
   FileSignature,
-  Files,
   Gauge,
   IdCard,
   KeyRound,
@@ -14,8 +13,7 @@ import type { AppRoute } from "../../shared/types/navigation";
 
 export const routes: AppRoute[] = [
   { id: "dashboard", label: "Dashboard", icon: Gauge, path: "/dashboard" },
-  { id: "documents", label: "Documentos", icon: Files, path: "/documents" },
-  { id: "signatures", label: "Solicitudes", icon: FileSignature, path: "/signatures" },
+  { id: "signatures", label: "Mis contratos", icon: FileSignature, path: "/signatures" },
   { id: "identity", label: "Identidad", icon: IdCard, path: "/identity" },
   { id: "certificates", label: "Certificados", icon: KeyRound, path: "/certificates" },
   { id: "audit", label: "Auditoria", icon: FileClock, path: "/audit" },

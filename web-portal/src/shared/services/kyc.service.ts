@@ -48,9 +48,10 @@ async function mapRowToVerification(
     })
   );
 
-  const personalData: KycPersonalData | null = row.full_name
+  const hasPersonalData = row.full_name || row.document_number || row.birth_date || row.phone || row.address;
+  const personalData: KycPersonalData | null = hasPersonalData
     ? {
-        fullName:       row.full_name       as string,
+        fullName:       (row.full_name       as string) ?? "",
         documentType:   (row.document_type   as string) ?? "",
         documentNumber: (row.document_number as string) ?? "",
         cuilCuit:       (row.cuil_cuit       as string) ?? "",

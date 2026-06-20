@@ -48,7 +48,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function ProfilePage() {
-  const { user, reloadUser } = useAuth();
+  const { user, updateUser, reloadUser } = useAuth();
   const navigate = useNavigate();
   const [fullName, setFullName]   = useState("");
   const [saving, setSaving]       = useState(false);
@@ -64,10 +64,18 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     getMyVerification(user.id)
-      .then(setKyc)
+      .then((v) => {
+        if (cancelled) return;
+        setKyc(v);
+        if (v && v.status !== user.verificationStatus) {
+          updateUser({ verificationStatus: v.status });
+        }
+      })
       .catch(console.error)
-      .finally(() => setKycLoading(false));
+      .finally(() => { if (!cancelled) setKycLoading(false); });
+    return () => { cancelled = true; };
   }, [user]);
 
   useEffect(() => {
@@ -77,7 +85,7 @@ export function ProfilePage() {
       try {
         const { data } = await supabase
           .from("users")
-          .select("full_name, document_number, cuil_cuit, birth_date, phone, address")
+          .select("full_name, document_number, cuil_cuit, birth_date, phone, address, city, province")
           .eq("id", currentUser.id)
           .maybeSingle();
         if (!data) return;
@@ -97,8 +105,8 @@ export function ProfilePage() {
           birthDate: data.birth_date ?? "",
           phone: data.phone ?? "",
           address: data.address ?? "",
-          city: "",
-          province: "",
+          city: data.city ?? "",
+          province: data.province ?? "",
           country: "Argentina",
         });
       } catch (err) {
@@ -132,7 +140,21 @@ export function ProfilePage() {
     }
   }
 
-  const pd = kyc?.personalData ?? profileKycData;
+  let pd = kyc?.personalData ?? profileKycData;
+  if (!pd && user.verificationStatus === "VERIFIED") {
+    pd = {
+      fullName: user.fullName,
+      documentType: "DNI",
+      documentNumber: "",
+      cuilCuit: "",
+      birthDate: "",
+      phone: "",
+      address: "",
+      city: "",
+      province: "",
+      country: "Argentina",
+    };
+  }
   const canStartKyc = user.verificationStatus !== "VERIFIED" && user.verificationStatus !== "IN_REVIEW";
   const kycActionLabel =
     user.verificationStatus === "REJECTED"

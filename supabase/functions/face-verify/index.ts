@@ -67,6 +67,17 @@ async function sha256Hex(data: string | Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+
+  return btoa(binary);
+}
+
 async function signedRekognitionRequest(
   body: string,
   action: string
@@ -167,31 +178,70 @@ serve(async (req) => {
       throw new Error("No se encontró la solicitud de firma");
     }
 
-    const { data: iv } = await supabase
-      .from("identity_verifications")
-      .select("selfie_path")
+    // 1. Obtener el user_id a partir del email del firmante
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("id")
       .eq("email", sr.signer_email)
+      .maybeSingle();
+
+    if (!userRow) {
+      throw new Error("No se encontró el usuario firmante en el sistema");
+    }
+
+    // 2. Buscar la última verificación de identidad del usuario
+    const { data: verif } = await supabase
+      .from("identity_verifications")
+      .select("id")
+      .eq("user_id", userRow.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (!iv?.selfie_path) {
-      // Sin foto KYC → aprobar de todas formas (usuario sin KYC)
+    if (!verif) {
+      // Sin verificación KYC → aprobar de todas formas (usuario sin KYC)
       return new Response(
         JSON.stringify({ ok: true, similarity: 0, verified: true, noKyc: true }),
         { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
 
-    // Descargar foto KYC desde storage
-    const { data: kycBlob } = await supabase.storage
-      .from("kyc-documents")
-      .download(iv.selfie_path);
+    // 3. Buscar la selfie en identity_documents
+    const { data: doc } = await supabase
+      .from("identity_documents")
+      .select("storage_path")
+      .eq("verification_id", verif.id)
+      .eq("type", "SELFIE")
+      .maybeSingle();
 
-    if (!kycBlob) throw new Error("No se pudo descargar la foto KYC");
+    if (!doc?.storage_path) {
+      // Sin foto selfie KYC → aprobar de todas formas
+      return new Response(
+        JSON.stringify({ ok: true, similarity: 0, verified: true, noSelfie: true }),
+        { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Descargar foto KYC desde storage
+    let { data: kycBlob, error: downloadError } = await supabase.storage
+      .from("kyc-documents")
+      .download(doc.storage_path);
+
+    if (downloadError || !kycBlob) {
+      console.warn("[face-verify] kyc-documents download failed, trying identity-documents fallback...", downloadError);
+      const { data: fallbackBlob, error: fallbackError } = await supabase.storage
+        .from("identity-documents")
+        .download(doc.storage_path);
+
+      if (fallbackError || !fallbackBlob) {
+        console.error("[face-verify] Storage download error:", downloadError || fallbackError);
+        throw new Error(`No se pudo descargar la foto KYC: ${downloadError?.message || fallbackError?.message}`);
+      }
+      kycBlob = fallbackBlob;
+    }
 
     const kycArrayBuffer = await kycBlob.arrayBuffer();
-    const kycBase64 = btoa(String.fromCharCode(...new Uint8Array(kycArrayBuffer)));
+    const kycBase64 = bytesToBase64(new Uint8Array(kycArrayBuffer));
 
     // Llamar a Rekognition CompareFaces
     const payload = JSON.stringify({

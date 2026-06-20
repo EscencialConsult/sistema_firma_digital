@@ -9,7 +9,7 @@ import { supabase } from "../../../shared/lib/supabase";
 import { AdminVerificationCard } from "../components/AdminVerificationCard";
 import type { IdentityDocument, IdentityVerification } from "../types/identity.types";
 
-const IDENTITY_BUCKET = "identity-documents";
+const IDENTITY_BUCKET = "kyc-documents";
 
 function DocumentImage({ document, alt, className }: { document: IdentityDocument; alt?: string; className?: string }) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);

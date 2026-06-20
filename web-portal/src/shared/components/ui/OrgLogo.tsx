@@ -25,7 +25,6 @@ export function OrgLogo({ logoDarkUrl, logoLightUrl, variant, size = 36, classNa
         onError={() => setImgError(true)}
         style={{ width: size, height: size, objectFit: "contain" }}
         className={`shrink-0 rounded-lg ${className}`}
-        fetchPriority="high"
         decoding="async"
       />
     );

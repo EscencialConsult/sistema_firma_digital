@@ -22,7 +22,7 @@ export function VerifiedGuard() {
     case "EXPIRED":
       return <Navigate to="/kyc" replace />;
     case "IN_REVIEW":
-      return <Navigate to="/kyc/pending" replace />;
+      return <Navigate to="/kyc" replace />;
     case "REJECTED":
       return <Navigate to="/kyc/rejected" replace />;
     default: // VERIFIED

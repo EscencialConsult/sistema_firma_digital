@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { FileText, X } from "lucide-react";
 import { SharedSidebar } from "../../shared/components/ui/SharedSidebar";
 import { SharedHeader } from "../../shared/components/ui/SharedHeader";
+import { OnboardingTour } from "../../shared/components/onboarding/OnboardingTour";
 import { TERMS_TEXT } from "../../shared/legal/terms";
 
 export function AppLayout() {
@@ -23,7 +24,7 @@ export function AppLayout() {
         <SharedHeader 
           variant="user" 
           onMobileOpen={() => setMobileOpen(true)} 
-          showSearch={false} 
+          showSearch={true} 
         />
 
         <main className="min-h-[calc(100vh-3.5rem)] px-4 py-6 md:px-6">
@@ -32,6 +33,8 @@ export function AppLayout() {
           </div>
         </main>
       </div>
+
+      {location.pathname === "/dashboard" && <OnboardingTour variant="user" />}
 
       {termsOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/45 px-4 py-6 backdrop-blur-sm">

@@ -39,20 +39,30 @@ function fallbackProfile(userId: string, authUser?: SupabaseAuthUser | null): Au
 
 /** Fetch the public.users profile row and map to AuthUser */
 export async function fetchProfile(userId: string, authUser?: SupabaseAuthUser | null): Promise<AuthUser | null> {
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, email, full_name, role, verification_status, certificate_status, organization_id, terms_accepted_at, document_number, cuil_cuit, birth_date, phone, address")
-    .eq("id", userId)
-    .maybeSingle();
+  const [profile, kycStatus] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, email, full_name, role, verification_status, certificate_status, organization_id, terms_accepted_at, document_number, cuil_cuit, birth_date, phone, address")
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase.rpc("get_my_kyc_status"),
+  ]);
 
+  const { data, error } = profile;
   if (error || !data) return fallbackProfile(userId, authUser);
+
+  // El status real puede estar en identity_verifications — priorizarlo
+  const kycRow = kycStatus?.data as Record<string, unknown> | null;
+  const realStatus = kycRow?.status
+    ? (kycRow.status as string)
+    : data.verification_status;
 
   return {
     id:                 data.id,
     email:              data.email,
     fullName:           data.full_name,
     role:               data.role               as UserRole,
-    verificationStatus: data.verification_status as VerificationStatus,
+    verificationStatus: realStatus as VerificationStatus,
     certificateStatus:  data.certificate_status  as CertificateStatus,
     organizationId:     data.organization_id ?? undefined,
     termsAcceptedAt:    data.terms_accepted_at ?? undefined,

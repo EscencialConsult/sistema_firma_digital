@@ -16,18 +16,60 @@ export interface AdminStats {
 /** Uses the get_admin_stats() RPC function defined in the schema */
 export async function getAdminStats(): Promise<AdminStats> {
   const { data, error } = await supabase.rpc("get_admin_stats");
-  if (error) throw new Error(error.message);
 
-  // The RPC returns a single JSON row
+  if (error) {
+    return getAdminStatsFallback();
+  }
+
   const row = Array.isArray(data) ? data[0] : data;
   return {
-    totalUsers:       Number(row?.total_users       ?? 0),
-    verifiedUsers:    Number(row?.verified_users     ?? 0),
-    pendingKyc:       Number(row?.pending_kyc        ?? 0),
-    totalContracts:   Number(row?.total_contracts    ?? 0),
-    signedContracts:  Number(row?.signed_contracts   ?? 0),
-    pendingContracts: Number(row?.pending_contracts  ?? 0),
-    rejectedContracts:Number(row?.rejected_contracts ?? 0),
+    totalUsers:        Number(row?.totalUsers        ?? row?.total_users        ?? 0),
+    verifiedUsers:     Number(row?.verifiedUsers     ?? row?.verified_users     ?? 0),
+    pendingKyc:        Number(row?.pendingKyc        ?? row?.pending_kyc        ?? 0),
+    totalContracts:    Number(row?.totalContracts    ?? row?.total_contracts    ?? 0),
+    signedContracts:   Number(row?.signedContracts   ?? row?.signed_contracts   ?? 0),
+    pendingContracts:  Number(row?.pendingContracts  ?? row?.pending_contracts  ?? 0),
+    rejectedContracts: Number(row?.rejectedContracts ?? row?.rejected_contracts ?? 0),
+  };
+}
+
+async function countRows(table: string, build?: (query: any) => any): Promise<number> {
+  let query = supabase.from(table).select("*", { count: "exact", head: true });
+  if (build) query = build(query);
+  const { count, error } = await query;
+  if (error) return 0;
+  return count ?? 0;
+}
+
+async function getAdminStatsFallback(): Promise<AdminStats> {
+  const [
+    totalUsers,
+    verifiedUsers,
+    pendingKyc,
+    totalContracts,
+    signedDocuments,
+    signedRequests,
+    pendingContracts,
+    rejectedContracts,
+  ] = await Promise.all([
+    countRows("users", (q) => q.eq("role", "USER")),
+    countRows("users", (q) => q.eq("verification_status", "VERIFIED")),
+    countRows("identity_verifications", (q) => q.in("status", ["PENDING", "IN_REVIEW"])),
+    countRows("documents"),
+    countRows("documents", (q) => q.eq("status", "COMPLETED")),
+    countRows("signature_requests", (q) => q.eq("status", "SIGNED")),
+    countRows("documents", (q) => q.in("status", ["SENT", "VIEWED", "CONFORMITY_ACCEPTED"])),
+    countRows("documents", (q) => q.in("status", ["REJECTED", "EXPIRED"])),
+  ]);
+
+  return {
+    totalUsers,
+    verifiedUsers,
+    pendingKyc,
+    totalContracts,
+    signedContracts: Math.max(signedDocuments, signedRequests),
+    pendingContracts,
+    rejectedContracts,
   };
 }
 

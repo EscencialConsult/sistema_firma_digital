@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { SharedSidebar } from "../../shared/components/ui/SharedSidebar";
 import { SharedHeader } from "../../shared/components/ui/SharedHeader";
+import { OnboardingTour } from "../../shared/components/onboarding/OnboardingTour";
 
 export function AdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -28,6 +29,8 @@ export function AdminLayout() {
           </div>
         </main>
       </div>
+
+      {location.pathname === "/admin" && <OnboardingTour variant="admin" />}
     </div>
   );
 }
