@@ -87,9 +87,10 @@
 
   /* UI Tokens */
   .primary-action {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] px-4 text-sm font-medium transition-all duration-300 active:scale-[0.96] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] px-4 text-sm font-medium active:scale-[0.96] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
     background-color: var(--brand-primary);
     color: var(--brand-primary-text);
+    transition: background-color 0.35s ease, color 0.35s ease, filter 0.2s ease, transform 0.1s ease;
     min-height: 44px; /* Apple HIG standard for touch targets */
     touch-action: manipulation;
   }
@@ -104,11 +105,13 @@
   .brand-nav-active {
     background-color: var(--brand-primary);
     color: var(--brand-primary-text);
+    transition: background-color 0.35s ease, color 0.35s ease;
   }
 
   /* Texto/ícono con color de marca */
   .brand-text {
     color: var(--brand-primary);
+    transition: color 0.35s ease;
   }
 
   .secondary-action {

@@ -7,13 +7,14 @@ import {
   PlusCircle,
   Save,
   ShieldCheck,
+  Sparkles,
   Trash2,
   UserCheck,
   X,
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { getMyOrganization, updateOrganization } from "../../shared/services/organizations.service";
-import { applyTheme, DEFAULT_THEME } from "../../shared/config/theme";
+import { applyTheme, DEFAULT_THEME, getContrastText } from "../../shared/config/theme";
 import {
   getOrgAuthorities,
   inviteAuthority,
@@ -445,25 +446,40 @@ export function AdminSettingsPage() {
             <p className="text-[10px] text-zinc-400">El color del texto sobre cada fondo se calcula automáticamente para garantizar legibilidad (WCAG-AA).</p>
           </div>
 
-          {savedColors && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
-              ✓ Colores guardados y aplicados a todos los usuarios de la organización
-            </div>
-          )}
-
+          {/* Botón: usa el color primario elegido como propio fondo — live preview + acción */}
           <button
             type="button"
             onClick={handleSaveColors}
             disabled={savingColors || !org}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white border border-zinc-200 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 transition disabled:opacity-50"
+            className="relative inline-flex w-full items-center justify-center gap-2.5 rounded-xl py-3.5 text-sm font-semibold transition-all duration-300 active:scale-[0.98] disabled:opacity-50 overflow-hidden"
+            style={{
+              backgroundColor: colorPrimary,
+              color: getContrastText(colorPrimary),
+            }}
           >
-            {savingColors ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            {savingColors
-              ? "Guardando..."
-              : org?.brandPrimary
-                ? "Actualizar colores de marca"
-                : "Activar colores de marca"}
+            {savingColors ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                Aplicando colores...
+              </>
+            ) : savedColors ? (
+              <>
+                <CheckCircle2 size={15} />
+                ¡Colores aplicados!
+              </>
+            ) : (
+              <>
+                <Sparkles size={15} />
+                Actualizar páginas con colores actuales
+              </>
+            )}
           </button>
+
+          {savedColors && (
+            <p className="text-center text-[11px] text-zinc-400 -mt-1">
+              Los usuarios de la organización verán estos colores al iniciar sesión.
+            </p>
+          )}
         </div>
 
         {/* ─── Autoridades firmantes ────────────────────────────────────────── */}

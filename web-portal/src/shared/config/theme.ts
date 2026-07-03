@@ -73,7 +73,7 @@ function getLuminance(hex: string): number {
  * Devuelve el color de texto (negro o blanco) con contraste WCAG-AA
  * garantizado para usar SOBRE el color de fondo dado.
  */
-function getContrastText(hex: string): string {
+export function getContrastText(hex: string): string {
   return getLuminance(hex) > 0.179 ? "#09090b" : "#ffffff";
 }
 
