@@ -82,9 +82,10 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
   const isDark = variant === "super-admin";
   const textPrimary = isDark ? "text-white" : "text-zinc-950";
   const textSecondary = isDark ? "text-zinc-500" : "text-zinc-500";
-  const bgSidebarDesktop = isDark ? "bg-zinc-950 border-zinc-800/60" : "bg-white/80 border-zinc-200/50 backdrop-blur-md";
-  const bgSidebarMobile = isDark ? "bg-zinc-950" : "bg-white";
+  const bgSidebarDesktop = isDark ? "bg-zinc-950 border-zinc-800/60" : "border-zinc-200/50 backdrop-blur-md";
+  const bgSidebarMobile = isDark ? "bg-zinc-950" : "";
   const bgOverlay = isDark ? "bg-black/60" : "bg-black/40 backdrop-blur-sm";
+  const brandSidebarStyle = isDark ? undefined : { background: "var(--brand-bg)", transition: "background 0.35s ease" };
 
   const getLinkClasses = (isActive: boolean) => {
     const base = "flex w-full items-center gap-3 rounded-[var(--radius-button)] px-3.5 py-2.5 text-sm font-medium transition duration-200 active:scale-[0.98]";
@@ -148,7 +149,14 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
 
     if (variant === "admin") {
       return (
-        <div className="mt-auto rounded-[var(--radius-card)] border border-zinc-200 bg-zinc-50 p-3">
+        <div
+          className="mt-auto rounded-[var(--radius-card)] border p-3"
+          style={{
+            borderColor: "var(--brand-accent)",
+            backgroundColor: "var(--brand-accent-soft)",
+            transition: "background-color 0.35s ease, border-color 0.35s ease",
+          }}
+        >
           <p className="text-xs font-semibold text-zinc-800 truncate">{user?.fullName}</p>
           <p className="mt-0.5 text-[11px] text-zinc-500 truncate">{user?.email}</p>
           <button
@@ -212,14 +220,14 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
 
   return (
     <>
-      <aside className={`fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r px-4 py-5 lg:flex ${bgSidebarDesktop}`}>
+      <aside className={`fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r px-4 py-5 lg:flex ${bgSidebarDesktop}`} style={brandSidebarStyle}>
         {sidebarContent}
       </aside>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-30 lg:hidden">
           <div className={`absolute inset-0 ${bgOverlay}`} onClick={onMobileClose} />
-          <aside className={`relative flex h-full w-72 flex-col px-4 py-5 ${bgSidebarMobile}`}>
+          <aside className={`relative flex h-full w-72 flex-col px-4 py-5 ${bgSidebarMobile}`} style={brandSidebarStyle}>
             <button
               onClick={onMobileClose}
               className={`mb-4 self-end rounded-lg p-1.5 transition-colors ${isDark ? 'text-zinc-500 hover:bg-zinc-800' : 'text-zinc-500 hover:bg-zinc-100'}`}
