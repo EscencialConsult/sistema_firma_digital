@@ -197,6 +197,7 @@ export const MOCK_SIGNING_REQUESTS: SigningRequest[] = [
   {
     id: "sr-001",
     documentId: "c-001",
+    documentVersionId: null,
     documentTitle: "Reconocimiento de Deuda — Curso Desarrollo Web Full Stack",
     signerEmail: "alumno@gmail.com",
     signerName: "María González",
@@ -207,6 +208,7 @@ export const MOCK_SIGNING_REQUESTS: SigningRequest[] = [
     pdfUrl: null,
     finalPdfUrl: null,
     sentAt: "2026-06-10T09:30:00Z",
+    signedAt: null,
     expiresAt: "2026-07-10T09:30:00Z",
   },
 ];

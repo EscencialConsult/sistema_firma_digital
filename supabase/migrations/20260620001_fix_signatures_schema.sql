@@ -12,10 +12,12 @@ CREATE TABLE IF NOT EXISTS public.signatures (
 );
 
 ALTER TABLE public.signatures
+  ADD COLUMN IF NOT EXISTS user_id          UUID REFERENCES public.users(id),
   ADD COLUMN IF NOT EXISTS signature_data   TEXT,
   ADD COLUMN IF NOT EXISTS signature_method TEXT DEFAULT 'CANVAS',
   ADD COLUMN IF NOT EXISTS user_agent       TEXT,
-  ADD COLUMN IF NOT EXISTS ip_address       TEXT;
+  ADD COLUMN IF NOT EXISTS ip_address       TEXT,
+  ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ NOT NULL DEFAULT now();
 
 -- ─── Fix: tabla conformity_acceptances ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.conformity_acceptances (

@@ -19,11 +19,11 @@ export function RegisterPage() {
     e.preventDefault();
     setLocalError("");
     if (password.length < 6) {
-      setLocalError("La contraseña debe tener al menos 6 caracteres.");
+      setLocalError("La contrasena debe tener al menos 6 caracteres.");
       return;
     }
     if (password !== confirm) {
-      setLocalError("Las contraseñas no coinciden.");
+      setLocalError("Las contrasenas no coinciden.");
       return;
     }
     setLoading(true);
@@ -40,19 +40,22 @@ export function RegisterPage() {
   const displayError = localError || error;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-sm">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm sm:p-8">
       <div className="mb-7">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">
-          Nuevo usuario
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">
+          Nueva cuenta
         </p>
-        <h2 className="mt-1.5 text-2xl font-bold text-white">Crear cuenta</h2>
+        <h2 className="mt-2 text-2xl font-bold text-zinc-950">Crear cuenta</h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-500">
+          Completa tus datos para iniciar la verificacion de identidad.
+        </p>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <Input
           label="Nombre completo"
           type="text"
-          placeholder="María González"
+          placeholder="Maria Gonzalez"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           icon={<User size={15} />}
@@ -70,40 +73,42 @@ export function RegisterPage() {
           autoComplete="email"
         />
         <Input
-          label="Contraseña"
+          label="Contrasena"
           type="password"
-          placeholder="Mínimo 6 caracteres"
+          placeholder="Minimo 6 caracteres"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           icon={<Lock size={15} />}
           required
+          autoComplete="new-password"
         />
         <Input
-          label="Confirmar contraseña"
+          label="Confirmar contrasena"
           type="password"
-          placeholder="Repetí tu contraseña"
+          placeholder="Repeti tu contrasena"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           icon={<Lock size={15} />}
           required
+          autoComplete="new-password"
         />
 
         {displayError && (
-          <p className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs font-medium text-red-400">
+          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-600">
             {displayError}
           </p>
         )}
 
-        <Button className="h-11 w-full mt-2" type="submit" disabled={loading}>
+        <Button className="mt-2 h-11 w-full" type="submit" disabled={loading}>
           <ShieldCheck size={15} />
           {loading ? "Creando cuenta..." : "Crear cuenta"}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-xs text-zinc-600">
-        ¿Ya tenés cuenta?{" "}
-        <Link to="/login" className="font-semibold text-white transition hover:text-zinc-200">
-          Iniciar sesión
+      <p className="mt-6 text-center text-sm text-zinc-500">
+        Ya tenes cuenta?{" "}
+        <Link to="/login" className="font-semibold text-zinc-950 transition hover:text-zinc-700">
+          Iniciar sesion
         </Link>
       </p>
     </div>

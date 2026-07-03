@@ -3,11 +3,12 @@ import { type ClipboardEvent, type KeyboardEvent, useEffect, useRef, useState } 
 type OtpInputProps = {
   length?: number;
   onComplete: (code: string) => void;
+  onChange?: (code: string) => void;
   disabled?: boolean;
   error?: boolean;
 };
 
-export function OtpInput({ length = 6, onComplete, disabled = false, error = false }: OtpInputProps) {
+export function OtpInput({ length = 6, onComplete, onChange, disabled = false, error = false }: OtpInputProps) {
   const [values, setValues] = useState<string[]>(Array(length).fill(""));
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -25,6 +26,7 @@ export function OtpInput({ length = 6, onComplete, disabled = false, error = fal
       inputs.current[index + 1]?.focus();
     }
     const code = next.join("");
+    onChange?.(code);
     if (code.length === length && !code.includes("")) {
       onComplete(code);
     }
@@ -49,6 +51,8 @@ export function OtpInput({ length = 6, onComplete, disabled = false, error = fal
     setValues(next);
     const target = Math.min(pasted.length, length - 1);
     inputs.current[target]?.focus();
+    const code = next.join("");
+    onChange?.(code);
     if (pasted.length === length) onComplete(pasted);
   }
 

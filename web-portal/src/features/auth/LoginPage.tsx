@@ -26,12 +26,15 @@ export function LoginPage() {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-sm">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm sm:p-8">
       <div className="mb-7">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">
           Acceso seguro
         </p>
-        <h2 className="mt-1.5 text-2xl font-bold text-white">Iniciar sesión</h2>
+        <h2 className="mt-2 text-2xl font-bold text-zinc-950">Iniciar sesion</h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-500">
+          Ingresa con tu cuenta para ver contratos, firmas y notificaciones.
+        </p>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
@@ -46,9 +49,9 @@ export function LoginPage() {
           autoComplete="email"
         />
         <Input
-          label="Contraseña"
+          label="Contrasena"
           type="password"
-          placeholder="Tu contraseña"
+          placeholder="Tu contrasena"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           icon={<Lock size={15} />}
@@ -57,37 +60,23 @@ export function LoginPage() {
         />
 
         {error && (
-          <p className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs font-medium text-red-400">
+          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-600">
             {error}
           </p>
         )}
 
-        <Button className="h-11 w-full mt-2" type="submit" disabled={loading}>
+        <Button className="mt-2 h-11 w-full" type="submit" disabled={loading}>
           <ShieldCheck size={15} />
           {loading ? "Entrando..." : "Entrar al portal"}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-xs text-zinc-600">
-        ¿No tenés cuenta?{" "}
-        <Link to="/register" className="font-semibold text-white transition hover:text-zinc-200">
+      <p className="mt-6 text-center text-sm text-zinc-500">
+        No tenes cuenta?{" "}
+        <Link to="/register" className="font-semibold text-zinc-950 transition hover:text-zinc-700">
           Crear cuenta
         </Link>
       </p>
-
-      {/* Dev hint */}
-      <details className="mt-6">
-        <summary className="cursor-pointer text-[11px] text-zinc-700 hover:text-zinc-500 transition select-none">
-          Credenciales de prueba
-        </summary>
-        <div className="mt-2 space-y-1 rounded-xl border border-white/5 bg-white/5 p-3 font-mono text-[11px] text-zinc-500">
-          <p>admin@escencial.com · Admin123456</p>
-          <p>alumno@gmail.com · Alumno123 (verificado)</p>
-          <p>nuevo@gmail.com · Nuevo123 (pendiente KYC)</p>
-          <p>revision@gmail.com · Review123 (en revisión)</p>
-          <p>rechazado@gmail.com · Rejected123 (rechazado)</p>
-        </div>
-      </details>
     </div>
   );
 }

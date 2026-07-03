@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   CheckCircle2,
-  ExternalLink,
   FileSignature,
   Hash,
   Printer,
@@ -10,8 +9,10 @@ import {
   ShieldCheck,
   Trash2,
   XCircle,
+  Camera,
+  RefreshCw,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ContractDocument } from "../admin/components/ContractRenderer";
 import { Button } from "../../shared/components/ui/Button";
@@ -20,8 +21,8 @@ import {
   acceptConformity,
   executeSignature,
   getSigningRequest,
-  initiateFaceVerificationDIDIT,
   tryGenerateConsolidatedPdf,
+  verifyFaceLocal,
 } from "../../shared/services/signing.service";
 import type { SignatureResult, SigningRequest } from "../../shared/types/signing";
 
@@ -158,7 +159,7 @@ function ConformityStep({
   );
 }
 
-// ─── Step 1: Face Verification (DIDIT) ───────────────────────────────────────
+// ─── Step 1: Face Verification (Local webcam) ───────────────────────────────────────
 
 function FaceVerificationStep({
   requestId,
@@ -169,18 +170,92 @@ function FaceVerificationStep({
   onVerified: () => void;
   didFail?: boolean;
 }) {
+  const [cameraActive, setCameraActive] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState(didFail ? "La verificación falló o fue abandonada. Intentá de nuevo." : "");
+  const [verifying, setVerifying] = useState(false);
+  const [error, setError] = useState(didFail ? "La verificación falló o fue abandonada. Intentá de nuevo." : "");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  async function handleStartDIDIT() {
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  const startCamera = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const { url } = await initiateFaceVerificationDIDIT(requestId);
-      window.location.href = url;
+      stopCamera();
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: 640, height: 480 },
+        audio: false,
+      });
+      streamRef.current = mediaStream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+      setCameraActive(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar la verificación");
+      console.error("Error accessing webcam:", err);
+      setError("No pudimos acceder a tu cámara. Asegurate de dar los permisos necesarios.");
+    } finally {
       setLoading(false);
+    }
+  }, [stopCamera]);
+
+  useEffect(() => {
+    startCamera();
+    return () => {
+      stopCamera();
+    };
+  }, [startCamera, stopCamera]);
+
+  function capturePhoto() {
+    const video = videoRef.current;
+    if (!video || !cameraActive) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+      setCapturedPhoto(dataUrl);
+      stopCamera();
+    }
+  }
+
+  function retake() {
+    setCapturedPhoto(null);
+    startCamera();
+  }
+
+  async function verifySelfie() {
+    if (!capturedPhoto) return;
+    setVerifying(true);
+    setError("");
+    try {
+      const base64 = capturedPhoto.split(",")[1];
+      const res = await verifyFaceLocal(requestId, base64);
+      if (res.verified) {
+        onVerified();
+      } else {
+        setError(`Verificación fallida (${res.similarity}% de similitud). Asegurate de estar bien iluminado y de frente a la cámara.`);
+        retake();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al procesar la verificación facial");
+    } finally {
+      setVerifying(false);
     }
   }
 
@@ -189,59 +264,90 @@ function FaceVerificationStep({
       <div>
         <h2 className="text-xl font-bold text-zinc-950">Verificación de identidad</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Necesitamos confirmar tu identidad antes de que puedas firmar. El proceso se realiza a través de DIDIT y toma menos de un minuto.
+          Capturá una selfie para compararla con tu DNI/KYC registrado y validar tu identidad.
         </p>
       </div>
 
-      {/* Visual del proceso */}
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-zinc-900">
-            <Shield size={18} className="text-white" />
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-900 p-4 overflow-hidden relative min-h-[300px] text-white">
+        {capturedPhoto ? (
+          <img
+            src={capturedPhoto}
+            alt="Captura"
+            className="w-full max-w-sm rounded-xl border-2 border-white/20 shadow-md"
+          />
+        ) : (
+          <div className="relative w-full max-w-sm">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full rounded-xl border-2 border-white/10 scale-x-[-1]"
+            />
+            {!cameraActive && !loading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/80 rounded-xl space-y-3 p-4 text-center">
+                <Camera size={32} className="text-zinc-500" />
+                <p className="text-xs text-zinc-400">La cámara está inactiva</p>
+                <Button onClick={startCamera} size="sm">
+                  Activar Cámara
+                </Button>
+              </div>
+            )}
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/55 rounded-xl">
+                <RefreshCw size={24} className="animate-spin text-white" />
+              </div>
+            )}
           </div>
-          <div>
-            <p className="font-semibold text-zinc-900 text-sm">Verificación biométrica DIDIT</p>
-            <p className="text-xs text-zinc-500">Liveness check + coincidencia con documento de identidad</p>
-          </div>
-        </div>
-
-        <div className="space-y-2 text-xs text-zinc-500">
-          {[
-            "Vas a ser redirigido a la plataforma de verificación DIDIT",
-            "Tomá una selfie con tu cámara o teléfono",
-            "DIDIT verifica que sos una persona real y coincidís con tu DNI",
-            "Al finalizar, vas a volver automáticamente a este paso",
-          ].map((step, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-bold text-zinc-600">
-                {i + 1}
-              </span>
-              <span>{step}</span>
-            </div>
-          ))}
-        </div>
+        )}
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-700 leading-relaxed">
           {error}
         </div>
       )}
 
-      <Button
-        onClick={handleStartDIDIT}
-        disabled={loading}
-        className="h-12 w-full text-base"
-      >
-        {loading ? (
-          "Iniciando verificación..."
+      <div className="flex items-center gap-3">
+        {capturedPhoto ? (
+          <>
+            <Button
+              onClick={retake}
+              variant="secondary"
+              disabled={verifying}
+              className="flex-1 h-12"
+            >
+              <RefreshCw size={15} /> Volver a tomar
+            </Button>
+            <Button
+              onClick={verifySelfie}
+              disabled={verifying}
+              className="flex-1 h-12"
+            >
+              {verifying ? (
+                <>
+                  <RefreshCw size={15} className="animate-spin" /> Verificando...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={15} /> Confirmar y verificar
+                </>
+              )}
+            </Button>
+          </>
         ) : (
-          <><ExternalLink size={16} /> Verificar identidad con DIDIT</>
+          <Button
+            onClick={capturePhoto}
+            disabled={!cameraActive || loading}
+            className="w-full h-12 text-base"
+          >
+            <Camera size={16} /> Capturar Foto
+          </Button>
         )}
-      </Button>
+      </div>
 
-      <p className="text-center text-[11px] text-zinc-400">
-        Verificación biométrica segura · Tecnología DIDIT · Ley 25.506
+      <p className="text-center text-[10px] text-zinc-400">
+        La selfie será procesada de forma segura mediante biometría facial comparativa · Ley 25.506
       </p>
     </div>
   );
@@ -501,7 +607,7 @@ export function SigningFlowPage() {
         setStep(1);
       }
     });
-  }, [id]);
+  }, [id, location.search, navigate]);
 
   // Step 0 → 1: conformidad → verificación facial
   async function handleAcceptConformity() {
@@ -537,8 +643,8 @@ export function SigningFlowPage() {
       tryGenerateConsolidatedPdf(request.documentId);
       setResult(sig);
       setStep(3);
-    } catch {
-      setError("Error al registrar la firma. Intentá de nuevo.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al registrar la firma. Intentá de nuevo.");
     } finally {
       setLoading(false);
     }

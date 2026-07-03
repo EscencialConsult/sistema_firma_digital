@@ -38,7 +38,13 @@ serve(async (req) => {
     }
 
     const payloadBase64 = token.split(".")[1];
-    const payload = JSON.parse(atob(payloadBase64));
+    const base64 = payloadBase64.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = base64.length % 4;
+    const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
+    const utf8String = new TextDecoder().decode(
+      Uint8Array.from(atob(padded), (c) => c.charCodeAt(0))
+    );
+    const payload = JSON.parse(utf8String);
     let organization_id: string | null = payload.organization_id ?? null;
 
     // Fallback: JWT claim absent → query users table

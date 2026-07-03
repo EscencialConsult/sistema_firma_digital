@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "../../shared/lib/supabase";
 import {
   login,
@@ -27,11 +27,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
 
+  const isAuthenticatingRef = useRef(false);
+
   useEffect(() => {
     let mounted = true;
 
     // Chequear sesión existente de forma inmediata (no esperar INITIAL_SESSION)
     async function initialize() {
+      isAuthenticatingRef.current = true;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!mounted) return;
@@ -42,7 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // sesión inválida o sin conectividad — seguir sin usuario
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          isAuthenticatingRef.current = false;
+        }
       }
     }
 
@@ -53,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (event, session) => {
         if (!mounted) return;
         if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          if (isAuthenticatingRef.current) return;
           if (session?.user) {
             try {
               const profile = await fetchProfile(session.user.id, session.user);
@@ -81,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       async signIn(email, password) {
         setError(null);
+        isAuthenticatingRef.current = true;
         try {
           const user = await login(email, password);
           setUser(user);
@@ -92,17 +100,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               : "No se pudo iniciar sesión.";
           setError(message);
           throw err;
+        } finally {
+          isAuthenticatingRef.current = false;
         }
       },
 
       async signUp(input) {
         setError(null);
+        isAuthenticatingRef.current = true;
         try {
           const user = await register(input);
           setUser(user);
         } catch (err) {
           setError(err instanceof Error ? err.message : "No se pudo crear la cuenta.");
           throw err;
+        } finally {
+          isAuthenticatingRef.current = false;
         }
       },
 

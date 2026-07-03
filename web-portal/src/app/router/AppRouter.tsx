@@ -23,9 +23,7 @@ const RegisterPage = lazy(() =>
 const KycWizardPage = lazy(() =>
   import("../../features/kyc/KycWizardPage").then((m) => ({ default: m.KycWizardPage }))
 );
-const KycPendingPage = lazy(() =>
-  import("../../features/kyc/KycPendingPage").then((m) => ({ default: m.KycPendingPage }))
-);
+
 const KycRejectedPage = lazy(() =>
   import("../../features/kyc/KycRejectedPage").then((m) => ({ default: m.KycRejectedPage }))
 );
@@ -195,8 +193,13 @@ export function AppRouter() {
           {/* KYC (usuarios sin verificar) */}
           <Route element={<KycLayout />}>
             <Route path="/kyc"          element={<KycWizardPage />} />
-            <Route path="/kyc/pending"  element={<KycPendingPage />} />
+
             <Route path="/kyc/rejected" element={<KycRejectedPage />} />
+          </Route>
+
+          {/* App principal (con sidebar) - accesible sin verificación KYC */}
+          <Route element={<AppLayout />}>
+            <Route path="/profile"          element={<ProfilePage />} />
           </Route>
 
           {/* ── Requieren verificación KYC ── */}
@@ -215,7 +218,6 @@ export function AppRouter() {
               <Route path="/identity"         element={<IdentityPage />} />
               <Route path="/certificates"     element={<CertificatesPage />} />
               <Route path="/audit"            element={<AuditPage />} />
-              <Route path="/profile"          element={<ProfilePage />} />
             </Route>
 
             {/* ── Solo admins (ADMIN / ORG_ADMIN) ── */}

@@ -3,6 +3,7 @@ export type SigningStep = "preview" | "conformity" | "otp" | "complete";
 export interface SigningRequest {
   id: string;
   documentId: string;
+  documentVersionId: string | null;
   documentTitle: string;
   signerEmail: string;
   signerName: string;
@@ -14,6 +15,7 @@ export interface SigningRequest {
   /** URL del PDF consolidado con todas las firmas, disponible cuando el doc está COMPLETED */
   finalPdfUrl: string | null;
   sentAt: string;
+  signedAt: string | null;
   expiresAt: string;
   /** Set when the document was created from a template in the admin panel */
   templateId?: string;

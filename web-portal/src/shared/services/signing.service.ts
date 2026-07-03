@@ -26,6 +26,7 @@ function mapRowToSigningRequest(
   return {
     id:                 sr.id as string,
     documentId:         sr.document_id as string,
+    documentVersionId:  (sr.document_version_id as string) ?? (latestV.id as string) ?? null,
     documentTitle:      (document.title as string) ?? "",
     signerEmail:        sr.signer_email as string,
     signerName:         sr.signer_name as string,
@@ -36,6 +37,7 @@ function mapRowToSigningRequest(
     pdfUrl,
     finalPdfUrl:        (document.final_pdf_url as string) ?? null,
     sentAt:             sr.sent_at as string,
+    signedAt:           (sr.signed_at as string) ?? null,
     expiresAt:          sr.expires_at as string,
     templateId:         (document.template_id as string) ?? undefined,
     templateFields,
@@ -46,10 +48,12 @@ function mapRowToSigningRequest(
 
 /** Signing requests sent to this email address */
 export async function getMySigningRequests(email: string): Promise<SigningRequest[]> {
+  if (!email) return [];
+
   const { data, error } = await supabase
     .from("signature_requests")
     .select("*, documents(*, document_versions:document_versions!document_versions_document_id_fkey(*))")
-    .eq("signer_email", email)
+    .ilike("signer_email", email)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -110,12 +114,18 @@ export async function executeSignature(
     .from("signatures")
     .insert({
       signature_request_id: requestId,
+      document_id:          request.documentId,
+      document_version_id:  request.documentVersionId,
       user_id:              user?.id ?? null,
+      signer_email:         request.signerEmail,
+      signer_name:          request.signerName,
+      document_hash:        request.sha256Hash || `manual-signature:${requestId}:${signedAt}`,
       ip_address:           null,
       user_agent:           navigator.userAgent,
       signed_at:            signedAt,
       signature_method:     "CANVAS",
       signature_data:       (metadata.signatureData as string) ?? null,
+      metadata:             { signatureType: "CANVAS", faceVerified: true },
     })
     .select()
     .single();
@@ -125,7 +135,7 @@ export async function executeSignature(
   // 2. Update request status to SIGNED
   await supabase
     .from("signature_requests")
-    .update({ status: "SIGNED", completed_at: signedAt })
+    .update({ status: "SIGNED", signed_at: signedAt })
     .eq("id", requestId);
 
   // 3. Audit log
@@ -168,20 +178,50 @@ export async function initiateFaceVerificationDIDIT(requestId: string): Promise<
 }
 
 /**
+ * Realiza la verificación facial local enviando la selfie capturada en base64
+ * a la Edge Function 'face-verify'.
+ */
+export async function verifyFaceLocal(
+  requestId: string,
+  selfieBase64: string
+): Promise<{ ok: boolean; similarity: number; verified: boolean; mock?: boolean; noKyc?: boolean; noSelfie?: boolean }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const { data, error } = await supabase.functions.invoke("face-verify", {
+    body: { requestId, selfieBase64 },
+    headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+  });
+  if (error) {
+    let details = "";
+    if (error instanceof Error && "context" in error) {
+      try {
+        const bodyText = await (error as any).context.text();
+        const parsed = JSON.parse(bodyText);
+        details = parsed.error || bodyText;
+      } catch {
+        details = "";
+      }
+    }
+    throw new Error(details || error.message || "Error en la verificación facial");
+  }
+  return data;
+}
+
+
+/**
  * Después de que alguien firma, verifica si el documento quedó COMPLETED.
  * Si es así y no tiene PDF consolidado, lo genera y lo sube a Storage.
  * Se llama silenciosamente (no lanza error visible al usuario si falla).
  */
-export async function tryGenerateConsolidatedPdf(documentId: string): Promise<void> {
+export async function generateConsolidatedPdfBlob(documentId: string): Promise<Blob | null> {
   try {
     // 1. Chequear si el documento está COMPLETED y no tiene PDF aún
     const { data: doc } = await supabase
       .from("documents")
-      .select("title, status, final_pdf_url, organization_id")
+      .select("title, status, organization_id, template_id, template_fields, document_versions:document_versions!document_versions_document_id_fkey(*)")
       .eq("id", documentId)
       .single();
 
-    if (!doc || doc.status !== "COMPLETED" || doc.final_pdf_url) return;
+    if (!doc) return null;
 
     // 2. Traer todos los signature_requests firmados
     const { data: srs } = await supabase
@@ -190,7 +230,7 @@ export async function tryGenerateConsolidatedPdf(documentId: string): Promise<vo
       .eq("document_id", documentId)
       .eq("status", "SIGNED");
 
-    if (!srs?.length) return;
+    if (!srs?.length) return null;
 
     // 3. Traer las firmas (imágenes) de esos requests
     const srIds = srs.map((sr) => sr.id as string);
@@ -210,29 +250,77 @@ export async function tryGenerateConsolidatedPdf(documentId: string): Promise<vo
     });
 
     // 4. Generar PDF
-    const pdfBlob = await generateSignedPdf(doc.title as string, documentId, signers);
+    const rawFields = doc.template_fields as Record<string, unknown> | null;
+    const templateFields = rawFields
+      ? Object.fromEntries(Object.entries(rawFields).map(([k, v]) => [k, String(v ?? "")]))
+      : null;
+    const versions = (doc.document_versions as Array<Record<string, unknown>>) ?? [];
+    const latestVersion = [...versions].sort(
+      (a, b) => ((b.version_number as number) ?? 0) - ((a.version_number as number) ?? 0)
+    )[0];
+    let originalPdf: Blob | null = null;
+
+    if (latestVersion?.storage_path) {
+      const { data: originalBlob, error: originalError } = await supabase.storage
+        .from("contract-pdfs")
+        .download(latestVersion.storage_path as string);
+
+      if (originalError) {
+        console.warn("[pdf] No se pudo descargar el PDF original, usando fallback de template:", originalError.message);
+      } else {
+        originalPdf = originalBlob;
+      }
+    }
+
+    const pdfBlob = await generateSignedPdf({
+      title:          doc.title as string,
+      id:             documentId,
+      templateId:     (doc.template_id as string) ?? null,
+      templateFields,
+      originalPdf,
+    }, documentId, signers);
 
     // 5. Subir a Storage — path: {org_id}/{doc_id}/firmado.pdf
-    const orgId = (doc.organization_id as string) ?? "shared";
-    const path  = `${orgId}/${documentId}/firmado.pdf`;
+    return pdfBlob;
+  } catch (err) {
+    console.warn("[pdf] Error generando PDF consolidado:", err);
+    return null;
+  }
+}
+
+export async function tryGenerateConsolidatedPdf(documentId: string): Promise<string | null> {
+  try {
+    const pdfBlob = await generateConsolidatedPdfBlob(documentId);
+    if (!pdfBlob) return null;
+
+    const { data: doc } = await supabase
+      .from("documents")
+      .select("organization_id")
+      .eq("id", documentId)
+      .single();
+
+    const orgId = (doc?.organization_id as string) ?? "shared";
+    const path = `${orgId}/${documentId}/firmado.pdf`;
     const { error: uploadErr } = await supabase.storage
       .from("signed-contracts")
       .upload(path, pdfBlob, { contentType: "application/pdf", upsert: true });
 
     if (uploadErr) {
       console.warn("[pdf] Error subiendo PDF:", uploadErr.message);
-      return;
+      return null;
     }
 
     const { data: urlData } = supabase.storage.from("signed-contracts").getPublicUrl(path);
 
-    // 6. Guardar URL en el documento
     await supabase
       .from("documents")
       .update({ final_pdf_url: urlData.publicUrl })
       .eq("id", documentId);
+
+    return urlData.publicUrl;
   } catch (err) {
-    console.warn("[pdf] Error generando PDF consolidado:", err);
+    console.warn("[pdf] Error subiendo PDF consolidado:", err);
+    return null;
   }
 }
 

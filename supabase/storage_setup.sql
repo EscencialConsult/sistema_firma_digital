@@ -34,14 +34,20 @@ CREATE POLICY "kyc_user_select"
 ON storage.objects FOR SELECT
 USING (
   bucket_id = 'kyc-documents'
-  AND auth.uid()::text = (storage.foldername(name))[1]
+  AND (
+    auth.uid()::text = split_part(name, '/', 1)
+    OR auth.uid()::text = split_part(name, '/', 2)
+  )
 );
 
 CREATE POLICY "kyc_user_insert"
 ON storage.objects FOR INSERT
 WITH CHECK (
   bucket_id = 'kyc-documents'
-  AND auth.uid()::text = (storage.foldername(name))[1]
+  AND (
+    auth.uid()::text = split_part(name, '/', 1)
+    OR auth.uid()::text = split_part(name, '/', 2)
+  )
 );
 
 CREATE POLICY "kyc_admin_select"
@@ -50,7 +56,7 @@ USING (
   bucket_id = 'kyc-documents'
   AND EXISTS (
     SELECT 1 FROM public.users
-    WHERE id = auth.uid() AND role = 'ADMIN'
+    WHERE id = auth.uid() AND (role = 'ADMIN' OR role = 'SUPER_ADMIN' OR role = 'ORG_ADMIN')
   )
 );
 

@@ -61,7 +61,7 @@ function mapSrToSigner(sr: Record<string, unknown>): ContractSigner {
     status: sr.status as ContractSigner["status"],
     sentAt: sr.sent_at as string,
     viewedAt: (sr.viewed_at as string) ?? null,
-    signedAt: (sr.completed_at as string) ?? null,
+    signedAt: (sr.signed_at as string) ?? null,
   };
 }
 

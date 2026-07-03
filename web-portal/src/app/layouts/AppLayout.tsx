@@ -1,9 +1,17 @@
 import { useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
-import { FileText, X } from "lucide-react";
+import { Outlet, useLocation, NavLink } from "react-router-dom";
+import { FileText, X, Gauge, History, UserCircle } from "lucide-react";
 import { SharedSidebar } from "../../shared/components/ui/SharedSidebar";
 import { SharedHeader } from "../../shared/components/ui/SharedHeader";
+import { OnboardingTour } from "../../shared/components/onboarding/OnboardingTour";
 import { TERMS_TEXT } from "../../shared/legal/terms";
+
+const MOBILE_NAV = [
+  { path: "/dashboard",  label: "Inicio",      icon: Gauge,      end: true },
+  { path: "/signatures", label: "Contratos",   icon: FileText },
+  { path: "/audit",      label: "Historial",   icon: History },
+  { path: "/profile",    label: "Mi Perfil",   icon: UserCircle },
+];
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -11,7 +19,7 @@ export function AppLayout() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--color-text-base)]">
+    <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--color-text-base)] pb-20 lg:pb-0">
       <SharedSidebar 
         variant="user" 
         mobileOpen={mobileOpen} 
@@ -23,7 +31,7 @@ export function AppLayout() {
         <SharedHeader 
           variant="user" 
           onMobileOpen={() => setMobileOpen(true)} 
-          showSearch={false} 
+          showSearch={true} 
         />
 
         <main className="min-h-[calc(100vh-3.5rem)] px-4 py-6 md:px-6">
@@ -32,6 +40,35 @@ export function AppLayout() {
           </div>
         </main>
       </div>
+
+      {/* Barra de navegación inferior premium para móviles */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 lg:hidden glass-premium border-t border-zinc-200/60 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex h-16 items-center justify-around px-2">
+          {MOBILE_NAV.map(({ path, label, icon: Icon, end }) => (
+            <NavLink
+              key={path}
+              to={path}
+              end={end}
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-xl text-xs font-medium transition-all duration-300 mobile-tap-effect ${
+                  isActive
+                    ? "text-zinc-950 font-semibold"
+                    : "text-zinc-400 hover:text-zinc-600"
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon size={20} className={isActive ? "text-zinc-950 stroke-[2.2px]" : "text-zinc-400"} />
+                  <span className="text-[10px] tracking-tight">{label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
+
+      {location.pathname === "/dashboard" && <OnboardingTour variant="user" />}
 
       {termsOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/45 px-4 py-6 backdrop-blur-sm">
