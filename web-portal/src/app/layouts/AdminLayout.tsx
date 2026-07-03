@@ -49,14 +49,14 @@ export function AdminLayout() {
               className={({ isActive }) =>
                 `flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-xl text-xs font-medium transition-all duration-300 mobile-tap-effect ${
                   isActive
-                    ? "text-zinc-950 font-semibold"
+                    ? "brand-text font-semibold"
                     : "text-zinc-400 hover:text-zinc-600"
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon size={20} className={isActive ? "text-zinc-950 stroke-[2.2px]" : "text-zinc-400"} />
+                  <Icon size={20} className={isActive ? "brand-text stroke-[2.2px]" : "text-zinc-400"} />
                   <span className="text-[10px] tracking-tight">{label}</span>
                 </>
               )}

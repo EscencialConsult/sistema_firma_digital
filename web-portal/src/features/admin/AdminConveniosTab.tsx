@@ -16,7 +16,7 @@ import {
   Trash2,
   User,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../../shared/components/ui/Button";
 import { Toast } from "../../shared/components/ui/Toast";
 import { getAllUsers } from "../../shared/services/admin.service";
@@ -671,12 +671,12 @@ export function AdminConveniosTab({ orgId }: { orgId: string }) {
   const [toast, setToast] = useState({ visible: false, message: "" });
   const showToast = (message: string) => setToast({ visible: true, message });
 
-  function loadTemplates() {
+  const loadTemplates = useCallback(() => {
     setLoadingTpl(true);
     getConvenioTemplates(orgId).then(setTemplates).finally(() => setLoadingTpl(false));
-  }
+  }, [orgId]);
 
-  useEffect(() => { loadTemplates(); }, [orgId]);
+  useEffect(() => { loadTemplates(); }, [loadTemplates]);
 
   function openNew() {
     setEditingTemplate(null);
@@ -739,14 +739,14 @@ export function AdminConveniosTab({ orgId }: { orgId: string }) {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-400">Nombre de la plantilla *</label>
-            <input value={tplName} onChange={(e) => setTplName(e.target.value)}
+            <label htmlFor="conv-tpl-name" className="mb-1 block text-xs font-semibold text-zinc-400">Nombre de la plantilla *</label>
+            <input id="conv-tpl-name" value={tplName} onChange={(e) => setTplName(e.target.value)}
               placeholder="Ej: Convenio de representación comercial"
               className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-400">Descripción (opcional)</label>
-            <input value={tplDesc} onChange={(e) => setTplDesc(e.target.value)}
+            <label htmlFor="conv-tpl-desc" className="mb-1 block text-xs font-semibold text-zinc-400">Descripción (opcional)</label>
+            <input id="conv-tpl-desc" value={tplDesc} onChange={(e) => setTplDesc(e.target.value)}
               placeholder="Descripción breve"
               className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
           </div>

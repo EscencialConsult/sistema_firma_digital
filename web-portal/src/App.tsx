@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./app/providers/AuthProvider";
+import { ThemeProvider } from "./app/providers/ThemeProvider";
 import { AppRouter } from "./app/router/AppRouter";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -60,9 +61,11 @@ export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ErrorBoundary>
-          <AppRouter />
-        </ErrorBoundary>
+        <ThemeProvider>
+          <ErrorBoundary>
+            <AppRouter />
+          </ErrorBoundary>
+        </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>
   );

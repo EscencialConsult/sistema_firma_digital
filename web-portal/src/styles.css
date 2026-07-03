@@ -13,6 +13,22 @@
     --radius-button: 0.75rem;
     --shadow-card: 0 1px 3px rgba(0,0,0,0.01), 0 10px 40px -15px rgba(0,0,0,0.04);
     --shadow-hover: 0 15px 40px -12px rgba(0,0,0,0.08);
+
+    /* ── Colores de marca (sobreescritos por ThemeProvider al cargar la org) ── */
+    /* Primario */
+    --brand-primary:        #18181b;
+    --brand-primary-text:   #ffffff;   /* contraste auto-calculado en JS */
+    --brand-primary-soft:   rgba(24,24,27,0.12);
+    /* Secundario */
+    --brand-secondary:      #6366f1;
+    --brand-secondary-text: #ffffff;
+    /* Acento */
+    --brand-accent:         #f59e0b;
+    --brand-accent-text:    #09090b;
+    --brand-accent-soft:    rgba(245,158,11,0.12);
+    /* Fondo de marca */
+    --brand-bg:             #fafafa;
+    --brand-bg-text:        #09090b;
   }
 
   body {
@@ -71,9 +87,28 @@
 
   /* UI Tokens */
   .primary-action {
-    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] bg-zinc-900 px-4 text-sm font-medium text-white transition-all duration-300 hover:bg-zinc-800 active:scale-[0.96] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] px-4 text-sm font-medium transition-all duration-300 active:scale-[0.96] disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+    background-color: var(--brand-primary);
+    color: var(--brand-primary-text);
     min-height: 44px; /* Apple HIG standard for touch targets */
     touch-action: manipulation;
+  }
+  .primary-action:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+  .primary-action:focus-visible {
+    --tw-ring-color: var(--brand-primary);
+  }
+
+  /* Nav activo con color de marca */
+  .brand-nav-active {
+    background-color: var(--brand-primary);
+    color: var(--brand-primary-text);
+  }
+
+  /* Texto/ícono con color de marca */
+  .brand-text {
+    color: var(--brand-primary);
   }
 
   .secondary-action {

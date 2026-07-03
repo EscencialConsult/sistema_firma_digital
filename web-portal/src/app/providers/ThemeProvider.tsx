@@ -1,0 +1,52 @@
+import { type ReactNode, useEffect } from "react";
+import { useAuth } from "./AuthProvider";
+import { getMyOrganization } from "../../shared/services/organizations.service";
+import { applyTheme, resetTheme } from "../../shared/config/theme";
+
+/**
+ * ThemeProvider — aplica los 4 colores de marca de la org activa.
+ *
+ * Reglas:
+ * - SUPER_ADMIN → siempre usa DEFAULT_THEME (negro/zinc). Su panel
+ *   es interno y no debe verse afectado por colores de clientes.
+ * - ORG_ADMIN / USER con org → carga la org y aplica sus colores.
+ * - Sin usuario / sin org → resetea al DEFAULT_THEME.
+ *
+ * Los colores se consumen con CSS vars:
+ *   var(--brand-primary)          → color principal
+ *   var(--brand-primary-text)     → texto legible encima del principal
+ *   var(--brand-primary-soft)     → versión tenue para chips/fondos
+ *   var(--brand-accent)           → color de acento
+ *   var(--brand-accent-text)      → texto legible encima del acento
+ *   (ver theme.ts para la lista completa)
+ */
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    // Super admin: siempre negro. No mezclar colores de clientes.
+    if (user?.role === "SUPER_ADMIN") {
+      resetTheme();
+      return;
+    }
+
+    if (!user?.organizationId) {
+      resetTheme();
+      return;
+    }
+
+    getMyOrganization()
+      .then((org) => {
+        if (!org) { resetTheme(); return; }
+        applyTheme({
+          primary:    org.brandPrimary    ?? undefined,
+          secondary:  org.brandSecondary  ?? undefined,
+          accent:     org.brandAccent     ?? undefined,
+          background: org.brandBackground ?? undefined,
+        });
+      })
+      .catch(() => resetTheme());
+  }, [user?.organizationId, user?.role]);
+
+  return <>{children}</>;
+}

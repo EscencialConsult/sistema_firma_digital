@@ -17,6 +17,10 @@ function mapRow(row: Record<string, unknown>): Organization {
     maxUsers:        (row.max_users as number) ?? 50,
     contactEmail:    (row.contact_email as string) ?? undefined,
     createdAt:       row.created_at as string,
+    brandPrimary:    (row.brand_primary    as string) ?? undefined,
+    brandSecondary:  (row.brand_secondary  as string) ?? undefined,
+    brandAccent:     (row.brand_accent     as string) ?? undefined,
+    brandBackground: (row.brand_background as string) ?? undefined,
   };
 }
 
@@ -104,16 +108,24 @@ export async function updateOrganization(id: string, updates: Partial<{
   maxUsers: number;
   contactEmail: string;
   isActive: boolean;
+  brandPrimary:    string | null;
+  brandSecondary:  string | null;
+  brandAccent:     string | null;
+  brandBackground: string | null;
 }>): Promise<void> {
   const dbUpdates: Record<string, unknown> = {};
-  if (updates.name !== undefined)           dbUpdates.name              = updates.name;
-  if (updates.logoDarkUrl  !== undefined)   dbUpdates.logo_dark_url     = updates.logoDarkUrl;
-  if (updates.logoLightUrl !== undefined)   dbUpdates.logo_light_url    = updates.logoLightUrl;
-  if (updates.primaryColor !== undefined)   dbUpdates.primary_color     = updates.primaryColor;
+  if (updates.name !== undefined)            dbUpdates.name              = updates.name;
+  if (updates.logoDarkUrl  !== undefined)    dbUpdates.logo_dark_url     = updates.logoDarkUrl;
+  if (updates.logoLightUrl !== undefined)    dbUpdates.logo_light_url    = updates.logoLightUrl;
+  if (updates.primaryColor !== undefined)    dbUpdates.primary_color     = updates.primaryColor;
   if (updates.diditWorkflowId !== undefined) dbUpdates.didit_workflow_id = updates.diditWorkflowId;
-  if (updates.maxUsers !== undefined)       dbUpdates.max_users         = updates.maxUsers;
-  if (updates.contactEmail !== undefined)   dbUpdates.contact_email     = updates.contactEmail;
-  if (updates.isActive !== undefined)       dbUpdates.is_active         = updates.isActive;
+  if (updates.maxUsers !== undefined)        dbUpdates.max_users         = updates.maxUsers;
+  if (updates.contactEmail !== undefined)    dbUpdates.contact_email     = updates.contactEmail;
+  if (updates.isActive !== undefined)        dbUpdates.is_active         = updates.isActive;
+  if (updates.brandPrimary    !== undefined) dbUpdates.brand_primary     = updates.brandPrimary;
+  if (updates.brandSecondary  !== undefined) dbUpdates.brand_secondary   = updates.brandSecondary;
+  if (updates.brandAccent     !== undefined) dbUpdates.brand_accent      = updates.brandAccent;
+  if (updates.brandBackground !== undefined) dbUpdates.brand_background  = updates.brandBackground;
 
   const { error } = await supabase.from("organizations").update(dbUpdates).eq("id", id);
   if (error) throw new Error(error.message);

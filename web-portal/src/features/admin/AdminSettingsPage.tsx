@@ -2,6 +2,7 @@ import {
   CheckCircle2,
   Copy,
   Loader2,
+  Palette,
   PenLine,
   PlusCircle,
   Save,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { getMyOrganization, updateOrganization } from "../../shared/services/organizations.service";
+import { applyTheme, DEFAULT_THEME } from "../../shared/config/theme";
 import {
   getOrgAuthorities,
   inviteAuthority,
@@ -132,8 +134,9 @@ function InviteModal({
           /* ── Formulario ── */
           <form onSubmit={handleSubmit} className="p-5 space-y-4">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Nombre completo *</label>
+              <label htmlFor="inv-fullname" className="mb-1.5 block text-xs font-semibold text-zinc-500">Nombre completo *</label>
               <input
+                id="inv-fullname"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Ej: María García"
@@ -142,8 +145,9 @@ function InviteModal({
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Email *</label>
+              <label htmlFor="inv-email" className="mb-1.5 block text-xs font-semibold text-zinc-500">Email *</label>
               <input
+                id="inv-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -153,8 +157,9 @@ function InviteModal({
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">CUIL</label>
+              <label htmlFor="inv-cuil" className="mb-1.5 block text-xs font-semibold text-zinc-500">CUIL</label>
               <input
+                id="inv-cuil"
                 value={cuil}
                 onChange={(e) => setCuil(e.target.value)}
                 placeholder="20-12345678-9"
@@ -210,12 +215,24 @@ export function AdminSettingsPage() {
   const [showModal, setShowModal]       = useState(false);
   const [revoking, setRevoking]         = useState<string | null>(null);
 
+  // Brand colors
+  const [colorPrimary,    setColorPrimary]    = useState(DEFAULT_THEME.primary);
+  const [colorSecondary,  setColorSecondary]  = useState(DEFAULT_THEME.secondary);
+  const [colorAccent,     setColorAccent]     = useState(DEFAULT_THEME.accent);
+  const [colorBackground, setColorBackground] = useState(DEFAULT_THEME.background);
+  const [savingColors, setSavingColors]       = useState(false);
+  const [savedColors,  setSavedColors]        = useState(false);
+
   useEffect(() => {
     getMyOrganization()
       .then((o) => {
         setOrg(o);
         if (o) {
           setContactEmail(o.contactEmail ?? "");
+          if (o.brandPrimary)    setColorPrimary(o.brandPrimary);
+          if (o.brandSecondary)  setColorSecondary(o.brandSecondary);
+          if (o.brandAccent)     setColorAccent(o.brandAccent);
+          if (o.brandBackground) setColorBackground(o.brandBackground);
           getOrgAuthorities(o.id)
             .then(setAuthorities)
             .catch(() => setAuthorities([]))
@@ -255,6 +272,34 @@ export function AdminSettingsPage() {
       // silencioso — el botón vuelve a su estado
     } finally {
       setRevoking(null);
+    }
+  }
+
+  async function handleSaveColors() {
+    if (!org) return;
+    setSavingColors(true);
+    setSavedColors(false);
+    try {
+      await updateOrganization(org.id, {
+        brandPrimary:    colorPrimary,
+        brandSecondary:  colorSecondary,
+        brandAccent:     colorAccent,
+        brandBackground: colorBackground,
+      });
+      // Preview inmediato en la UI
+      applyTheme({
+        primary:    colorPrimary,
+        secondary:  colorSecondary,
+        accent:     colorAccent,
+        background: colorBackground,
+      });
+      setOrg({ ...org, brandPrimary: colorPrimary, brandSecondary: colorSecondary, brandAccent: colorAccent, brandBackground: colorBackground });
+      setSavedColors(true);
+      setTimeout(() => setSavedColors(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar colores");
+    } finally {
+      setSavingColors(false);
     }
   }
 
@@ -325,8 +370,9 @@ export function AdminSettingsPage() {
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
             <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Datos de contacto</p>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Email de contacto</label>
+              <label htmlFor="contact-email" className="mb-1.5 block text-xs font-semibold text-zinc-500">Email de contacto</label>
               <input
+                id="contact-email"
                 type="email"
                 value={contactEmail}
                 onChange={(e) => setContactEmail(e.target.value)}
@@ -344,6 +390,81 @@ export function AdminSettingsPage() {
             {saving ? "Guardando..." : "Guardar cambios"}
           </button>
         </form>
+
+        {/* ─── Colores de marca ────────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-5">
+          <div className="flex items-center gap-2">
+            <Palette size={15} className="text-zinc-400" />
+            <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Colores de marca</p>
+          </div>
+          <p className="text-xs text-zinc-500 -mt-2">
+            Estos colores se aplican automáticamente a la interfaz cuando los usuarios de tu organización inician sesión.
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            {([
+              { id: "color-primary",    label: "Principal",   desc: "Botones de acción, nav activo",  value: colorPrimary,    set: setColorPrimary },
+              { id: "color-secondary",  label: "Secundario",  desc: "Fondos suaves, apoyo visual",     value: colorSecondary,  set: setColorSecondary },
+              { id: "color-accent",     label: "Acento",      desc: "Badges, highlights",              value: colorAccent,     set: setColorAccent },
+              { id: "color-background", label: "Fondo",       desc: "Background de sidebar y cards",   value: colorBackground, set: setColorBackground },
+            ] as const).map(({ id, label, desc, value, set }) => (
+              <div key={id} className="flex items-center gap-3">
+                <label htmlFor={id} className="relative shrink-0 cursor-pointer">
+                  <input
+                    id={id}
+                    type="color"
+                    value={value}
+                    onChange={(e) => set(e.target.value)}
+                    className="h-10 w-10 cursor-pointer rounded-xl border border-zinc-200 p-0.5 bg-white"
+                  />
+                </label>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-zinc-900">{label}</p>
+                  <p className="text-[11px] text-zinc-400 truncate">{desc}</p>
+                  <p className="text-[11px] font-mono text-zinc-500 mt-0.5">{value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Preview strip con texto de contraste */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">Preview</p>
+            <div className="rounded-xl overflow-hidden flex h-10">
+              {([
+                { color: colorPrimary,    label: "Principal" },
+                { color: colorSecondary,  label: "Secundario" },
+                { color: colorAccent,     label: "Acento" },
+                { color: colorBackground, label: "Fondo" },
+              ] as const).map(({ color, label }) => (
+                <div key={label} className="flex-1 flex items-center justify-center text-[9px] font-bold"
+                  style={{ background: color }}>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-zinc-400">El color del texto sobre cada fondo se calcula automáticamente para garantizar legibilidad (WCAG-AA).</p>
+          </div>
+
+          {savedColors && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+              ✓ Colores guardados y aplicados a todos los usuarios de la organización
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSaveColors}
+            disabled={savingColors || !org}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white border border-zinc-200 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 transition disabled:opacity-50"
+          >
+            {savingColors ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+            {savingColors
+              ? "Guardando..."
+              : org?.brandPrimary
+                ? "Actualizar colores de marca"
+                : "Activar colores de marca"}
+          </button>
+        </div>
 
         {/* ─── Autoridades firmantes ────────────────────────────────────────── */}
         <div className="space-y-4">

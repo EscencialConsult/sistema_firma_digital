@@ -89,7 +89,7 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
   const getLinkClasses = (isActive: boolean) => {
     const base = "flex w-full items-center gap-3 rounded-[var(--radius-button)] px-3.5 py-2.5 text-sm font-medium transition duration-200 active:scale-[0.98]";
     if (isActive) {
-      return isDark ? `${base} bg-white/10 text-white` : `${base} bg-zinc-900 text-white shadow-sm`;
+      return isDark ? `${base} bg-white/10 text-white` : `${base} brand-nav-active shadow-sm`;
     }
     return isDark ? `${base} text-zinc-500 hover:bg-white/5 hover:text-zinc-300` : `${base} text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900`;
   };
