@@ -80,19 +80,27 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
 
   // Theme styles based on variant
   const isDark = variant === "super-admin";
-  const textPrimary = isDark ? "text-white" : "text-zinc-950";
-  const textSecondary = isDark ? "text-zinc-500" : "text-zinc-500";
+  // Para no-dark: el color del texto se hereda del inline style del aside (var(--brand-bg-text))
+  const textPrimary = isDark ? "text-white" : "";
+  const textSecondary = isDark ? "text-zinc-500" : "opacity-60";
   const bgSidebarDesktop = isDark ? "bg-zinc-950 border-zinc-800/60" : "border-zinc-200/50 backdrop-blur-md";
   const bgSidebarMobile = isDark ? "bg-zinc-950" : "";
   const bgOverlay = isDark ? "bg-black/60" : "bg-black/40 backdrop-blur-sm";
-  const brandSidebarStyle = isDark ? undefined : { background: "var(--brand-bg)", transition: "background 0.35s ease" };
+  const brandSidebarStyle = isDark ? undefined : {
+    background: "var(--brand-bg)",
+    color: "var(--brand-bg-text)",
+    transition: "background 0.35s ease, color 0.35s ease",
+  };
 
   const getLinkClasses = (isActive: boolean) => {
     const base = "flex w-full items-center gap-3 rounded-[var(--radius-button)] px-3.5 py-2.5 text-sm font-medium transition duration-200 active:scale-[0.98]";
     if (isActive) {
       return isDark ? `${base} bg-white/10 text-white` : `${base} brand-nav-active shadow-sm`;
     }
-    return isDark ? `${base} text-zinc-500 hover:bg-white/5 hover:text-zinc-300` : `${base} text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900`;
+    // Inactivo: para dark → zinc. Para branded → hereda color del sidebar + opacity.
+    return isDark
+      ? `${base} text-zinc-500 hover:bg-white/5 hover:text-zinc-300`
+      : `${base} opacity-60 hover:opacity-100 hover:bg-black/[0.07]`;
   };
 
   const renderHeader = () => {
@@ -157,11 +165,11 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
             transition: "background-color 0.35s ease, border-color 0.35s ease",
           }}
         >
-          <p className="text-xs font-semibold text-zinc-800 truncate">{user?.fullName}</p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 truncate">{user?.email}</p>
+          <p className="text-xs font-semibold truncate">{user?.fullName}</p>
+          <p className="mt-0.5 text-[11px] opacity-60 truncate">{user?.email}</p>
           <button
             onClick={logout}
-            className="mt-3 flex items-center gap-1.5 text-xs text-zinc-500 hover:text-red-500 transition"
+            className="mt-3 flex items-center gap-1.5 text-xs opacity-50 hover:text-red-500 hover:opacity-100 transition"
             type="button"
           >
             <LogOut size={12} /> Cerrar sesión
