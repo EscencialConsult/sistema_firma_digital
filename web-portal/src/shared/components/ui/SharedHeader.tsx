@@ -91,10 +91,17 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
 
   // Theme settings
   const isDark = variant === "super-admin";
-  const bgHeader = isDark ? "bg-zinc-950/90 border-zinc-800/60" : "bg-white/90 border-zinc-200/60";
+  const bgHeader = isDark ? "bg-zinc-950/90 border-zinc-800/60" : "";
   const textIcon = isDark ? "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300" : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900";
   const borderIcon = isDark ? "border-zinc-800" : "border-zinc-200";
   const textTitle = isDark ? "text-zinc-400" : "text-zinc-600";
+  // Header con tinte del color primario + borde inferior coloreado (no-dark)
+  const brandHeaderStyle = isDark ? undefined : {
+    backgroundColor: "white",
+    backgroundImage: "linear-gradient(var(--brand-primary-soft), var(--brand-primary-soft))",
+    borderBottomColor: "var(--brand-primary)",
+    transition: "background-image 0.35s ease, border-color 0.35s ease",
+  };
   
   const bgDropdown = isDark ? "bg-zinc-900 border-zinc-800 text-zinc-105" : "bg-white border-zinc-200 text-zinc-800";
 
@@ -388,7 +395,7 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
   };
 
   return (
-    <header className={`sticky top-0 z-10 border-b backdrop-blur ${bgHeader}`}>
+    <header className={`sticky top-0 z-10 border-b backdrop-blur ${bgHeader}`} style={brandHeaderStyle}>
       <div className="flex h-14 items-center justify-between gap-4 px-4 md:px-6">
         <button
           onClick={onMobileOpen}

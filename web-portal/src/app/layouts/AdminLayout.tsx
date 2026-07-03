@@ -17,7 +17,14 @@ export function AdminLayout() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-secondary)] text-[var(--color-text-base)] pb-20 lg:pb-0">
+    <div
+      className="min-h-screen text-[var(--color-text-base)] pb-20 lg:pb-0"
+      style={{
+        backgroundColor: "var(--color-bg-secondary)",
+        backgroundImage: "linear-gradient(var(--brand-primary-soft), var(--brand-primary-soft))",
+        transition: "background-image 0.35s ease",
+      }}
+    >
       <SharedSidebar 
         variant="admin" 
         mobileOpen={mobileOpen} 

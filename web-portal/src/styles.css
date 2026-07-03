@@ -127,7 +127,9 @@
   }
 
   .card-premium {
-    @apply rounded-[var(--radius-card)] border border-zinc-200/50 bg-white shadow-[var(--shadow-card)] transition-all duration-300;
+    @apply rounded-[var(--radius-card)] bg-white shadow-[var(--shadow-card)] transition-all duration-300;
+    border: 1px solid var(--brand-accent-soft);
+    transition: border-color 0.35s ease, box-shadow 0.3s ease;
   }
 
   .glass-premium {
