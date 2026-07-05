@@ -92,20 +92,22 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
   // Theme settings
   const isDark = variant === "super-admin";
   const bgHeader = isDark ? "bg-zinc-950/90 border-zinc-800/60" : "";
-  const textIcon = isDark ? "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300" : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900";
-  const borderIcon = isDark ? "border-zinc-800" : "border-zinc-200";
-  const textTitle = isDark ? "text-zinc-400" : "text-zinc-600";
-  // Header con tinte del color primario + borde inferior coloreado (no-dark)
-  const brandHeaderStyle = isDark ? undefined : {
-    backgroundColor: "white",
-    backgroundImage: "linear-gradient(var(--brand-primary-soft), var(--brand-primary-soft))",
-    borderBottomColor: "var(--brand-primary)",
-    transition: "background-image 0.35s ease, border-color 0.35s ease",
-  };
-  
+  // Non-dark: hereda color del inline style del header (var(--brand-bg-text))
+  const textIcon = isDark
+    ? "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+    : "opacity-60 hover:opacity-100 hover:bg-white/10";
+  const borderIcon = isDark ? "border-zinc-800" : "border-white/25";
+  const textTitle = isDark ? "text-zinc-400" : "opacity-70";
   const bgDropdown = isDark ? "bg-zinc-900 border-zinc-800 text-zinc-105" : "bg-white border-zinc-200 text-zinc-800";
+  // Header usa el mismo color de fondo que el sidebar (brand-bg)
+  const brandHeaderStyle = isDark ? undefined : {
+    backgroundColor: "var(--brand-bg)",
+    color: "var(--brand-bg-text)",
+    borderBottomColor: "var(--brand-primary)",
+    transition: "background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease",
+  };
 
-  const defaultTitle = variant === "admin" 
+  const defaultTitle = variant === "admin"
     ? (ROLE_LABEL[user?.role ?? ""] ?? "Panel de Administración")
     : variant === "super-admin"
     ? "Panel Super Administrador"
@@ -407,11 +409,11 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
 
         {showSearch ? (
           <div ref={searchContainerRef} className="relative flex-1 min-w-0 md:max-w-md lg:ml-0 z-50">
-            <div 
+            <div
               className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-1.5 text-sm transition duration-200 ${
-                isDark 
-                  ? "border-zinc-800 bg-zinc-900/40 text-zinc-300 focus-within:border-zinc-700 focus-within:bg-zinc-900/80" 
-                  : "border-zinc-200/50 bg-zinc-50 text-zinc-800 focus-within:border-zinc-300 focus-within:bg-zinc-100/60"
+                isDark
+                  ? "border-zinc-800 bg-zinc-900/40 text-zinc-300 focus-within:border-zinc-700 focus-within:bg-zinc-900/80"
+                  : "border-white/25 bg-white/10 focus-within:border-white/40 focus-within:bg-white/20"
               }`}
             >
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -424,7 +426,7 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                   placeholder="Buscar en el portal..."
-                  className="w-full border-0 bg-transparent py-1 text-sm outline-none placeholder-zinc-400 text-zinc-800 dark:text-zinc-200"
+                  className={`w-full border-0 bg-transparent py-1 text-sm outline-none ${isDark ? "placeholder-zinc-400 text-zinc-300" : "placeholder-current opacity-80"}`}
                 />
               </div>
               {searchQuery && (
@@ -438,9 +440,9 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
               )}
               {!searchQuery && (
                 <kbd className={`hidden sm:inline-flex h-5 select-none items-center gap-0.5 rounded border px-1.5 font-mono text-[9px] font-medium transition shrink-0 ${
-                  isDark 
-                    ? "bg-zinc-800 border-zinc-700 text-zinc-500" 
-                    : "bg-white border-zinc-200 text-zinc-400"
+                  isDark
+                    ? "bg-zinc-800 border-zinc-700 text-zinc-500"
+                    : "bg-white/15 border-white/25 opacity-60"
                 }`}>
                   <span>Ctrl</span>K
                 </kbd>
@@ -561,11 +563,11 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
           {variant === "user" && (
             <>
               <div className="hidden text-right text-xs md:block mr-2">
-                <p className="font-semibold text-zinc-800">{user?.fullName}</p>
-                <p className="text-zinc-400 font-mono">{user?.email}</p>
+                <p className="font-semibold">{user?.fullName}</p>
+                <p className="font-mono opacity-60">{user?.email}</p>
               </div>
               <button
-                className="hidden rounded-[var(--radius-button)] bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 active:scale-[0.98] transition-all md:inline-flex"
+                className="hidden primary-action px-4 py-2 md:inline-flex"
                 type="button"
                 onClick={() => navigate("/signatures")}
               >
@@ -579,7 +581,7 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
             <button
               onClick={() => setNotificationsOpen(prev => !prev)}
               className={`relative grid h-9 w-9 place-items-center rounded-xl border transition-colors ${borderIcon} ${textIcon} ${
-                notificationsOpen ? (isDark ? "bg-zinc-800 text-zinc-200" : "bg-zinc-100 text-zinc-900") : ""
+                notificationsOpen ? (isDark ? "bg-zinc-800 text-zinc-200" : "bg-white/20 !opacity-100") : ""
               }`}
               type="button"
               title="Notificaciones"
