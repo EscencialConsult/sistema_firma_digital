@@ -140,7 +140,8 @@ function ConformityStep({
         <label className="flex cursor-pointer items-start gap-3">
           <input
             type="checkbox"
-            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-zinc-900"
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer"
+                style={{ accentColor: "var(--brand-primary)" }}
             checked={checked}
             onChange={(e) => setChecked(e.target.checked)}
           />
@@ -733,7 +734,7 @@ export function SigningFlowPage() {
               <p className="text-[11px] text-zinc-500">Flujo de firma seguro</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: "var(--brand-primary)" }}>
             <ShieldCheck size={14} />
             <span className="hidden sm:inline">Firma segura</span>
           </div>

@@ -15,29 +15,32 @@ export function Stepper({ steps, current }: StepperProps) {
           <div key={label} className="flex flex-1 items-start min-w-0">
             <div className="relative flex min-w-[74px] flex-col items-center gap-2">
               <div
-                className={`grid h-11 w-11 shrink-0 place-items-center rounded-full border text-sm font-bold transition-all duration-200 ${
+                className={`grid h-11 w-11 shrink-0 place-items-center rounded-full border text-sm font-bold transition-all duration-300 ${
+                  active ? "shadow-sm" : ""
+                } ${!done && !active ? "border-zinc-200 bg-zinc-100 text-zinc-500" : ""}`}
+                style={
                   done
-                    ? "border-zinc-900 bg-zinc-900 text-white shadow-sm"
+                    ? { background: "var(--brand-primary)", borderColor: "var(--brand-primary)", color: "var(--brand-primary-text)" }
                     : active
-                    ? "border-white bg-zinc-950 text-white shadow-sm ring-4 ring-zinc-200"
-                    : "border-zinc-200 bg-zinc-100 text-zinc-500"
-                }`}
+                    ? { background: "var(--brand-primary)", borderColor: "transparent", color: "var(--brand-primary-text)", boxShadow: "0 0 0 4px var(--brand-primary-soft)" }
+                    : undefined
+                }
               >
                 {done ? <Check size={14} strokeWidth={2.5} /> : <span>{i + 1}</span>}
               </div>
               <span
                 className={`hidden max-w-[120px] text-center text-[10px] font-bold uppercase leading-tight tracking-wide sm:block ${
-                  active ? "text-zinc-950" : done ? "text-zinc-600" : "text-zinc-300"
+                  done ? "text-zinc-500" : !active ? "text-zinc-300" : ""
                 }`}
+                style={active ? { color: "var(--brand-primary)" } : undefined}
               >
                 {label}
               </span>
             </div>
             {i < steps.length - 1 && (
               <div
-                className={`mt-[22px] h-px flex-1 transition-all duration-200 ${
-                  i < current ? "bg-zinc-900" : "bg-zinc-200"
-                }`}
+                className="mt-[22px] h-px flex-1 transition-all duration-300"
+                style={i < current ? { background: "var(--brand-primary)" } : { background: "#e4e4e7" }}
               />
             )}
           </div>
