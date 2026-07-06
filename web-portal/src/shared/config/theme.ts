@@ -93,33 +93,49 @@ function hexToSoft(hex: string, alpha = 0.12): string {
 // ─── API pública ──────────────────────────────────────────────────────────────
 
 /**
- * Aplica los 4 colores de marca al :root.
- * Por cada color calcula automáticamente:
- *   - *-text: color de texto con contraste garantizado
- *   - *-soft: versión tenue (12% alpha) para chips y fondos
+ * Aplica los 4 colores de marca al :root y los cachea en localStorage
+ * para que el inline script de index.html los aplique instantáneamente
+ * en la próxima carga (sin flash de colores por defecto).
+ *
+ * @param cache - false solo para resetTheme (evita guardar DEFAULT_THEME)
  */
-export function applyTheme(theme: Partial<BrandTheme>): void {
+export function applyTheme(theme: Partial<BrandTheme>, { cache = true }: { cache?: boolean } = {}): void {
   const t    = { ...DEFAULT_THEME, ...filterEmpty(theme) };
   const root = document.documentElement;
 
-  root.style.setProperty(CSS_VARS.primary,        t.primary);
-  root.style.setProperty(CSS_VARS.primaryText,     getContrastText(t.primary));
-  root.style.setProperty(CSS_VARS.primarySoft,     hexToSoft(t.primary));
+  const computed = {
+    primary:         t.primary,
+    primaryText:     getContrastText(t.primary),
+    primarySoft:     hexToSoft(t.primary),
+    secondary:       t.secondary,
+    secondaryText:   getContrastText(t.secondary),
+    accent:          t.accent,
+    accentText:      getContrastText(t.accent),
+    accentSoft:      hexToSoft(t.accent),
+    background:      t.background,
+    backgroundText:  getContrastText(t.background),
+  };
 
-  root.style.setProperty(CSS_VARS.secondary,       t.secondary);
-  root.style.setProperty(CSS_VARS.secondaryText,   getContrastText(t.secondary));
+  root.style.setProperty(CSS_VARS.primary,        computed.primary);
+  root.style.setProperty(CSS_VARS.primaryText,     computed.primaryText);
+  root.style.setProperty(CSS_VARS.primarySoft,     computed.primarySoft);
+  root.style.setProperty(CSS_VARS.secondary,       computed.secondary);
+  root.style.setProperty(CSS_VARS.secondaryText,   computed.secondaryText);
+  root.style.setProperty(CSS_VARS.accent,          computed.accent);
+  root.style.setProperty(CSS_VARS.accentText,      computed.accentText);
+  root.style.setProperty(CSS_VARS.accentSoft,      computed.accentSoft);
+  root.style.setProperty(CSS_VARS.background,      computed.background);
+  root.style.setProperty(CSS_VARS.backgroundText,  computed.backgroundText);
 
-  root.style.setProperty(CSS_VARS.accent,          t.accent);
-  root.style.setProperty(CSS_VARS.accentText,      getContrastText(t.accent));
-  root.style.setProperty(CSS_VARS.accentSoft,      hexToSoft(t.accent));
-
-  root.style.setProperty(CSS_VARS.background,      t.background);
-  root.style.setProperty(CSS_VARS.backgroundText,  getContrastText(t.background));
+  if (cache) {
+    try { localStorage.setItem("brand_theme", JSON.stringify(computed)); } catch { /* storage lleno o bloqueado */ }
+  }
 }
 
-/** Restaura el tema por defecto (logout o SUPER_ADMIN) */
+/** Restaura el tema por defecto (logout o SUPER_ADMIN) — limpia el caché */
 export function resetTheme(): void {
-  applyTheme(DEFAULT_THEME);
+  try { localStorage.removeItem("brand_theme"); } catch { /* no-op */ }
+  applyTheme(DEFAULT_THEME, { cache: false });
 }
 
 function filterEmpty(obj: Partial<BrandTheme>): Partial<BrandTheme> {

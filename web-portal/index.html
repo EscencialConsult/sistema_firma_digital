@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Portal de firma</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Aplica colores de marca cacheados ANTES de que React cargue → sin flash -->
+    <script>
+      try {
+        var t = JSON.parse(localStorage.getItem('brand_theme') || 'null');
+        if (t && t.primary) {
+          var r = document.documentElement;
+          r.style.setProperty('--brand-primary',        t.primary);
+          r.style.setProperty('--brand-primary-text',   t.primaryText);
+          r.style.setProperty('--brand-primary-soft',   t.primarySoft);
+          r.style.setProperty('--brand-secondary',      t.secondary);
+          r.style.setProperty('--brand-secondary-text', t.secondaryText);
+          r.style.setProperty('--brand-accent',         t.accent);
+          r.style.setProperty('--brand-accent-text',    t.accentText);
+          r.style.setProperty('--brand-accent-soft',    t.accentSoft);
+          r.style.setProperty('--brand-bg',             t.background);
+          r.style.setProperty('--brand-bg-text',        t.backgroundText);
+        }
+      } catch(e) {}
+    </script>
     
     <!-- Preload de fuentes críticas para evitar destellos (FOUT) -->
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
