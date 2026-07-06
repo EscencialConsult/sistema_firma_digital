@@ -520,8 +520,8 @@ function SuccessStep({ result }: { result: SignatureResult }) {
   return (
     <div className="space-y-6 text-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100">
-          <CheckCircle2 size={40} className="text-emerald-600" />
+        <div className="grid h-20 w-20 place-items-center rounded-full" style={{ background: "var(--brand-primary-soft)" }}>
+          <CheckCircle2 size={40} style={{ color: "var(--brand-primary)" }} />
         </div>
         <div>
           <h2 className="text-2xl font-bold text-zinc-950">¡Documento firmado!</h2>
@@ -556,7 +556,7 @@ function SuccessStep({ result }: { result: SignatureResult }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
+      <div className="flex items-center justify-center gap-2 rounded-xl border p-3 text-xs font-semibold" style={{ borderColor: "var(--brand-primary-soft)", background: "var(--brand-primary-soft)", color: "var(--brand-primary)" }}>
         <ShieldCheck size={14} />
         Firma verificada · OTP + Reconocimiento facial + Firma manuscrita
       </div>
@@ -716,8 +716,17 @@ export function SigningFlowPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <header className="no-print border-b border-zinc-200 bg-white px-4 py-4">
+    <div
+      className="min-h-screen"
+      style={{
+        backgroundColor: "var(--color-bg-primary)",
+        backgroundImage: "linear-gradient(var(--brand-primary-soft), var(--brand-primary-soft))",
+      }}
+    >
+      <header
+        className="no-print border-b bg-white px-4 py-4"
+        style={{ borderBottomColor: "var(--brand-primary)" }}
+      >
         <div className="mx-auto flex max-w-2xl items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -752,7 +761,7 @@ export function SigningFlowPage() {
           </div>
         )}
 
-        <div className="rounded-2xl border border-zinc-200/60 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border bg-white p-6 shadow-sm" style={{ borderColor: "var(--brand-primary-soft)" }}>
           {step === 0 && (
             <ConformityStep request={request} onAccept={handleAcceptConformity} loading={loading} />
           )}

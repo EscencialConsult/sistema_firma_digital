@@ -201,7 +201,7 @@ function TermsStep({
   return (
     <div className="space-y-6">
       <div>
-        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-950 text-white">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
           <FileText size={18} />
         </div>
         <h2 className="text-lg font-bold text-zinc-950">Terminos y condiciones</h2>
@@ -219,7 +219,8 @@ function TermsStep({
       <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-4">
         <input
           type="checkbox"
-          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-zinc-950"
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer"
+                style={{ accentColor: "var(--brand-primary)" }}
           checked={accepted}
           onChange={(e) => onAcceptedChange(e.target.checked)}
         />
@@ -270,7 +271,7 @@ function FinalReviewStep({
   return (
     <div className="space-y-6">
       <div>
-        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-950 text-white">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
           <CheckCircle size={18} />
         </div>
         <h2 className="text-lg font-bold text-zinc-950">Revision final</h2>
@@ -288,7 +289,7 @@ function FinalReviewStep({
         ))}
       </div>
 
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+      <div className="rounded-2xl border p-4 text-sm font-medium" style={{ borderColor: "var(--brand-primary-soft)", background: "var(--brand-primary-soft)", color: "var(--brand-primary)" }}>
         Tu identidad fue validada y los terminos quedaron aceptados para esta cuenta.
       </div>
 
@@ -343,8 +344,9 @@ function KycPendingView({
           <div key={label} className="flex items-center gap-3">
             <div
               className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                done ? "bg-emerald-500" : active ? "animate-pulse bg-amber-500" : "bg-zinc-200"
-              }`}
+                active ? "animate-pulse" : ""
+              } ${!done && !active ? "bg-zinc-200" : ""}`}
+              style={done ? { background: "var(--brand-primary)" } : active ? { background: "var(--brand-accent)" } : undefined}
             />
             <p className={`text-sm ${done || active ? "text-zinc-900 font-medium" : "text-zinc-400"}`}>
               {label}
@@ -566,10 +568,10 @@ function ProviderVerificationStep({
         <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center">
           {verifiedData ? (
             <>
-              <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-emerald-600 text-white">
+              <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full" style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
                 <CheckCircle size={28} />
               </div>
-              <h3 className="text-xl font-bold text-emerald-700">
+              <h3 className="text-xl font-bold" style={{ color: "var(--brand-primary)" }}>
                 {verifiedData.status === "VERIFIED" ? "Verificación exitosa" : "Verificación completada"}
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">
@@ -598,7 +600,7 @@ function ProviderVerificationStep({
             </>
           ) : (
             <>
-              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl bg-zinc-950 text-white">
+              <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-xl" style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
                 <Loader2 size={22} className="animate-spin" />
               </div>
               <h3 className="text-base font-bold text-zinc-950">Verificando resultado</h3>
