@@ -43,14 +43,26 @@
   }
 
   @media print {
-    @page { margin: 1.5cm; }
+    @page { margin: 2cm; size: A4 portrait; }
     body {
-      background: white;
+      background: white !important;
       color: black;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
     .print\:hidden, .no-print { display: none !important; }
+    .print-only { display: block !important; }
+    /* Expandir el visor de contratos para imprimir todo el contenido */
+    .contract-doc-wrapper {
+      max-height: none !important;
+      overflow: visible !important;
+      height: auto !important;
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+    }
+    /* Eliminar fondo de marca de la página al imprimir */
+    .signing-page-bg { background: white !important; }
   }
 }
 

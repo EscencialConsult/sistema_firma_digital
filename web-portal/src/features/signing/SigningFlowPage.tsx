@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ContractDocument } from "../admin/components/ContractRenderer";
+import { loadOrgCache } from "../../shared/config/orgCache";
 import { Button } from "../../shared/components/ui/Button";
 import { Stepper } from "../../shared/components/ui/Stepper";
 import {
@@ -715,14 +716,28 @@ export function SigningFlowPage() {
     else navigate(-1);
   }
 
+  const orgCache = loadOrgCache();
+  const printLogoUrl = orgCache?.logoLightUrl ?? orgCache?.logoDarkUrl ?? null;
+
   return (
     <div
-      className="min-h-screen"
-      style={{
-        backgroundColor: "var(--color-bg-primary)",
-        backgroundImage: "linear-gradient(var(--brand-primary-soft), var(--brand-primary-soft))",
-      }}
+      className="signing-page-bg min-h-screen"
+      style={{ background: "var(--brand-bg)", color: "var(--brand-bg-text)" }}
     >
+      {/* Header solo para impresión: logo de marca + título del documento */}
+      <div className="print-only hidden border-b border-zinc-200 pb-4 mb-6">
+        <div className="flex items-center justify-between">
+          {printLogoUrl
+            ? <img src={printLogoUrl} alt="Logo" style={{ height: 40, objectFit: "contain" }} />
+            : <span className="font-bold text-lg text-zinc-900">{orgCache?.name ?? "Firma Digital"}</span>
+          }
+          <div className="text-right">
+            <p className="text-sm font-semibold text-zinc-900">{request.documentTitle}</p>
+            <p className="text-xs text-zinc-500">Flujo de firma seguro · Ley 25.506</p>
+          </div>
+        </div>
+      </div>
+
       <header
         className="no-print border-b bg-white px-4 py-4"
         style={{ borderBottomColor: "var(--brand-primary)" }}

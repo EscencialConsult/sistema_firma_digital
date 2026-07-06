@@ -12,7 +12,7 @@ import type { AlumnoData } from "../../../shared/utils/contractTemplate";
 
 function DocWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-y-auto max-h-[58vh] rounded-2xl bg-white text-zinc-900 shadow-inner border border-zinc-200">
+    <div className="contract-doc-wrapper overflow-y-auto max-h-[58vh] rounded-2xl bg-white text-zinc-900 shadow-inner border border-zinc-200">
       <div className="p-8 font-serif text-[13px] leading-7 space-y-4">
         {children}
       </div>
