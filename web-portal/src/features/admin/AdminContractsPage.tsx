@@ -200,7 +200,7 @@ function TemplateCard({
         </div>
       )}
 
-      <Button onClick={onSend} className="mt-auto h-9 w-full text-xs bg-zinc-900 hover:bg-zinc-700">
+      <Button onClick={onSend} className="mt-auto h-9 w-full text-xs" style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
         <Send size={12} /> Enviar contrato
       </Button>
     </div>

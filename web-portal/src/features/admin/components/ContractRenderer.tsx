@@ -50,13 +50,23 @@ function DocClause({ n, title, children }: { n: string; title: string; children:
   );
 }
 
-function DocSig({ label, name, sub }: { label: string; name: string; sub: string }) {
+function DocSig({ label, name, sub, signatureUrl }: { label: string; name: string; sub: string; signatureUrl?: string }) {
   return (
     <div className="text-center">
-      <div className="border-t-2 border-zinc-500 pt-3 mt-14">
-        <p className="font-bold text-xs uppercase font-sans">{name}</p>
-        <p className="text-[11px] text-zinc-500">{sub}</p>
-        <p className="text-[11px] text-zinc-500 italic">{label}</p>
+      <div className="relative mt-14">
+        {signatureUrl && (
+          <img
+            src={signatureUrl}
+            alt="Firma"
+            className="mx-auto mb-1 h-12 object-contain"
+            style={{ maxWidth: 160 }}
+          />
+        )}
+        <div className="border-t-2 border-zinc-500 pt-3">
+          <p className="font-bold text-xs uppercase font-sans">{name}</p>
+          <p className="text-[11px] text-zinc-500">{sub}</p>
+          <p className="text-[11px] text-zinc-500 italic">{label}</p>
+        </div>
       </div>
     </div>
   );
@@ -141,6 +151,7 @@ function FormacionDoc({ f, alumno }: { f: Record<string, string>; alumno: Alumno
           label="Representante Legal — Escencial Consultora S.A.S."
           name={f.autoridad_nombre || "—"}
           sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+          signatureUrl={f.autoridad_signature_url || undefined}
         />
         <DocSigEmpty label="El/La Alumno/a" />
       </DocSignatures>
@@ -312,6 +323,7 @@ function SoftwareDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
           label="Contratista — Escencial Consultora S.A.S."
           name={f.autoridad_nombre || "—"}
           sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+          signatureUrl={f.autoridad_signature_url || undefined}
         />
         <DocSigEmpty label="Comitente" />
       </DocSignatures>
@@ -371,6 +383,7 @@ function SoporteDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
           label="Prestadora — Escencial Consultora S.A.S."
           name={f.autoridad_nombre || "—"}
           sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+          signatureUrl={f.autoridad_signature_url || undefined}
         />
         <DocSigEmpty label="Comitente" />
       </DocSignatures>
@@ -450,7 +463,7 @@ function CustomDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDat
         dangerouslySetInnerHTML={{ __html: content }} 
       />
       <DocSignatures>
-        <DocSig label="Firma Autorizada" name={f.autoridad_nombre || "—"} sub={`CUIL/CUIT: ${f.autoridad_cuil || "—"}`} />
+        <DocSig label="Firma Autorizada" name={f.autoridad_nombre || "—"} sub={`CUIL/CUIT: ${f.autoridad_cuil || "—"}`} signatureUrl={f.autoridad_signature_url || undefined} />
         <DocSigEmpty label={alumno.nombre || "Firmante"} />
       </DocSignatures>
       <DocFooter />

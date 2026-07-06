@@ -495,23 +495,26 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
                                 onMouseEnter={() => setActiveIndex(globalIndex)}
                                 className={`flex items-center justify-between rounded-xl px-3 py-2 cursor-pointer transition ${
                                   isActive
-                                    ? (isDark ? "bg-white/10 text-white" : "bg-zinc-900 text-white shadow-sm")
+                                    ? (isDark ? "bg-white/10 text-white" : "shadow-sm")
                                     : (isDark ? "text-zinc-400 hover:bg-zinc-900/50 hover:text-zinc-200" : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900")
                                 }`}
+                                style={isActive && !isDark ? { background: "var(--brand-primary)", color: "var(--brand-primary-text)" } : undefined}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
                                   <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg border transition ${
                                     isActive
-                                      ? (isDark ? "border-zinc-700 bg-zinc-900" : "border-zinc-800 bg-zinc-800 text-white")
+                                      ? (isDark ? "border-zinc-700 bg-zinc-900" : "")
                                       : (isDark ? "border-zinc-800 bg-zinc-900/30" : "border-zinc-200/50 bg-zinc-50")
-                                  }`}>
+                                  }`}
+                                  style={isActive && !isDark ? { background: "var(--brand-primary)", borderColor: "var(--brand-primary)", color: "var(--brand-primary-text)", opacity: 0.85 } : undefined}>
                                     <Icon size={14} />
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-xs font-bold leading-none">{item.title}</p>
                                     <p className={`text-[10px] mt-0.5 truncate ${
-                                      isActive ? "text-zinc-300" : "text-zinc-400"
-                                    }`}>
+                                      isActive ? (isDark ? "text-zinc-300" : "") : "text-zinc-400"
+                                    }`}
+                                    style={isActive && !isDark ? { color: "var(--brand-primary-text)", opacity: 0.75 } : undefined}>
                                       {item.description}
                                     </p>
                                   </div>
@@ -519,7 +522,7 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
                                 <div className="flex items-center gap-1.5">
                                   {isActive && (
                                     <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded tracking-wide font-mono ${
-                                      isDark ? "bg-zinc-700 text-zinc-300 border border-zinc-700" : "bg-zinc-950 text-zinc-300"
+                                      isDark ? "bg-zinc-700 text-zinc-300 border border-zinc-700" : "bg-white/20 text-inherit"
                                     }`}>
                                       Ir
                                     </span>

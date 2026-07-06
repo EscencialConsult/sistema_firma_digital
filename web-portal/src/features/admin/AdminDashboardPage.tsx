@@ -90,7 +90,7 @@ export function AdminDashboardPage() {
     : [];
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto py-2">
+    <div className="space-y-8 py-2">
       <div className="border-b border-zinc-100 pb-5">
         <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
           Panel de administración

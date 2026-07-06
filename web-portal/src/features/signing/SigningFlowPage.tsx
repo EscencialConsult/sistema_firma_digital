@@ -1,9 +1,9 @@
 import {
   ArrowLeft,
   CheckCircle2,
+  Download,
   FileSignature,
   Hash,
-  Printer,
   PenLine,
   Shield,
   ShieldCheck,
@@ -48,6 +48,129 @@ function ConformityStep({
   loading: boolean;
 }) {
   const [checked, setChecked] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownloadPdf() {
+    setDownloading(true);
+    try {
+      const wrapper = document.querySelector('.contract-doc-wrapper') as HTMLElement | null;
+      if (!wrapper) return;
+
+      const cached = loadOrgCache();
+      const orgName = cached?.name ?? 'Firma Digital';
+      const logoUrl = cached?.logoLightUrl ?? cached?.logoDarkUrl ?? null;
+
+      // Contenedor off-screen — position:fixed;top:0 para coordenadas simples sin corrección de scroll
+      const container = document.createElement('div');
+      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:760px;background:white;padding:48px;box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#09090b;z-index:-1;';
+
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;margin-bottom:24px;border-bottom:2px solid #18181b;';
+
+      if (logoUrl) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.style.cssText = 'height:36px;object-fit:contain;max-width:140px;';
+        img.src = logoUrl;
+        header.appendChild(img);
+        await new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res(); setTimeout(res, 2000); });
+      } else {
+        const nameEl = document.createElement('strong');
+        nameEl.textContent = orgName;
+        nameEl.style.fontSize = '15px';
+        header.appendChild(nameEl);
+      }
+
+      const metaEl = document.createElement('div');
+      metaEl.style.textAlign = 'right';
+      metaEl.innerHTML = `<div style="font-size:11px;font-weight:600;color:#0a0a0a">${request.documentTitle}</div><div style="font-size:9px;color:#71717a;margin-top:2px">Flujo de firma seguro · Ley 25.506</div>`;
+      header.appendChild(metaEl);
+      container.appendChild(header);
+
+      const clone = wrapper.cloneNode(true) as HTMLElement;
+      clone.style.cssText = 'max-height:none;overflow:visible;box-shadow:none;border:none;border-radius:0;background:white;';
+      container.appendChild(clone);
+
+      document.body.appendChild(container);
+      await new Promise(r => setTimeout(r, 200));
+
+      // Usar midpoints de los ESPACIOS entre párrafos como candidatos de corte.
+      // getBoundingClientRect en position:fixed;top:0 → coordenadas directas, sin corrección de scroll.
+      // Solo p/h* para evitar capturar divs contenedores que abarcan múltiples párrafos.
+      const containerTop = container.getBoundingClientRect().top; // = 0 para fixed;top:0
+      const blockEls = Array.from(container.querySelectorAll('p, h1, h2, h3, h4, h5, h6'));
+      const breakCandidates: number[] = [];
+      for (let i = 0; i < blockEls.length - 1; i++) {
+        const currBottom = (blockEls[i] as HTMLElement).getBoundingClientRect().bottom - containerTop;
+        const nextTop    = (blockEls[i + 1] as HTMLElement).getBoundingClientRect().top - containerTop;
+        // Midpoint del espacio en blanco entre dos elementos = corte garantizado en whitespace
+        const gapMid = nextTop > currBottom
+          ? (currBottom + nextTop) / 2
+          : currBottom + 2; // si no hay gap, dos px después del bottom
+        breakCandidates.push(Math.round(gapMid * 2)); // ×2 por scale:2
+      }
+
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      document.body.removeChild(container);
+
+      const pageW_mm = 210;
+      const pageH_mm = 297;
+      const totalH_mm = (canvas.height * pageW_mm) / canvas.width;
+      const pageH_px = Math.round(canvas.height * (pageH_mm / totalH_mm));
+      const cw = canvas.width;
+
+      // Elegir el candidato de corte más cercano al límite de cada página
+      const breakPxs: number[] = [0];
+      let pos = 0;
+      while (pos + pageH_px < canvas.height) {
+        const target = pos + pageH_px;
+        const minBreak = pos + Math.round(pageH_px * 0.3);
+        let best = target; // fallback: corte exacto a 297mm
+        for (let i = breakCandidates.length - 1; i >= 0; i--) {
+          if (breakCandidates[i] <= target && breakCandidates[i] >= minBreak) {
+            best = breakCandidates[i];
+            break;
+          }
+        }
+        breakPxs.push(best);
+        pos = best;
+      }
+      breakPxs.push(canvas.height);
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      for (let p = 0; p < breakPxs.length - 1; p++) {
+        if (p > 0) pdf.addPage();
+        const sy = breakPxs[p];
+        const ey = breakPxs[p + 1];
+        const sliceH_px = ey - sy;
+        const sliceH_mm = (sliceH_px * pageW_mm) / cw;
+        const sc = document.createElement('canvas');
+        sc.width = cw;
+        sc.height = sliceH_px;
+        const sCtx = sc.getContext('2d')!;
+        sCtx.fillStyle = '#fff';
+        sCtx.fillRect(0, 0, cw, sliceH_px);
+        sCtx.drawImage(canvas, 0, sy, cw, sliceH_px, 0, 0, cw, sliceH_px);
+        pdf.addImage(sc.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageW_mm, sliceH_mm);
+      }
+
+      const norm = (s: string) =>
+        s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '-').toLowerCase();
+      pdf.save(`${norm(request.documentTitle)}_${norm(request.signerName)}.pdf`);
+    } catch (err) {
+      console.error('Error generando PDF:', err);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -60,55 +183,29 @@ function ConformityStep({
 
       <div className="contract-outer-box rounded-2xl border border-zinc-200 bg-zinc-50 overflow-hidden">
         {/* Header */}
-        <div className="no-print flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-3">
-          <div className="flex items-center gap-2">
-            <FileSignature size={16} className="text-zinc-500" />
-            <p className="text-sm font-semibold text-zinc-900">{request.documentTitle}</p>
+        <div className="no-print flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-3 gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <FileSignature size={16} className="shrink-0 text-zinc-500" />
+            <p className="truncate text-sm font-semibold text-zinc-900">{request.documentTitle}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             {request.sha256Hash && (
-              <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+              <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-zinc-400">
                 <Hash size={11} />
                 <span className="font-mono">{request.sha256Hash.slice(0, 16)}...</span>
               </div>
             )}
             <button
               type="button"
-              onClick={() => {
-                const wrapper = document.querySelector('.contract-doc-wrapper');
-                if (!wrapper) return;
-                const cached = loadOrgCache();
-                const logoUrl = cached?.logoLightUrl ?? cached?.logoDarkUrl ?? null;
-                const orgName = cached?.name ?? 'Firma Digital';
-                const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(el => el.outerHTML).join('\n');
-                const inlineStyles = Array.from(document.querySelectorAll('style')).map(el => el.outerHTML).join('\n');
-                const printWin = window.open('', '_blank');
-                if (!printWin) return;
-                printWin.document.write(`<!DOCTYPE html><html lang="es"><head>
-<meta charset="UTF-8"><title>${request.documentTitle}</title>
-${styleLinks}${inlineStyles}
-<style>
-  @page { margin: 2cm; size: A4 portrait; }
-  body { background: white !important; margin: 0; padding: 0; }
-  .print-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; margin-bottom: 24px; border-bottom: 2px solid #18181b; }
-  .contract-doc-wrapper { max-height: none !important; overflow: visible !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; background: white !important; }
-</style></head><body>
-<div class="print-header">
-  ${logoUrl ? `<img src="${logoUrl}" style="height:40px;object-fit:contain;max-width:160px" alt="${orgName}" />` : `<strong style="font-size:16px">${orgName}</strong>`}
-  <div style="text-align:right">
-    <div style="font-size:12px;font-weight:600">${request.documentTitle}</div>
-    <div style="font-size:10px;color:#71717a;margin-top:2px">Flujo de firma seguro · Ley 25.506</div>
-  </div>
-</div>
-${wrapper.outerHTML}
-</body></html>`);
-                printWin.document.close();
-                printWin.focus();
-                setTimeout(() => { printWin.print(); printWin.close(); }, 600);
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 hover:bg-zinc-50 transition"
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 transition disabled:opacity-50"
             >
-              <Printer size={11} /> Imprimir / PDF
+              {downloading
+                ? <RefreshCw size={12} className="animate-spin" />
+                : <Download size={12} />
+              }
+              {downloading ? 'Generando...' : 'Descargar PDF'}
             </button>
           </div>
         </div>

@@ -312,7 +312,7 @@ export function AdminKycReviewPage() {
   const filtered = filter === "all" ? verifications : verifications.filter((v) => v.status === filter);
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto py-2">
+    <div className="space-y-6 py-2">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-5">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Admin Panel</p>
