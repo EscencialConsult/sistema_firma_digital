@@ -51,14 +51,14 @@ function ConformityStep({
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="no-print">
         <h2 className="text-xl font-bold text-zinc-950">Declaración de conformidad</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Leé el documento y la declaración antes de continuar.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 overflow-hidden">
+      <div className="contract-outer-box rounded-2xl border border-zinc-200 bg-zinc-50 overflow-hidden">
         {/* Header */}
         <div className="no-print flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-3">
           <div className="flex items-center gap-2">
@@ -785,7 +785,7 @@ export function SigningFlowPage() {
           </div>
         )}
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm" style={{ borderColor: "var(--brand-primary-soft)" }}>
+        <div className="signing-main-card rounded-2xl border bg-white p-6 shadow-sm" style={{ borderColor: "var(--brand-primary-soft)" }}>
           {step === 0 && (
             <ConformityStep request={request} onAccept={handleAcceptConformity} loading={loading} />
           )}

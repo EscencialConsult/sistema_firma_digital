@@ -61,8 +61,25 @@
       border: none !important;
       border-radius: 0 !important;
     }
-    /* Eliminar fondo de marca de la página al imprimir */
-    .signing-page-bg { background: white !important; }
+    /* Eliminar fondo de marca y altura minima de la pagina al imprimir */
+    .signing-page-bg {
+      background: white !important;
+      min-height: auto !important;
+    }
+    /* Limpiar contenedores intermedios al imprimir */
+    .contract-outer-box {
+      background: white !important;
+      border: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+    }
+    /* Colapsar el card principal del signing */
+    .signing-main-card {
+      border: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+    }
   }
 }
 
