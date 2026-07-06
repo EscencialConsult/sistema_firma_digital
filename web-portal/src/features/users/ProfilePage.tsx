@@ -178,17 +178,17 @@ export function ProfilePage() {
       <div className="grid gap-6 md:grid-cols-3">
 
         {/* Avatar + estados */}
-        <Card className="md:col-span-1 p-5 flex flex-col items-center text-center justify-between border border-zinc-200/50 bg-white">
-          <div className="space-y-4 w-full">
-            <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.15)]" style={{ background: "var(--brand-primary)" }}>
-              <UserCircleIcon className="h-10 w-10" style={{ color: "var(--brand-primary-text)" }} />
+        <Card className="md:col-span-1 self-start p-6 flex flex-col items-center text-center border border-zinc-200/50 bg-white gap-5">
+          <div className="space-y-3 w-full">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-2xl shadow-[0_12px_32px_rgba(0,0,0,0.12)]" style={{ background: "var(--brand-primary)" }}>
+              <UserCircleIcon className="h-12 w-12" style={{ color: "var(--brand-primary-text)" }} />
             </div>
             <div>
               <h3 className="font-bold text-zinc-950 text-base">{user.fullName}</h3>
               <p className="text-xs text-zinc-400 font-mono mt-0.5">{user.email}</p>
             </div>
           </div>
-          <div className="w-full border-t border-zinc-100 pt-5 mt-5 space-y-3.5 text-xs text-left">
+          <div className="w-full border-t border-zinc-100 pt-5 space-y-3.5 text-xs text-left">
             <div className="flex items-center justify-between">
               <span className="text-zinc-500 font-medium flex items-center gap-1.5">
                 <ShieldCheck size={14} className="text-zinc-400" /> Estado KYC
