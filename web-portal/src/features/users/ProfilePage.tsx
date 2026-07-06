@@ -167,7 +167,7 @@ export function ProfilePage() {
           : "Iniciar verificación";
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Cuenta"
         title="Mi perfil"
