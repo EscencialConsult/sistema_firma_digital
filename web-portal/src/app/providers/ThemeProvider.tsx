@@ -2,6 +2,7 @@ import { type ReactNode, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { getMyOrganization } from "../../shared/services/organizations.service";
 import { applyTheme, resetTheme } from "../../shared/config/theme";
+import { saveOrgCache, clearOrgCache } from "../../shared/config/orgCache";
 
 /**
  * ThemeProvider — aplica los 4 colores de marca de la org activa.
@@ -26,18 +27,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Super admin: siempre negro. No mezclar colores de clientes.
     if (user?.role === "SUPER_ADMIN") {
+      clearOrgCache();
       resetTheme();
       return;
     }
 
     if (!user?.organizationId) {
+      clearOrgCache();
       resetTheme();
       return;
     }
 
     getMyOrganization()
       .then((org) => {
-        if (!org) { resetTheme(); return; }
+        if (!org) { clearOrgCache(); resetTheme(); return; }
+        // Cachear nombre + logos para carga instantánea en próxima sesión
+        saveOrgCache({
+          name:         org.name,
+          slug:         org.slug,
+          logoDarkUrl:  org.logoDarkUrl,
+          logoLightUrl: org.logoLightUrl,
+        });
         applyTheme({
           primary:    org.brandPrimary    ?? undefined,
           secondary:  org.brandSecondary  ?? undefined,

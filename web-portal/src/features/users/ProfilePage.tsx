@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   UserCircle,
 } from "lucide-react";
+import { UserCircleIcon } from "@heroicons/react/24/solid";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
@@ -179,8 +180,8 @@ export function ProfilePage() {
         {/* Avatar + estados */}
         <Card className="md:col-span-1 p-5 flex flex-col items-center text-center justify-between border border-zinc-200/50 bg-white">
           <div className="space-y-4 w-full">
-            <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-zinc-950 text-white font-bold text-xl shadow-[0_10px_30px_rgba(0,0,0,0.15)]">
-              {user.fullName.slice(0, 2).toUpperCase()}
+            <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.15)]" style={{ background: "var(--brand-primary)" }}>
+              <UserCircleIcon className="h-10 w-10" style={{ color: "var(--brand-primary-text)" }} />
             </div>
             <div>
               <h3 className="font-bold text-zinc-950 text-base">{user.fullName}</h3>

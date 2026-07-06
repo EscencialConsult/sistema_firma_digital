@@ -21,6 +21,7 @@ import { useAuth } from "../../../app/providers/AuthProvider";
 import { getMyOrganization } from "../../services/organizations.service";
 import type { Organization } from "../../types/organization";
 import { OrgLogo } from "./OrgLogo";
+import { loadOrgCache } from "../../config/orgCache";
 
 type SidebarVariant = "user" | "admin" | "super-admin";
 
@@ -58,7 +59,13 @@ const SUPER_ADMIN_NAV = [
 
 export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick }: SharedSidebarProps) {
   const { user, logout } = useAuth();
-  const [org, setOrg] = useState<Organization | null>(null);
+  // Inicializar con caché local para mostrar logo/nombre sin flash
+  const [org, setOrg] = useState<Organization | null>(() => {
+    if (variant === "super-admin") return null;
+    const cached = loadOrgCache();
+    if (!cached) return null;
+    return { name: cached.name, slug: cached.slug, logoDarkUrl: cached.logoDarkUrl, logoLightUrl: cached.logoLightUrl } as Organization;
+  });
 
   useEffect(() => {
     if (variant === "super-admin") return;
@@ -184,21 +191,21 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
           <button
             type="button"
             onClick={onTermsClick}
-            className="mx-auto inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"
+            className="mx-auto inline-flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold opacity-50 hover:opacity-100 hover:bg-white/10 transition"
           >
             <FileText size={12} />
             Términos y condiciones
           </button>
         )}
-        <div className="rounded-[var(--radius-card)] border border-zinc-200/60 bg-zinc-50 p-4">
+        <div className="rounded-[var(--radius-card)] border border-white/20 bg-white/10 p-4">
           <div className="mb-1 flex items-center gap-2">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
             </span>
-            <p className="text-xs font-semibold text-zinc-900 truncate">{user?.fullName}</p>
+            <p className="text-xs font-semibold truncate">{user?.fullName}</p>
           </div>
-          <p className="text-[11px] text-zinc-500 capitalize">
+          <p className="text-[11px] opacity-60 capitalize">
             {user?.role?.toLowerCase()} · {verificationLabel}
           </p>
         </div>
