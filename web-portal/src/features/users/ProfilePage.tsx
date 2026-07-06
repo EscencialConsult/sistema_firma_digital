@@ -174,87 +174,83 @@ export function ProfilePage() {
         description="Gestioná tu información personal y revisá el estado de tu identidad verificada."
       />
 
-      {/* ── Fila 1: avatar + edición ── */}
-      <div className="grid gap-6 md:grid-cols-3">
+      {/* ── Banner de perfil ── */}
+      <Card className="border border-zinc-200/50 bg-white p-6">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
+          {/* Avatar */}
+          <div className="shrink-0 grid h-20 w-20 place-items-center rounded-2xl shadow-[0_12px_32px_rgba(0,0,0,0.12)]" style={{ background: "var(--brand-primary)" }}>
+            <UserCircleIcon className="h-12 w-12" style={{ color: "var(--brand-primary-text)" }} />
+          </div>
 
-        {/* Avatar + estados */}
-        <Card className="md:col-span-1 self-start p-6 flex flex-col items-center text-center border border-zinc-200/50 bg-white gap-5">
-          <div className="space-y-3 w-full">
-            <div className="mx-auto grid h-20 w-20 place-items-center rounded-2xl shadow-[0_12px_32px_rgba(0,0,0,0.12)]" style={{ background: "var(--brand-primary)" }}>
-              <UserCircleIcon className="h-12 w-12" style={{ color: "var(--brand-primary-text)" }} />
-            </div>
-            <div>
-              <h3 className="font-bold text-zinc-950 text-base">{user.fullName}</h3>
-              <p className="text-xs text-zinc-400 font-mono mt-0.5">{user.email}</p>
+          {/* Nombre + email + badges */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-zinc-950 text-xl leading-none">{user.fullName}</h3>
+            <p className="text-sm text-zinc-400 font-mono mt-1">{user.email}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <span className="flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
+                <ShieldCheck size={13} className="text-zinc-400" /> KYC
+                <span className="ml-1"><StatusBadge status={user.verificationStatus} /></span>
+              </span>
+              <span className="text-zinc-200">|</span>
+              <span className="flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
+                <Award size={13} className="text-zinc-400" /> Firma Digital
+                <span className="ml-1"><StatusBadge status={user.certificateStatus} /></span>
+              </span>
             </div>
           </div>
-          <div className="w-full border-t border-zinc-100 pt-5 space-y-3.5 text-xs text-left">
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500 font-medium flex items-center gap-1.5">
-                <ShieldCheck size={14} className="text-zinc-400" /> Estado KYC
-              </span>
-              <StatusBadge status={user.verificationStatus} />
+        </div>
+      </Card>
+
+      {/* ── Edición de datos ── */}
+      <Card className="border border-zinc-200/50 bg-white">
+        <CardHeader
+          title="Datos de cuenta"
+          subtitle="Podés editar tu nombre. El email no puede cambiarse."
+        />
+        <form onSubmit={handleSave} className="p-5 space-y-5">
+          {success && (
+            <div className="flex gap-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 text-xs text-emerald-800 font-semibold items-center">
+              <CheckCircle2 size={14} className="text-emerald-600 shrink-0" /> Cambios guardados.
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-zinc-500 font-medium flex items-center gap-1.5">
-                <Award size={14} className="text-zinc-400" /> Firma Digital
-              </span>
-              <StatusBadge status={user.certificateStatus} />
+          )}
+          {error && (
+            <div className="flex gap-2 rounded-xl border border-rose-100 bg-rose-50/40 p-3 text-xs text-rose-800 font-semibold items-center">
+              <AlertCircle size={14} className="text-rose-600 shrink-0" /> {error}
+            </div>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Nombre completo</label>
+              <input
+                type="text"
+                className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 outline-none text-sm focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 transition font-medium text-zinc-800"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Tu nombre completo"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Email</label>
+              <input
+                type="email"
+                className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-2.5 outline-none text-sm text-zinc-400 font-mono cursor-not-allowed"
+                value={user.email}
+                disabled
+              />
+              <span className="text-[10px] text-zinc-400 block">El email es inmutable para preservar la trazabilidad de firmas.</span>
             </div>
           </div>
-        </Card>
-
-        {/* Edición de nombre */}
-        <Card className="md:col-span-2 border border-zinc-200/50 bg-white">
-          <CardHeader
-            title="Datos de cuenta"
-            subtitle="Podés editar tu nombre. El email no puede cambiarse."
-          />
-          <form onSubmit={handleSave} className="p-5 space-y-5">
-            {success && (
-              <div className="flex gap-2 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 text-xs text-emerald-800 font-semibold items-center">
-                <CheckCircle2 size={14} className="text-emerald-600 shrink-0" /> Cambios guardados.
-              </div>
-            )}
-            {error && (
-              <div className="flex gap-2 rounded-xl border border-rose-100 bg-rose-50/40 p-3 text-xs text-rose-800 font-semibold items-center">
-                <AlertCircle size={14} className="text-rose-600 shrink-0" /> {error}
-              </div>
-            )}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Nombre completo</label>
-                <input
-                  type="text"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 outline-none text-sm focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 transition font-medium text-zinc-800"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Tu nombre completo"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">Email</label>
-                <input
-                  type="email"
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 px-4 py-2.5 outline-none text-sm text-zinc-400 font-mono cursor-not-allowed"
-                  value={user.email}
-                  disabled
-                />
-                <span className="text-[10px] text-zinc-400 block">El email es inmutable para preservar la trazabilidad de firmas.</span>
-              </div>
-            </div>
-            <div className="border-t border-zinc-100 pt-5 flex justify-end">
-              <Button
-                type="submit"
-                disabled={saving || !fullName.trim() || fullName.trim() === user.fullName}
-              >
-                <UserCircle size={15} /> {saving ? "Guardando..." : "Guardar cambios"}
-              </Button>
-            </div>
-          </form>
-        </Card>
-      </div>
+          <div className="border-t border-zinc-100 pt-5 flex justify-start">
+            <Button
+              type="submit"
+              disabled={saving || !fullName.trim() || fullName.trim() === user.fullName}
+            >
+              <UserCircle size={15} /> {saving ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </div>
+        </form>
+      </Card>
 
       {/* ── Fila 2: datos KYC verificados ── */}
       <Card className="border border-zinc-200/50 bg-white">
