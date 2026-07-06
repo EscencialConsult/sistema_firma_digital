@@ -74,7 +74,38 @@ function ConformityStep({
             )}
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => {
+                const wrapper = document.querySelector('.contract-doc-wrapper');
+                if (!wrapper) return;
+                const cached = loadOrgCache();
+                const logoUrl = cached?.logoLightUrl ?? cached?.logoDarkUrl ?? null;
+                const orgName = cached?.name ?? 'Firma Digital';
+                const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(el => el.outerHTML).join('\n');
+                const inlineStyles = Array.from(document.querySelectorAll('style')).map(el => el.outerHTML).join('\n');
+                const printWin = window.open('', '_blank');
+                if (!printWin) return;
+                printWin.document.write(`<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8"><title>${request.documentTitle}</title>
+${styleLinks}${inlineStyles}
+<style>
+  @page { margin: 2cm; size: A4 portrait; }
+  body { background: white !important; margin: 0; padding: 0; }
+  .print-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; margin-bottom: 24px; border-bottom: 2px solid #18181b; }
+  .contract-doc-wrapper { max-height: none !important; overflow: visible !important; border: none !important; box-shadow: none !important; border-radius: 0 !important; background: white !important; }
+</style></head><body>
+<div class="print-header">
+  ${logoUrl ? `<img src="${logoUrl}" style="height:40px;object-fit:contain;max-width:160px" alt="${orgName}" />` : `<strong style="font-size:16px">${orgName}</strong>`}
+  <div style="text-align:right">
+    <div style="font-size:12px;font-weight:600">${request.documentTitle}</div>
+    <div style="font-size:10px;color:#71717a;margin-top:2px">Flujo de firma seguro · Ley 25.506</div>
+  </div>
+</div>
+${wrapper.outerHTML}
+</body></html>`);
+                printWin.document.close();
+                printWin.focus();
+                setTimeout(() => { printWin.print(); printWin.close(); }, 600);
+              }}
               className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 hover:bg-zinc-50 transition"
             >
               <Printer size={11} /> Imprimir / PDF
