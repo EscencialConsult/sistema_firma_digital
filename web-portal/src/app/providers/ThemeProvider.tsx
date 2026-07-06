@@ -22,9 +22,13 @@ import { saveOrgCache, clearOrgCache } from "../../shared/config/orgCache";
  *   (ver theme.ts para la lista completa)
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
+    // Mientras auth está cargando, el inline script de index.html ya aplicó
+    // el cache de localStorage. No tocar nada para evitar flash de colores genéricos.
+    if (loading) return;
+
     // Super admin: siempre negro. No mezclar colores de clientes.
     if (user?.role === "SUPER_ADMIN") {
       clearOrgCache();
@@ -56,7 +60,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         });
       })
       .catch(() => resetTheme());
-  }, [user?.organizationId, user?.role]);
+  }, [loading, user?.organizationId, user?.role]);
 
   return <>{children}</>;
 }
