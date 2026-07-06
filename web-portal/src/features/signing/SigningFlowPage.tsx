@@ -742,26 +742,32 @@ export function SigningFlowPage() {
       </div>
 
       <header
-        className="no-print border-b bg-white px-4 py-4"
-        style={{ borderBottomColor: "var(--brand-primary)" }}
+        className="no-print border-b px-4 py-4"
+        style={{
+          background: "var(--brand-bg)",
+          color: "var(--brand-bg-text)",
+          borderBottomColor: "var(--brand-primary)",
+          transition: "background 0.35s ease, color 0.35s ease",
+        }}
       >
         <div className="mx-auto flex max-w-2xl items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={goBack}
-              className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 text-zinc-500 hover:bg-zinc-50 transition"
+              className="grid h-9 w-9 place-items-center rounded-xl transition"
+              style={{ border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)" }}
               type="button"
             >
               <ArrowLeft size={16} />
             </button>
             <div>
-              <p className="text-sm font-bold text-zinc-950 truncate max-w-[200px] sm:max-w-xs">
+              <p className="text-sm font-bold truncate max-w-[200px] sm:max-w-xs">
                 {request.documentTitle}
               </p>
-              <p className="text-[11px] text-zinc-500">Flujo de firma seguro</p>
+              <p className="text-[11px] opacity-60">Flujo de firma seguro</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: "var(--brand-primary)" }}>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-90">
             <ShieldCheck size={14} />
             <span className="hidden sm:inline">Firma segura</span>
           </div>
