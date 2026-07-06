@@ -722,7 +722,10 @@ export function SigningFlowPage() {
   return (
     <div
       className="signing-page-bg min-h-screen"
-      style={{ background: "var(--brand-bg)", color: "var(--brand-bg-text)" }}
+      style={{
+        backgroundColor: "var(--color-bg-primary)",
+        backgroundImage: "linear-gradient(var(--brand-primary-soft), var(--brand-primary-soft))",
+      }}
     >
       {/* Header solo para impresión: logo de marca + título del documento */}
       <div className="print-only hidden border-b border-zinc-200 pb-4 mb-6">
