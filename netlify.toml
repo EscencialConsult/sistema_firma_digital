@@ -3,6 +3,19 @@
   command = "npm ci && npm run build"
   publish = "dist/"
 
+# index.html nunca se cachea — el browser siempre busca la versión más nueva
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"
+
+# Assets JS/CSS tienen hash en el nombre → se pueden cachear para siempre
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

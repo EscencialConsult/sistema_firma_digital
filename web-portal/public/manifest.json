@@ -1,0 +1,16 @@
+{
+  "name": "Firma Digital",
+  "short_name": "Firma Digital",
+  "description": "Portal de firma electrónica segura",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f4f5",
+  "theme_color": "#18181b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

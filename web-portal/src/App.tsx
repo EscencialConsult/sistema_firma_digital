@@ -3,6 +3,7 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./app/providers/AuthProvider";
 import { ThemeProvider } from "./app/providers/ThemeProvider";
 import { AppRouter } from "./app/router/AppRouter";
+import { UpdateToast } from "./shared/components/ui/UpdateToast";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -64,6 +65,7 @@ export function App() {
         <ThemeProvider>
           <ErrorBoundary>
             <AppRouter />
+            <UpdateToast />
           </ErrorBoundary>
         </ThemeProvider>
       </AuthProvider>
