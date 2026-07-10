@@ -258,15 +258,15 @@ export async function generateConsolidatedPdfBlob(documentId: string): Promise<B
       ? Object.fromEntries(Object.entries(rawFields).map(([k, v]) => [k, String(v ?? "")]))
       : null;
     const versions = (doc.document_versions as Array<Record<string, unknown>>) ?? [];
-    const latestVersion = [...versions].sort(
-      (a, b) => ((b.version_number as number) ?? 0) - ((a.version_number as number) ?? 0)
+    const originalVersion = [...versions].sort(
+      (a, b) => ((a.version_number as number) ?? 0) - ((b.version_number as number) ?? 0)
     )[0];
     let originalPdf: Blob | null = null;
 
-    if (latestVersion?.storage_path) {
+    if (originalVersion?.storage_path) {
       const { data: originalBlob, error: originalError } = await supabase.storage
         .from("contract-pdfs")
-        .download(latestVersion.storage_path as string);
+        .download(originalVersion.storage_path as string);
 
       if (originalError) {
         console.warn("[pdf] No se pudo descargar el PDF original, usando fallback de template:", originalError.message);
@@ -348,12 +348,16 @@ export async function generatePerSignerSignedPdf(documentId: string): Promise<st
       (a, b) => ((b.version_number as number) ?? 0) - ((a.version_number as number) ?? 0)
     )[0];
 
-    if (!latestV?.storage_path) return null;
+    const originalV = [...versions].sort(
+      (a, b) => ((a.version_number as number) ?? 0) - ((b.version_number as number) ?? 0)
+    )[0];
 
-    // 2. Download current PDF
+    if (!originalV?.storage_path) return null;
+
+    // 2. Download original PDF (clean version without signatures)
     const { data: pdfBlob, error: dlErr } = await supabase.storage
       .from("contract-pdfs")
-      .download(latestV.storage_path as string);
+      .download(originalV.storage_path as string);
 
     if (dlErr || !pdfBlob) return null;
 

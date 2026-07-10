@@ -215,55 +215,108 @@ export async function generateSignedPdf(
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    for (const signer of signers) {
-      const pages = pdfDoc.getPageCount();
-      const targetPage = pdfDoc.getPage(pages - 1);
-      const { width: pageW, height: pageH } = targetPage.getSize();
+    // Add a new page specifically for the signature stamps to avoid overlapping the contract text
+    let targetPage = pdfDoc.addPage();
+    let { width: pageW, height: pageH } = targetPage.getSize();
 
-      const stampX = 50;
-      const stampY = 50;
-      const stampW = Math.min(200, pageW - 100);
-      const stampH = 60;
+    // Draw page header/title
+    targetPage.drawText("HOJA DE FIRMAS", {
+      x: 50,
+      y: pageH - 45,
+      size: 12,
+      font: helveticaBold,
+      color: rgb(0.06, 0.46, 0.24),
+    });
+
+    targetPage.drawLine({
+      start: { x: 50, y: pageH - 55 },
+      end: { x: pageW - 50, y: pageH - 55 },
+      thickness: 1,
+      color: rgb(0.8, 0.8, 0.8),
+    });
+
+    let currentY = pageH - 130;
+    const stampX = 50;
+    const stampW = pageW - 100;
+    const stampH = 60;
+    const gap = 20;
+
+    for (const signer of signers) {
+      if (currentY < 50 + stampH) {
+        targetPage = pdfDoc.addPage();
+        const size = targetPage.getSize();
+        pageW = size.width;
+        pageH = size.height;
+
+        targetPage.drawText("HOJA DE FIRMAS (Cont.)", {
+          x: 50,
+          y: pageH - 45,
+          size: 12,
+          font: helveticaBold,
+          color: rgb(0.06, 0.46, 0.24),
+        });
+
+        targetPage.drawLine({
+          start: { x: 50, y: pageH - 55 },
+          end: { x: pageW - 50, y: pageH - 55 },
+          thickness: 1,
+          color: rgb(0.8, 0.8, 0.8),
+        });
+
+        currentY = pageH - 130;
+      }
 
       targetPage.drawRectangle({
-        x: stampX, y: stampY, width: stampW, height: stampH,
+        x: stampX,
+        y: currentY,
+        width: stampW,
+        height: stampH,
         color: rgb(0.96, 0.98, 0.96),
         borderColor: rgb(0.06, 0.46, 0.24),
         borderWidth: 1.5,
       });
 
       targetPage.drawText("FIRMA ELECTRONICA", {
-        x: stampX + 8, y: stampY + stampH - 12,
-        size: 7, font: helveticaBold, color: rgb(0.06, 0.46, 0.24),
+        x: stampX + 12, y: currentY + stampH - 12,
+        size: 8, font: helveticaBold, color: rgb(0.06, 0.46, 0.24),
       });
       targetPage.drawText(`Firmante: ${signer.name || signer.email}`, {
-        x: stampX + 8, y: stampY + stampH - 24,
-        size: 6.5, font: helveticaFont, color: rgb(0.1, 0.1, 0.1),
+        x: stampX + 12, y: currentY + stampH - 24,
+        size: 7.5, font: helveticaFont, color: rgb(0.1, 0.1, 0.1),
       });
       targetPage.drawText(`Email: ${signer.email}`, {
-        x: stampX + 8, y: stampY + stampH - 34,
-        size: 6, font: helveticaFont, color: rgb(0.3, 0.3, 0.3),
+        x: stampX + 12, y: currentY + stampH - 34,
+        size: 7, font: helveticaFont, color: rgb(0.3, 0.3, 0.3),
       });
       const dateStr = new Date(signer.signedAt).toLocaleString("es-AR");
       targetPage.drawText(`Fecha: ${dateStr}`, {
-        x: stampX + 8, y: stampY + stampH - 44,
-        size: 5.5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
+        x: stampX + 12, y: currentY + stampH - 44,
+        size: 6.5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
       });
       targetPage.drawText("Metodo: OTP + facial + firma manuscrita", {
-        x: stampX + 8, y: stampY + stampH - 54,
-        size: 5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
+        x: stampX + 12, y: currentY + stampH - 54,
+        size: 6, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
       });
 
       if (signer.signatureData) {
         try {
           const sigImage = await pdfDoc.embedPng(signer.signatureData);
           targetPage.drawImage(sigImage, {
-            x: stampX + stampW - 62, y: stampY + 5, width: 52, height: 22,
+            x: stampX + stampW - 62, y: currentY + 19, width: 52, height: 22,
           });
         } catch {
-          // signature image not embeddable, skip
+          try {
+            const sigJpg = await pdfDoc.embedJpg(signer.signatureData);
+            targetPage.drawImage(sigJpg, {
+              x: stampX + stampW - 62, y: currentY + 19, width: 52, height: 22,
+            });
+          } catch {
+            // signature image not embeddable, skip
+          }
         }
       }
+
+      currentY -= (stampH + gap);
     }
 
     // Append certificate pages

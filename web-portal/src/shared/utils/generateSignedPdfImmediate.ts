@@ -24,48 +24,86 @@ export async function generateSignedPdfImmediate(
   const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const pos = position ?? DEFAULT_SIGNATURE_POSITION;
+  // Add a new page specifically for the signature stamps to avoid overlapping the contract text
+  let targetPage = pdfDoc.addPage();
+  let { width: pageW, height: pageH } = targetPage.getSize();
+
+  // Draw page header/title
+  targetPage.drawText("HOJA DE FIRMAS", {
+    x: 50,
+    y: pageH - 45,
+    size: 12,
+    font: helveticaBold,
+    color: rgb(0.06, 0.46, 0.24),
+  });
+
+  targetPage.drawLine({
+    start: { x: 50, y: pageH - 55 },
+    end: { x: pageW - 50, y: pageH - 55 },
+    thickness: 1,
+    color: rgb(0.8, 0.8, 0.8),
+  });
+
+  let currentY = pageH - 120;
+  const sigWidth = 150;
+  const sigHeight = 45;
+  const gap = 35;
 
   for (const signer of signers) {
     if (!signer.signatureData) continue;
 
-    // Determine target page
-    const pageCount = pdfDoc.getPageCount();
-    const pageIndex = pos.page === "last"
-      ? pageCount - 1
-      : Math.min(Math.max(0, pos.page as number), pageCount - 1);
+    // Check if we need to add a new page due to space constraints
+    if (currentY < 50 + sigHeight) {
+      targetPage = pdfDoc.addPage();
+      const size = targetPage.getSize();
+      pageW = size.width;
+      pageH = size.height;
 
-    const page = pdfDoc.getPage(pageIndex);
-    const { height: pageH } = page.getSize();
+      targetPage.drawText("HOJA DE FIRMAS (Cont.)", {
+        x: 50,
+        y: pageH - 45,
+        size: 12,
+        font: helveticaBold,
+        color: rgb(0.06, 0.46, 0.24),
+      });
 
-    // pdf-lib uses bottom-left origin; our config uses bottom-left too
-    const sigX = pos.x;
-    const sigY = pageH - pos.y - pos.height; // convert top-left Y to bottom-left Y
+      targetPage.drawLine({
+        start: { x: 50, y: pageH - 55 },
+        end: { x: pageW - 50, y: pageH - 55 },
+        thickness: 1,
+        color: rgb(0.8, 0.8, 0.8),
+      });
+
+      currentY = pageH - 120;
+    }
+
+    const sigX = 50;
+    const sigY = currentY;
 
     // 1. Embed and draw the signature image
     try {
       const sigImage = await pdfDoc.embedPng(signer.signatureData);
-      page.drawImage(sigImage, {
+      targetPage.drawImage(sigImage, {
         x: sigX,
         y: sigY,
-        width: pos.width,
-        height: pos.height,
+        width: sigWidth,
+        height: sigHeight,
       });
     } catch {
       // If PNG fails, try JPEG
       try {
         const sigImage = await pdfDoc.embedJpg(signer.signatureData);
-        page.drawImage(sigImage, {
+        targetPage.drawImage(sigImage, {
           x: sigX,
           y: sigY,
-          width: pos.width,
-          height: pos.height,
+          width: sigWidth,
+          height: sigHeight,
         });
       } catch {
         // Signature image not embeddable, draw placeholder text
-        page.drawText("Firma no disponible", {
+        targetPage.drawText("Firma no disponible", {
           x: sigX + 4,
-          y: sigY + pos.height / 2,
+          y: sigY + sigHeight / 2,
           size: 8,
           font: helveticaFont,
           color: rgb(0.6, 0.6, 0.6),
@@ -74,32 +112,34 @@ export async function generateSignedPdfImmediate(
     }
 
     // 2. Draw a thin line under the signature
-    page.drawLine({
-      start: { x: sigX, y: sigY - 1 },
-      end: { x: sigX + pos.width, y: sigY - 1 },
+    targetPage.drawLine({
+      start: { x: sigX, y: sigY - 4 },
+      end: { x: sigX + sigWidth, y: sigY - 4 },
       color: rgb(0.3, 0.3, 0.3),
       thickness: 0.5,
     });
 
     // 3. Draw label text below the line
-    const labelY = sigY - 8;
+    const labelY = sigY - 14;
     const dateStr = new Date(signer.signedAt).toLocaleString("es-AR");
 
-    page.drawText(`${signer.name || signer.email} — ${dateStr}`, {
+    targetPage.drawText(`${signer.name || signer.email} — ${dateStr}`, {
       x: sigX,
       y: labelY,
-      size: 6,
+      size: 7.5,
       font: helveticaFont,
-      color: rgb(0.4, 0.4, 0.4),
+      color: rgb(0.2, 0.2, 0.2),
     });
 
-    page.drawText("Firma electrónica — Ley 25.506", {
+    targetPage.drawText("Firma electrónica — Ley 25.506", {
       x: sigX,
-      y: labelY - 8,
-      size: 5,
+      y: labelY - 10,
+      size: 6.5,
       font: helveticaFont,
-      color: rgb(0.6, 0.6, 0.6),
+      color: rgb(0.5, 0.5, 0.5),
     });
+
+    currentY -= (sigHeight + gap + 20);
   }
 
   const modifiedBytes = await pdfDoc.save();
