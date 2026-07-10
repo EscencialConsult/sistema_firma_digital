@@ -59,7 +59,7 @@ async function signPdf(
   if (eofPos === -1) throw new Error("PDF inválido: no se encontró %%EOF");
 
   const sigContentSize = 16384;
-  const placeholder = `/Type /Sig /SubFilter /adbe.pkcs7.detached /Reason(Firma Digital) /Name(${signerName}) /ContactInfo(${signerEmail}) /M(D:${formatDate(new Date())}) /ByteRange[0 00000000 00000000 00000000] /Contents<${"0".repeat(sigContentSize)}>`;
+  const placeholder = `/Type /Sig /SubFilter /adbe.pkcs7.detached /Reason(Firma Electrónica) /Name(${signerName}) /ContactInfo(${signerEmail}) /M(D:${formatDate(new Date())}) /ByteRange[0 00000000 00000000 00000000] /Contents<${"0".repeat(sigContentSize)}>`;
 
   const insertionStr = `\n${placeholder}\n`;
   const beforeEof = pdfStr.substring(0, eofPos);
@@ -141,6 +141,8 @@ serve(async (req) => {
       token?: string;
       requestId?: string;
       otp: string;
+      signatureData?: string;
+      metadata?: { x: number; y: number; width: number; height: number; page?: number };
     };
 
     let signatureRequest;
@@ -318,13 +320,23 @@ serve(async (req) => {
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     const pages = pdfDoc.getPageCount();
-    const lastPage = pdfDoc.getPage(pages - 1);
-    const { width: pageW } = lastPage.getSize();
+    const configuredPosition = signatureRequest.documents?.signature_position ?? signatureRequest.signature_position;
+    const position = body.metadata ?? configuredPosition ?? { page: "last", x: 50, y: 50, width: 200, height: 60 };
+    const pageIndex = body.metadata?.page
+      ? Math.min(Math.max(0, body.metadata.page - 1), pages - 1)
+      : position.page === "last"
+        ? pages - 1
+        : Math.min(Math.max(0, Number(position.page) || 0), pages - 1);
+    const targetPage = pdfDoc.getPage(pageIndex);
+    const lastPage = targetPage;
+    const { width: pageW, height: pageH } = targetPage.getSize();
 
-    const metaX = 50;
-    const metaY = 50;
-    const metaW = Math.min(200, pageW - 100);
-    const metaH = 60;
+    const metaX = Math.max(0, Math.min(Number(position.x) || 50, pageW - 40));
+    const metaW = Math.max(80, Math.min(Number(position.width) || 200, pageW - metaX));
+    const metaH = Math.max(40, Number(position.height) || 60);
+    const metaY = body.metadata
+      ? Math.max(0, Math.min(Number(position.y) || 50, pageH - metaH))
+      : Math.max(0, Math.min(pageH - (Number(position.y) || 50) - metaH, pageH - metaH));
 
     lastPage.drawRectangle({
       x: metaX, y: metaY, width: metaW, height: metaH,
@@ -333,7 +345,7 @@ serve(async (req) => {
       borderWidth: 1.5,
     });
 
-    lastPage.drawText("FIRMA DIGITAL SEGURA", {
+    lastPage.drawText("FIRMA ELECTRÓNICA SEGURA", {
       x: metaX + 8, y: metaY + metaH - 12,
       size: 7, font: helveticaBold, color: rgb(0.06, 0.46, 0.24),
     });
@@ -354,6 +366,29 @@ serve(async (req) => {
       x: metaX + 8, y: metaY + metaH - 54,
       size: 5.5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
     });
+
+    // Embed signature image if provided
+    if (body.signatureData) {
+      try {
+        // Strip data URL prefix if present
+        const base64 = body.signatureData.replace(/^data:image\/\w+;base64,/, "");
+        const sigBytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+        const sigImage = await pdfDoc.embedPng(sigBytes);
+        // Draw at right side of stamp box, larger size (realistic signature)
+        lastPage.drawImage(sigImage, {
+          x: metaX + metaW - 90, y: metaY + 8, width: 80, height: 30,
+        });
+        // Draw line under signature
+        lastPage.drawLine({
+          start: { x: metaX + metaW - 90, y: metaY + 6 },
+          end: { x: metaX + metaW - 10, y: metaY + 6 },
+          color: rgb(0.3, 0.3, 0.3),
+          thickness: 0.5,
+        });
+      } catch {
+        // Signature image not embeddable, skip silently
+      }
+    }
 
     const pdfWithVisualBytes = await pdfDoc.save();
 

@@ -55,6 +55,9 @@ const ProfilePage = lazy(() =>
 const AuditPage = lazy(() =>
   import("../../features/audit/AuditPage").then((m) => ({ default: m.AuditPage }))
 );
+const SignatureAuditPage = lazy(() =>
+  import("../../features/audit/SignatureAuditPage").then((m) => ({ default: m.SignatureAuditPage }))
+);
 const IdentityPage = lazy(() =>
   import("../../features/identity/IdentityPage").then((m) => ({ default: m.IdentityPage }))
 );
@@ -218,6 +221,7 @@ export function AppRouter() {
               <Route path="/identity"         element={<IdentityPage />} />
               <Route path="/certificates"     element={<CertificatesPage />} />
               <Route path="/audit"            element={<AuditPage />} />
+              <Route path="/audit/signature/:signatureId" element={<SignatureAuditPage />} />
             </Route>
 
             {/* ── Solo admins (ADMIN / ORG_ADMIN) ── */}

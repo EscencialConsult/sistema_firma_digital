@@ -90,14 +90,6 @@ export function ProfilePage() {
           .eq("id", currentUser.id)
           .maybeSingle();
         if (!data) return;
-        const hasProfileKycData = Boolean(
-          data.document_number ||
-          data.cuil_cuit ||
-          data.birth_date ||
-          data.phone ||
-          data.address
-        );
-        if (!hasProfileKycData) return;
         setProfileKycData({
           fullName: data.full_name ?? currentUser.fullName,
           documentType: "DNI",
@@ -141,7 +133,7 @@ export function ProfilePage() {
     }
   }
 
-  let pd = kyc?.personalData ?? profileKycData;
+  let pd = profileKycData ?? kyc?.personalData;
   if (!pd && user.verificationStatus === "VERIFIED") {
     pd = {
       fullName: user.fullName,
@@ -191,7 +183,7 @@ export function ProfilePage() {
                   <ShieldCheck size={12} className="text-zinc-400 shrink-0" /> KYC — <StatusBadge status={user.verificationStatus} />
                 </span>
                 <span className="flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
-                  <Award size={12} className="text-zinc-400 shrink-0" /> Firma Digital — <StatusBadge status={user.certificateStatus} />
+                  <Award size={12} className="text-zinc-400 shrink-0" /> Firma Electrónica — <StatusBadge status={user.certificateStatus} />
                 </span>
               </div>
             </div>

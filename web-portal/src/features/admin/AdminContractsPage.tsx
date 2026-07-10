@@ -14,15 +14,19 @@ import {
   Send,
   ShieldCheck,
   Trash2,
+  Upload,
   User,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../app/providers/AuthProvider";
 import { Toast } from "../../shared/components/ui/Toast";
 import { Button } from "../../shared/components/ui/Button";
+import { Input } from "../../shared/components/ui/Input";
 import {
   getAllContracts,
   sendContractFromTemplate,
   sendDocumentToThirdParty,
+  uploadContractPdf,
 } from "../../shared/services/contracts.service";
 import { generateConsolidatedPdfBlob, tryGenerateConsolidatedPdf } from "../../shared/services/signing.service";
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
@@ -33,16 +37,24 @@ import {
   createContractTemplate,
   updateContractTemplate,
   deleteContractTemplate,
+  cloneContractTemplate,
   extractVariables,
   AUTO_FILL_VARS,
   VAR_LABELS,
   type DbContractTemplate,
 } from "../../shared/services/contractTemplates.service";
-import type { Contract } from "../../shared/types/contract";
+import {
+  computeInstallmentAmount,
+  FREQUENCY_LABELS,
+  getPaymentTemplates,
+  type PaymentTemplate,
+} from "../../shared/services/paymentTemplates.service";
+import { DEFAULT_SIGNATURE_POSITION, type Contract, type SignaturePosition } from "../../shared/types/contract";
 import type { AdminUserSummary } from "../../shared/types/user";
 import { ContractDocument, ContractDetailModal } from "./components/ContractRenderer";
 import { RichTextEditor } from "./components/RichTextEditor";
 import { AdminConveniosTab } from "./AdminConveniosTab";
+import { AdminPaymentTemplatesTab } from "./AdminPaymentTemplatesTab";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -72,6 +84,67 @@ function CopyButton({ value }: { value: string }) {
       className="grid h-5 w-5 shrink-0 place-items-center rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition">
       {copied ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
     </button>
+  );
+}
+
+function SignaturePositionEditor({
+  value,
+  onChange,
+}: {
+  value: SignaturePosition;
+  onChange: (value: SignaturePosition) => void;
+}) {
+  function setNumber(key: "x" | "y" | "width" | "height", raw: string) {
+    const next = Math.max(0, Number(raw) || 0);
+    onChange({ ...value, [key]: next });
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-3">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Posicion de firma</p>
+        <p className="mt-1 text-xs text-zinc-400">Valores en puntos PDF, medidos desde la esquina superior izquierda.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div>
+          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Pagina</label>
+          <select
+            value={value.page === "last" ? "last" : "custom"}
+            onChange={(e) => onChange({ ...value, page: e.target.value === "last" ? "last" : 0 })}
+            className="h-9 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500"
+          >
+            <option value="last">Ultima</option>
+            <option value="custom">Numero</option>
+          </select>
+        </div>
+        {value.page !== "last" && (
+          <div>
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Nro.</label>
+            <input
+              type="number"
+              min="1"
+              value={value.page + 1}
+              onChange={(e) => onChange({ ...value, page: Math.max(0, (Number(e.target.value) || 1) - 1) })}
+              className="h-9 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500"
+            />
+          </div>
+        )}
+        {(["x", "y", "width", "height"] as const).map((key) => (
+          <div key={key}>
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+              {key === "width" ? "Ancho" : key === "height" ? "Alto" : key.toUpperCase()}
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={value[key]}
+              onChange={(e) => setNumber(key, e.target.value)}
+              className="h-9 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -146,12 +219,13 @@ function SendThirdPartyModal({
 // ─── Template Card ────────────────────────────────────────────────────────────
 
 function TemplateCard({
-  template, onSend, onEdit, onDelete,
+  template, onSend, onEdit, onDelete, onClone,
 }: {
   template: DbContractTemplate;
   onSend:   () => void;
   onEdit:   () => void;
   onDelete: () => void;
+  onClone:  () => void;
 }) {
   const vars      = extractVariables(template.contentHtml);
   const adminVars = vars.filter((v) => !AUTO_FILL_VARS.has(v));
@@ -171,11 +245,18 @@ function TemplateCard({
         </div>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
           <button type="button" onClick={onEdit}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
+            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition"
+            title="Editar">
             <Pencil size={12} />
           </button>
+          <button type="button" onClick={onClone}
+            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition"
+            title="Clonar plantilla">
+            <Copy size={12} />
+          </button>
           <button type="button" onClick={onDelete}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition">
+            className="grid h-7 w-7 place-items-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition"
+            title="Eliminar">
             <Trash2 size={12} />
           </button>
         </div>
@@ -234,6 +315,11 @@ function SendingFlow({
   const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
   const [userSearch, setUserSearch]     = useState("");
 
+  // Payment plan
+  const [paymentTemplates, setPaymentTemplates] = useState<PaymentTemplate[]>([]);
+  const [loadingPayments, setLoadingPayments]   = useState(true);
+  const [selectedPayment, setSelectedPayment]   = useState<PaymentTemplate | null>(null);
+
   // Variables
   const allVars   = useMemo(() => extractVariables(template.contentHtml), [template]);
   const adminVars = allVars.filter((v) => !AUTO_FILL_VARS.has(v));
@@ -268,8 +354,27 @@ function SendingFlow({
     getOrgAuthorities(orgId)
       .then((all) => setAuthorities(all.filter((a) => a.status === "ACTIVE" && a.type === "PERMANENT")))
       .finally(() => setLoadingAuth(false));
-    getAllUsers().then(setUsers).finally(() => setLoadingUsers(false));
+    getAllUsers(orgId).then(setUsers).finally(() => setLoadingUsers(false));
+    getPaymentTemplates().then(setPaymentTemplates).finally(() => setLoadingPayments(false));
   }, [orgId]);
+
+  useEffect(() => {
+    if (!selectedPayment) return;
+    const installment = selectedPayment.installmentAmount ?? computeInstallmentAmount(selectedPayment.totalAmount, selectedPayment.installmentCount);
+    setVarValues((prev) => ({
+      ...prev,
+      plan_pago: selectedPayment.name,
+      descripcion_pago: selectedPayment.description ?? "",
+      monto: String(selectedPayment.totalAmount),
+      monto_total: String(selectedPayment.totalAmount),
+      cuotas: String(selectedPayment.installmentCount),
+      cantidad_cuotas: String(selectedPayment.installmentCount),
+      valor_cuota: String(installment),
+      frecuencia_pago: FREQUENCY_LABELS[selectedPayment.frequency] ?? selectedPayment.frequency,
+      mora: selectedPayment.hasMora ? `${selectedPayment.moraRate}% mensual` : "Sin mora",
+      tasa_mora: selectedPayment.hasMora ? String(selectedPayment.moraRate) : "0",
+    }));
+  }, [selectedPayment]);
 
   const filteredAuth = useMemo(() => {
     if (!authSearch) return authorities;
@@ -289,9 +394,10 @@ function SendingFlow({
   const previewFields = useMemo(() => ({
     _templateContent: template.contentHtml,
     _legalTitle:      template.name,
-    _dbTemplateId:    template.id,
-    ...varValues,
-  }), [template, varValues]);
+        _dbTemplateId:    template.id,
+        _paymentTemplateId: selectedPayment?.id ?? "",
+        ...varValues,
+  }), [template, selectedPayment, varValues]);
 
   async function handleSend() {
     if (!selectedAuth || !selectedUser) return;
@@ -302,6 +408,7 @@ function SendingFlow({
         _templateContent: template.contentHtml,
         _legalTitle:      template.name,
         _dbTemplateId:    template.id,
+        _paymentTemplateId: selectedPayment?.id ?? "",
         ...varValues,
       };
       const contract = await sendContractFromTemplate({
@@ -321,6 +428,8 @@ function SendingFlow({
           email:        selectedAuth.email,
           signatureUrl: selectedAuth.signatureUrl,
         },
+        paymentTemplateId: selectedPayment?.id ?? null,
+        signaturePosition: template.signaturePosition,
       });
       setSentContract(contract);
       setDone(true);
@@ -511,6 +620,57 @@ function SendingFlow({
 
           {/* Datos del usuario (referencia) */}
           <div className="space-y-4">
+            <div className="space-y-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Plan de pago</p>
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
+                {loadingPayments ? (
+                  <p className="text-xs text-zinc-400">Cargando planes de pago...</p>
+                ) : paymentTemplates.length === 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-zinc-800">Sin plantillas de pago</p>
+                    <p className="text-xs text-zinc-500">Creá una desde la pestaña Pagos para poder asociarla al contrato.</p>
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      value={selectedPayment?.id ?? ""}
+                      onChange={(e) => setSelectedPayment(paymentTemplates.find((p) => p.id === e.target.value) ?? null)}
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-500 transition"
+                    >
+                      <option value="">Sin plan de pago</option>
+                      {paymentTemplates.map((payment) => (
+                        <option key={payment.id} value={payment.id}>
+                          {payment.name}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedPayment ? (
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-900 space-y-1.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-emerald-700">Monto total</span>
+                          <strong>${selectedPayment.totalAmount.toLocaleString("es-AR")}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-emerald-700">Cuotas</span>
+                          <strong>{selectedPayment.installmentCount} x ${(selectedPayment.installmentAmount ?? computeInstallmentAmount(selectedPayment.totalAmount, selectedPayment.installmentCount)).toLocaleString("es-AR")}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-emerald-700">Frecuencia</span>
+                          <strong>{FREQUENCY_LABELS[selectedPayment.frequency] ?? selectedPayment.frequency}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-emerald-700">Mora</span>
+                          <strong>{selectedPayment.hasMora ? `${selectedPayment.moraRate}%` : "No aplica"}</strong>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-400">Opcional. Si lo seleccionás, queda asociado al contrato y completa las variables de pago.</p>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
             <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Datos del usuario</p>
             {selectedUser && (
               <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
@@ -596,7 +756,7 @@ function SendingFlow({
 type PageView = "list" | "templates" | "editor" | "sending";
 
 export function AdminContractsPage() {
-  const [activeTab, setActiveTab] = useState<"contracts" | "convenios">("contracts");
+  const [activeTab, setActiveTab] = useState<"templates" | "contracts" | "upload" | "convenios" | "payments">("contracts");
   const [orgId, setOrgId]         = useState<string | null>(null);
 
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -617,6 +777,7 @@ export function AdminContractsPage() {
   const [tplName, setTplName] = useState("");
   const [tplDesc, setTplDesc] = useState("");
   const [tplHtml, setTplHtml] = useState("");
+  const [tplSignaturePosition, setTplSignaturePosition] = useState<SignaturePosition>(DEFAULT_SIGNATURE_POSITION);
   const [savingTpl, setSavingTpl] = useState(false);
 
   // Sending state
@@ -656,12 +817,14 @@ export function AdminContractsPage() {
   function openNewTemplate() {
     setEditingTemplate(null);
     setTplName(""); setTplDesc(""); setTplHtml("");
+    setTplSignaturePosition(DEFAULT_SIGNATURE_POSITION);
     setView("editor");
   }
 
   function openEditTemplate(tpl: DbContractTemplate) {
     setEditingTemplate(tpl);
     setTplName(tpl.name); setTplDesc(tpl.description); setTplHtml(tpl.contentHtml);
+    setTplSignaturePosition(tpl.signaturePosition);
     setView("editor");
   }
 
@@ -671,13 +834,24 @@ export function AdminContractsPage() {
     setSavingTpl(true);
     try {
       if (editingTemplate) {
-        await updateContractTemplate(editingTemplate.id, { name: tplName, description: tplDesc, contentHtml: tplHtml });
+        await updateContractTemplate(editingTemplate.id, {
+          name: tplName,
+          description: tplDesc,
+          contentHtml: tplHtml,
+          signaturePosition: tplSignaturePosition,
+        });
         setDbTemplates((prev) => prev.map((t) => t.id === editingTemplate.id
-          ? { ...t, name: tplName, description: tplDesc, contentHtml: tplHtml }
+          ? { ...t, name: tplName, description: tplDesc, contentHtml: tplHtml, signaturePosition: tplSignaturePosition }
           : t));
         showToast("Plantilla actualizada.");
       } else if (orgId) {
-        const created = await createContractTemplate({ orgId, name: tplName, description: tplDesc, contentHtml: tplHtml });
+        const created = await createContractTemplate({
+          orgId,
+          name: tplName,
+          description: tplDesc,
+          contentHtml: tplHtml,
+          signaturePosition: tplSignaturePosition,
+        });
         setDbTemplates((prev) => [created, ...prev]);
         showToast("Plantilla creada.");
       }
@@ -694,6 +868,16 @@ export function AdminContractsPage() {
     await deleteContractTemplate(id);
     setDbTemplates((prev) => prev.filter((t) => t.id !== id));
     showToast("Plantilla eliminada.");
+  }
+
+  async function handleCloneTemplate(id: string) {
+    try {
+      const cloned = await cloneContractTemplate(id);
+      setDbTemplates((prev) => [cloned, ...prev]);
+      showToast("Plantilla clonada.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error al clonar");
+    }
   }
 
   async function openSignedPdf(contract: Contract) {
@@ -751,6 +935,8 @@ export function AdminContractsPage() {
 
         <RichTextEditor value={tplHtml} onChange={setTplHtml}
           placeholder="Redactá el contrato. Usá las variables del panel derecho para insertar datos dinámicos..." />
+
+        <SignaturePositionEditor value={tplSignaturePosition} onChange={setTplSignaturePosition} />
 
         <div className="flex justify-between">
           <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-5 text-zinc-700">
@@ -811,6 +997,7 @@ export function AdminContractsPage() {
                 onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
                 onEdit={() => openEditTemplate(tpl)}
                 onDelete={() => handleDeleteTemplate(tpl.id)}
+                onClone={() => handleCloneTemplate(tpl.id)}
               />
             ))}
           </div>
@@ -856,7 +1043,16 @@ export function AdminContractsPage() {
 
   return (
     <>
-      {viewContract && <ContractDetailModal contract={viewContract} onClose={() => setViewContract(null)} />}
+      {viewContract && (
+        <ContractDetailModal
+          contract={viewContract}
+          onClose={() => setViewContract(null)}
+          onUpdated={(updated) => {
+            setViewContract(updated);
+            setContracts((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+          }}
+        />
+      )}
       {sendThirdParty && (
         <SendThirdPartyModal contract={sendThirdParty} onClose={() => setSendThirdParty(null)}
           onSent={(id) => setContracts((prev) => prev.map((x) => x.id === id ? { ...x, status: "SENT", totalSigners: x.totalSigners + 1 } : x))} />
@@ -869,7 +1065,13 @@ export function AdminContractsPage() {
             <h1 className="mt-1 text-2xl font-bold text-zinc-900">Documentos</h1>
           </div>
           <div className="flex items-center gap-1 border-b border-zinc-200">
-            {([{ key: "contracts", label: "Contratos" }, { key: "convenios", label: "Convenios" }] as const).map((tab) => (
+            {([
+              { key: "templates", label: "Modelos" },
+              { key: "contracts", label: "Contratos" },
+              { key: "upload", label: "Subir PDF" },
+              { key: "convenios", label: "Convenios" },
+              { key: "payments", label: "Pagos" },
+            ] as const).map((tab) => (
               <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-2.5 text-sm font-semibold transition border-b-2 -mb-px ${
                   activeTab === tab.key ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"}`}>
@@ -882,16 +1084,66 @@ export function AdminContractsPage() {
         {activeTab === "convenios" && orgId && <AdminConveniosTab orgId={orgId} />}
         {activeTab === "convenios" && !orgId && <p className="text-sm text-zinc-400">Cargando organización...</p>}
 
+        {activeTab === "payments" && <AdminPaymentTemplatesTab />}
+
+        {activeTab === "upload" && <AdminUploadPdfTab />}
+
+        {activeTab === "templates" && (
+          <>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-zinc-500">{dbTemplates.length} plantillas creadas</p>
+              <Button onClick={openNewTemplate} className="h-10 px-4 shrink-0">
+                <Plus size={14} /> Nueva plantilla
+              </Button>
+            </div>
+            {loadingTemplates ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array(3).fill(null).map((_, i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-zinc-100" />)}
+              </div>
+            ) : dbTemplates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
+                  <LayoutTemplate size={28} className="text-zinc-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-zinc-700">Sin plantillas</p>
+                  <p className="text-sm text-zinc-400 mt-1">Creá tu primera plantilla para enviar contratos.</p>
+                </div>
+                <Button onClick={openNewTemplate} className="h-10 px-5">
+                  <Plus size={14} /> Crear primera plantilla
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {dbTemplates.map((tpl) => (
+                  <TemplateCard
+                    key={tpl.id}
+                    template={tpl}
+                    onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
+                    onEdit={() => openEditTemplate(tpl)}
+                    onDelete={() => handleDeleteTemplate(tpl.id)}
+                    onClone={() => handleCloneTemplate(tpl.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         {activeTab === "contracts" && (
           <>
             <div className="flex items-start justify-between gap-4">
               <p className="text-sm text-zinc-500">{contracts.filter((c) => c.status !== "DRAFT").length} contratos enviados</p>
-              <Button onClick={() => setView("templates")} className="h-10 px-4 shrink-0">
-                <LayoutTemplate size={14} /> Plantillas y envío
+              <div className="flex gap-2">
                 {dbTemplates.length > 0 && (
-                  <span className="ml-1 rounded-full bg-white/20 text-white text-[10px] px-1.5 py-0.5 font-bold">{dbTemplates.length}</span>
+                  <Button onClick={() => setView("templates")} className="h-10 px-4 shrink-0" variant="secondary">
+                    <LayoutTemplate size={14} /> Plantillas
+                  </Button>
                 )}
-              </Button>
+                <Button onClick={() => setActiveTab("upload")} className="h-10 px-4 shrink-0">
+                  <Upload size={14} /> Subir PDF
+                </Button>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -984,5 +1236,131 @@ export function AdminContractsPage() {
 
       <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
     </>
+  );
+}
+
+// ─── Upload PDF Tab ────────────────────────────────────────────────────────────
+
+function AdminUploadPdfTab() {
+  const { user } = useAuth();
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [signerName, setSignerName] = useState("");
+  const [signerEmail, setSignerEmail] = useState("");
+  const [signerCuil, setSignerCuil] = useState("");
+  const [signaturePosition, setSignaturePosition] = useState<SignaturePosition>(DEFAULT_SIGNATURE_POSITION);
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    if (!file || !signerName.trim() || !signerEmail.trim() || !user?.id) return;
+    setSending(true);
+    setError("");
+    try {
+      await uploadContractPdf({
+        file,
+        title: title.trim() || file.name,
+        signerName: signerName.trim(),
+        signerEmail: signerEmail.trim(),
+        signerCuil: signerCuil.trim() || undefined,
+        ownerId: user.id,
+        signaturePosition,
+      });
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al subir PDF");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function resetForm() {
+    setFile(null);
+    setTitle("");
+    setSignerName("");
+    setSignerEmail("");
+    setSignerCuil("");
+    setSignaturePosition(DEFAULT_SIGNATURE_POSITION);
+    setDone(false);
+    setError("");
+  }
+
+  const inputCls = "w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition";
+
+  if (done) {
+    return (
+      <div className="flex flex-col items-center py-16 text-center max-w-sm mx-auto gap-4">
+        <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
+          <Check size={36} className="text-emerald-600" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-zinc-900">PDF enviado a firmar</h3>
+          <p className="text-sm text-zinc-500 mt-2">{signerName} recibió el documento y puede firmarlo.</p>
+        </div>
+        <Button onClick={resetForm} className="h-10 px-6 mt-2">
+          <Upload size={14} /> Subir otro PDF
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-xl space-y-6">
+      <div>
+        <p className="text-sm text-zinc-500">Subí un PDF para enviarlo a firmar digitalmente.</p>
+      </div>
+
+      <div className="space-y-4">
+        {/* PDF file */}
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Archivo PDF *</label>
+          <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-8 transition ${file ? "border-emerald-300 bg-emerald-50" : "border-zinc-200 bg-zinc-50 hover:border-zinc-300"}`}>
+            <Upload size={24} className={file ? "text-emerald-500" : "text-zinc-400"} />
+            {file ? (
+              <div className="text-center">
+                <p className="text-sm font-semibold text-zinc-800">{file.name}</p>
+                <p className="text-xs text-zinc-500">{(file.size / 1024).toFixed(1)} KB</p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-sm font-semibold text-zinc-600">Hacé clic para seleccionar un PDF</p>
+                <p className="text-xs text-zinc-400 mt-1">o arrastrá el archivo aquí</p>
+              </div>
+            )}
+            <input type="file" accept=".pdf,application/pdf" className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f && f.type === "application/pdf") setFile(f);
+                else setError("Solo se aceptan archivos PDF");
+              }} />
+          </label>
+        </div>
+
+        <Input label="Título del documento (opcional)" value={title}
+          onChange={(e) => setTitle(e.target.value)} placeholder={file?.name ?? "Ej: Contrato de servicios"} />
+
+        <Input label="Nombre del firmante *" value={signerName}
+          onChange={(e) => setSignerName(e.target.value)} placeholder="Juan José Gimenez" />
+
+        <Input label="Email del firmante *" type="email" value={signerEmail}
+          onChange={(e) => setSignerEmail(e.target.value)} placeholder="juan@ejemplo.com" />
+
+        <Input label="CUIL / CUIT (opcional)" value={signerCuil}
+          onChange={(e) => setSignerCuil(e.target.value)} placeholder="20-40123456-7" />
+
+        <SignaturePositionEditor value={signaturePosition} onChange={setSignaturePosition} />
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          {error}
+        </div>
+      )}
+
+      <Button onClick={handleSubmit} disabled={!file || !signerName.trim() || !signerEmail.trim() || sending} className="h-12 w-full">
+        {sending ? "Subiendo y enviando..." : <><Upload size={15} /> Subir PDF y enviar a firmar</>}
+      </Button>
+    </div>
   );
 }

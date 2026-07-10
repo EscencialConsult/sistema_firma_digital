@@ -78,7 +78,7 @@ function ActivateModal({
   const [error, setError]           = useState("");
 
   useEffect(() => {
-    getAllUsers().then(setUsers).finally(() => setLoading(false));
+    getAllUsers(template.organizationId).then(setUsers).finally(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => {
@@ -342,7 +342,7 @@ function ConvenioSendingFlow({
     getOrgAuthorities(orgId)
       .then((all) => setAuthorities(all.filter((a) => a.status === "ACTIVE" && a.type === "PERMANENT")))
       .finally(() => setLoadingAuth(false));
-    getAllUsers().then(setUsers).finally(() => setLoadingUsers(false));
+    getAllUsers(orgId).then(setUsers).finally(() => setLoadingUsers(false));
   }, [orgId]);
 
   const filteredAuth = useMemo(() => {

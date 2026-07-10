@@ -21,6 +21,13 @@ function mapRow(row: Record<string, unknown>): Organization {
     brandSecondary:  (row.brand_secondary  as string) ?? undefined,
     brandAccent:     (row.brand_accent     as string) ?? undefined,
     brandBackground: (row.brand_background as string) ?? undefined,
+    phone:           (row.phone           as string) ?? undefined,
+    address:         (row.address         as string) ?? undefined,
+    city:            (row.city            as string) ?? undefined,
+    province:        (row.province        as string) ?? undefined,
+    postalCode:      (row.postal_code     as string) ?? undefined,
+    taxId:           (row.tax_id          as string) ?? undefined,
+    website:         (row.website         as string) ?? undefined,
   };
 }
 
@@ -112,6 +119,13 @@ export async function updateOrganization(id: string, updates: Partial<{
   brandSecondary:  string | null;
   brandAccent:     string | null;
   brandBackground: string | null;
+  phone:     string | null;
+  address:   string | null;
+  city:      string | null;
+  province:  string | null;
+  postalCode: string | null;
+  taxId:     string | null;
+  website:   string | null;
 }>): Promise<void> {
   const dbUpdates: Record<string, unknown> = {};
   if (updates.name !== undefined)            dbUpdates.name              = updates.name;
@@ -126,6 +140,13 @@ export async function updateOrganization(id: string, updates: Partial<{
   if (updates.brandSecondary  !== undefined) dbUpdates.brand_secondary   = updates.brandSecondary;
   if (updates.brandAccent     !== undefined) dbUpdates.brand_accent      = updates.brandAccent;
   if (updates.brandBackground !== undefined) dbUpdates.brand_background  = updates.brandBackground;
+  if (updates.phone           !== undefined) dbUpdates.phone             = updates.phone;
+  if (updates.address         !== undefined) dbUpdates.address           = updates.address;
+  if (updates.city            !== undefined) dbUpdates.city              = updates.city;
+  if (updates.province        !== undefined) dbUpdates.province          = updates.province;
+  if (updates.postalCode      !== undefined) dbUpdates.postal_code       = updates.postalCode;
+  if (updates.taxId           !== undefined) dbUpdates.tax_id            = updates.taxId;
+  if (updates.website         !== undefined) dbUpdates.website           = updates.website;
 
   const { error } = await supabase.from("organizations").update(dbUpdates).eq("id", id);
   if (error) throw new Error(error.message);

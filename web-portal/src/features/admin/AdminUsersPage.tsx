@@ -15,6 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
 import { getAllUsers, createAdminUser } from "../../shared/services/admin.service";
 import type { AdminUserSummary } from "../../shared/types/user";
@@ -338,6 +339,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export function AdminUsersPage() {
+  const { user } = useAuth();
   const [users, setUsers]         = useState<AdminUserSummary[]>([]);
   const [loading, setLoading]     = useState(true);
   const [tab, setTab]             = useState<MainTab>("list");
@@ -357,7 +359,7 @@ export function AdminUsersPage() {
   const [csvImported, setCsvImported] = useState(false);
 
   useEffect(() => {
-    getAllUsers().then((u) => { setUsers(u); setLoading(false); });
+    getAllUsers(user?.organizationId).then((u) => { setUsers(u); setLoading(false); });
   }, []);
 
   // ── Filtered users ──

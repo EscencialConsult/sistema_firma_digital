@@ -1,9 +1,9 @@
-import { CheckCircle2, Clock3, FileSignature, Files, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, Download, Eye, FileSignature, Files, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
-import { getMySigningRequests } from "../../shared/services/signing.service";
+import { getMySigningRequests, generateConsolidatedPdfBlob } from "../../shared/services/signing.service";
 import type { SigningRequest } from "../../shared/types/signing";
 
 function statusMeta(status: SigningRequest["status"]) {
@@ -149,12 +149,41 @@ export function ContractsPage() {
                       <StatusIcon size={12} />
                       {label}
                     </span>
-                    {isPending && (
+                    {isPending ? (
                       <Link to={`/signing/${r.id}`}>
                         <Button className="h-8 px-4 text-xs">
                           <FileSignature size={13} /> Firmar
                         </Button>
                       </Link>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {r.status === "SIGNED" && (
+                          <Button
+                            variant="secondary"
+                            className="h-8 px-4 text-xs"
+                            onClick={async () => {
+                              const blob = await generateConsolidatedPdfBlob(r.documentId);
+                              if (blob) {
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.href = url;
+                                link.download = `firmado_${r.fileName || "documento.pdf"}`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(url);
+                              }
+                            }}
+                          >
+                            <Download size={13} /> Descargar
+                          </Button>
+                        )}
+                        <Link to={`/contracts/${r.documentId}`}>
+                          <Button variant="secondary" className="h-8 px-4 text-xs">
+                            <Eye size={13} /> Ver detalle
+                          </Button>
+                        </Link>
+                      </div>
                     )}
                   </div>
                 </div>

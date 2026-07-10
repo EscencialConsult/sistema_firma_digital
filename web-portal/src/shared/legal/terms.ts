@@ -1,11 +1,11 @@
 export const TERMS_TEXT = `TÉRMINOS Y CONDICIONES DE USO
-PLATAFORMA FIRMA DIGITAL — ESCENCIAL CONSULTORA
+PLATAFORMA FIRMA ELECTRÓNICA — ESCENCIAL CONSULTORA
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ARTÍCULO 1 — IDENTIFICACIÓN DEL SERVICIO Y LAS PARTES
 
-1.1. Escencial Consultora (en adelante "la Plataforma" o "el Responsable") opera el servicio de firma electrónica y digital denominado Firma Digital Portal, disponible para usuarios en la República Argentina y demás países de América Latina en los que el servicio se encuentre habilitado.
+1.1. Escencial Consultora (en adelante "la Plataforma" o "el Responsable") opera el servicio de firma electrónica y digital denominado Firma Electrónica Portal, disponible para usuarios en la República Argentina y demás países de América Latina en los que el servicio se encuentre habilitado.
 
 1.2. El presente instrumento regula la relación contractual entre la Plataforma y toda persona humana o jurídica (en adelante "el Usuario") que acceda, registre una cuenta o utilice cualquier funcionalidad del servicio.
 

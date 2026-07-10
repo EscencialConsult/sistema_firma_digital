@@ -3,8 +3,14 @@
  * Also includes ContractDetailView for viewing existing contracts.
  */
 
-import { X } from "lucide-react";
-import type { Contract } from "../../../shared/types/contract";
+import { Plus, Trash2, UserPlus, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { Contract, ContractDetail } from "../../../shared/types/contract";
+import {
+  addContractSigner,
+  getContractById,
+  removeContractSigner,
+} from "../../../shared/services/contracts.service";
 import { numberToWords, formatDateLong, addMonths } from "../../../shared/utils/contractTemplate";
 import type { AlumnoData } from "../../../shared/utils/contractTemplate";
 
@@ -94,7 +100,7 @@ function DocSignatures({ children }: { children: React.ReactNode }) {
 function DocFooter() {
   return (
     <p className="text-center text-[10px] text-zinc-400 border-t border-zinc-100 pt-3 mt-2 font-sans">
-      Generado por Sistema Firma Digital · Escencial Consultora S.A.S. · Ley N° 25.506 de Firma Digital
+      Generado por Sistema Firma Electrónica · Escencial Consultora S.A.S. · Ley N° 25.506 de Firma Digital
     </p>
   );
 }
@@ -518,14 +524,63 @@ import { createPortal } from "react-dom";
 export function ContractDetailModal({
   contract,
   onClose,
+  onUpdated,
 }: {
   contract: Contract;
   onClose: () => void;
+  onUpdated?: (contract: Contract) => void;
 }) {
-  const st = STATUS_LABELS[contract.status] ?? { label: contract.status, color: "text-zinc-400 bg-zinc-50 border-zinc-200" };
+  const [detail, setDetail] = useState<ContractDetail | null>(null);
+  const [signerName, setSignerName] = useState("");
+  const [signerEmail, setSignerEmail] = useState("");
+  const [savingSigner, setSavingSigner] = useState(false);
+  const [signerError, setSignerError] = useState("");
+  const displayContract = detail ?? contract;
+  const st = STATUS_LABELS[displayContract.status] ?? { label: displayContract.status, color: "text-zinc-400 bg-zinc-50 border-zinc-200" };
+
+  async function reloadDetail() {
+    const fresh = await getContractById(contract.id);
+    if (!fresh) return;
+    setDetail(fresh);
+    onUpdated?.(fresh);
+  }
+
+  useEffect(() => {
+    void reloadDetail();
+  }, [contract.id]);
 
   function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function handleAddSigner() {
+    if (!signerName.trim() || !signerEmail.trim()) return;
+    setSavingSigner(true);
+    setSignerError("");
+    try {
+      await addContractSigner(contract.id, {
+        name: signerName.trim(),
+        email: signerEmail.trim(),
+      });
+      setSignerName("");
+      setSignerEmail("");
+      await reloadDetail();
+    } catch (err) {
+      setSignerError(err instanceof Error ? err.message : "Error agregando firmante");
+    } finally {
+      setSavingSigner(false);
+    }
+  }
+
+  async function handleRemoveSigner(signatureRequestId: string) {
+    if (!window.confirm("¿Quitar este firmante del contrato?")) return;
+    setSignerError("");
+    try {
+      await removeContractSigner(signatureRequestId);
+      await reloadDetail();
+    } catch (err) {
+      setSignerError(err instanceof Error ? err.message : "Error quitando firmante");
+    }
   }
 
   const modalContent = (
@@ -546,9 +601,9 @@ export function ContractDetailModal({
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${st.color}`}>
                 {st.label}
               </span>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-widest">#{contract.id.split("-")[0]}</p>
+              <p className="text-[10px] text-zinc-500 font-mono tracking-widest">#{displayContract.id.split("-")[0]}</p>
             </div>
-            <h2 className="font-bold text-zinc-900 text-lg leading-tight truncate">{contract.title}</h2>
+            <h2 className="font-bold text-zinc-900 text-lg leading-tight truncate">{displayContract.title}</h2>
           </div>
           <button
             onClick={onClose}
@@ -565,10 +620,10 @@ export function ContractDetailModal({
           <div className="space-y-4">
             <div className="flex items-center gap-4 flex-wrap">
               <div className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-600 flex items-center gap-2 shadow-sm">
-                <span>Versión {contract.versionNumber}</span>
+                <span>Versión {displayContract.versionNumber}</span>
               </div>
               <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 flex items-center gap-2 shadow-sm">
-                <span>{contract.completedSigners} / {contract.totalSigners} firmas</span>
+                <span>{displayContract.completedSigners} / {displayContract.totalSigners} firmas</span>
               </div>
             </div>
           </div>
@@ -576,59 +631,151 @@ export function ContractDetailModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Creado el</p>
-              <p className="text-sm font-medium text-zinc-800">{fmtDate(contract.createdAt)}</p>
+              <p className="text-sm font-medium text-zinc-800">{fmtDate(displayContract.createdAt)}</p>
             </div>
             <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Última actualización</p>
-              <p className="text-sm font-medium text-zinc-800">{fmtDate(contract.updatedAt)}</p>
+              <p className="text-sm font-medium text-zinc-800">{fmtDate(displayContract.updatedAt)}</p>
             </div>
           </div>
 
           <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Propietario</p>
-            <p className="text-sm font-medium text-zinc-800">{contract.ownerEmail}</p>
+            <p className="text-sm font-medium text-zinc-800">{displayContract.ownerEmail}</p>
           </div>
 
-          {contract.description && (
+          {displayContract.description && (
             <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1.5">Descripción y Destinatarios</p>
-              <p className="text-sm text-zinc-600 leading-relaxed">{contract.description}</p>
+              <p className="text-sm text-zinc-600 leading-relaxed">{displayContract.description}</p>
             </div>
           )}
+
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Firmantes requeridos</p>
+                <p className="mt-1 text-xs text-zinc-500">Agregá firmantes o quitá los que todavía no hayan firmado.</p>
+              </div>
+              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-600">
+                {displayContract.completedSigners}/{displayContract.totalSigners}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <input
+                value={signerName}
+                onChange={(e) => setSignerName(e.target.value)}
+                placeholder="Nombre del firmante"
+                className="h-9 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
+              />
+              <input
+                value={signerEmail}
+                onChange={(e) => setSignerEmail(e.target.value)}
+                placeholder="email@ejemplo.com"
+                type="email"
+                className="h-9 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
+              />
+              <button
+                type="button"
+                onClick={handleAddSigner}
+                disabled={!signerName.trim() || !signerEmail.trim() || savingSigner}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <UserPlus size={13} /> Agregar
+              </button>
+            </div>
+
+            {signerError && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{signerError}</p>
+            )}
+
+            <div className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-100">
+              {detail?.signers?.length ? detail.signers.map((signer) => {
+                const meta = STATUS_LABELS[signer.status] ?? { label: signer.status, color: "text-zinc-500 bg-zinc-50 border-zinc-200" };
+                const canRemove = signer.status !== "SIGNED";
+                return (
+                  <div key={signer.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-zinc-900">{signer.name || signer.email}</p>
+                      <p className="truncate text-xs text-zinc-500">{signer.email}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${meta.color}`}>
+                        {meta.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSigner(signer.id)}
+                        disabled={!canRemove}
+                        title={canRemove ? "Quitar firmante" : "No se puede quitar un firmante que ya firmó"}
+                        className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div className="flex items-center gap-2 px-3 py-3 text-xs text-zinc-400">
+                  <Plus size={13} /> Todavía no hay firmantes asignados.
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* SHA-256 Hash */}
           <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-bl-full -mr-8 -mt-8 opacity-50 transition group-hover:scale-110" />
             <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-1.5 relative z-10">Huella Criptográfica (SHA-256)</p>
             <p className="font-mono text-[11px] text-zinc-700 break-all leading-relaxed relative z-10 selection:bg-blue-200">
-              {contract.sha256Hash}
+              {displayContract.sha256Hash}
             </p>
             <p className="mt-2 text-[10px] text-zinc-500 relative z-10">
               Este identificador único garantiza la inmutabilidad y validez legal del documento.
             </p>
           </div>
 
-          {/* Document Preview Placeholder */}
+          {/* Document Preview */}
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3 ml-1">Contenido Documental</p>
             <div className="overflow-hidden rounded-2xl border border-zinc-200 shadow-sm bg-white">
               <div className="bg-zinc-50 border-b border-zinc-200 p-3 flex justify-between items-center">
-                <span className="text-xs font-mono text-zinc-500">{contract.fileName || "documento.pdf"}</span>
+                <span className="text-xs font-mono text-zinc-500">{displayContract.fileName || "documento.pdf"}</span>
+                {(displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl) && (
+                  <a
+                    href={displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition"
+                  >
+                    Abrir PDF completo
+                  </a>
+                )}
               </div>
-              <div className="p-8 font-serif text-[12px] leading-6 space-y-4 text-zinc-900 bg-gradient-to-b from-white to-zinc-50/30">
-                <div className="text-center pb-5 border-b border-zinc-200">
-                  <h1 className="text-sm font-bold uppercase tracking-widest font-sans">{contract.title}</h1>
-                  <p className="text-[10px] text-zinc-500 mt-1 font-sans">Escencial Consultora S.A.S.</p>
+              {displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl ? (
+                <iframe
+                  src={displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl || ""}
+                  className="w-full border-0"
+                  style={{ height: "60vh" }}
+                  title="Vista previa del PDF"
+                />
+              ) : (
+                <div className="p-8 font-serif text-[12px] leading-6 space-y-4 text-zinc-900 bg-gradient-to-b from-white to-zinc-50/30">
+                  <div className="text-center pb-5 border-b border-zinc-200">
+                    <h1 className="text-sm font-bold uppercase tracking-widest font-sans">{displayContract.title}</h1>
+                    <p className="text-[10px] text-zinc-500 mt-1 font-sans">Escencial Consultora S.A.S.</p>
+                  </div>
+                  <div className="space-y-2 opacity-80">
+                    <div className="h-3 bg-zinc-200 rounded-full w-full" />
+                    <div className="h-3 bg-zinc-200 rounded-full w-5/6" />
+                    <div className="h-3 bg-zinc-200 rounded-full w-4/6" />
+                  </div>
+                  <p className="text-[10px] text-zinc-400 text-center pt-6 border-t border-zinc-100 font-sans italic">
+                    PDF no disponible. El documento aún no tiene una versión PDF generada.
+                  </p>
                 </div>
-                <div className="space-y-2 opacity-80">
-                  <div className="h-3 bg-zinc-200 rounded-full w-full" />
-                  <div className="h-3 bg-zinc-200 rounded-full w-5/6" />
-                  <div className="h-3 bg-zinc-200 rounded-full w-4/6" />
-                </div>
-                <p className="text-[10px] text-zinc-400 text-center pt-6 border-t border-zinc-100 font-sans italic">
-                  Visualización técnica parcial. El documento completo en formato PDF y firmado digitalmente estará disponible tras completar las integraciones necesarias.
-                </p>
-              </div>
+              )}
             </div>
           </div>
         </div>

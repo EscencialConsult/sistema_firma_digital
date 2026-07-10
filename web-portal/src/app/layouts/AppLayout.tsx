@@ -87,7 +87,7 @@ export function AppLayout() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-zinc-950">Términos y condiciones</h3>
-                  <p className="text-xs text-zinc-500">Firma Digital Portal</p>
+                  <p className="text-xs text-zinc-500">Firma Electrónica Portal</p>
                 </div>
               </div>
               <button

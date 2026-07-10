@@ -9,7 +9,7 @@ const TERMS_TEXT = `
 TÉRMINOS Y CONDICIONES DE USO
 
 1. Aceptación de los Términos
-Al acceder y utilizar la plataforma Firma Digital Portal (en adelante, "la Plataforma"), el usuario acepta los presentes Términos y Condiciones de Uso. Si no estuviese de acuerdo con alguno de ellos, deberá abstenerse de utilizar la Plataforma.
+Al acceder y utilizar la plataforma Firma Electrónica Portal (en adelante, "la Plataforma"), el usuario acepta los presentes Términos y Condiciones de Uso. Si no estuviese de acuerdo con alguno de ellos, deberá abstenerse de utilizar la Plataforma.
 
 2. Objeto
 La Plataforma permite la creación, envío, gestión y firma electrónica de documentos con validez legal, así como la verificación de identidad (KYC) y la emisión de certificados digitales.
@@ -84,7 +84,7 @@ export function ConformityPage() {
               <ShieldCheck size={18} className="text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold text-zinc-950 leading-none">Firma Digital</p>
+              <p className="text-sm font-bold text-zinc-950 leading-none">Firma Electrónica</p>
               <p className="text-[11px] text-zinc-500 mt-0.5">Términos y condiciones</p>
             </div>
           </div>
@@ -127,7 +127,7 @@ export function ConformityPage() {
             />
             <span className="text-sm text-zinc-700 leading-relaxed">
               <span className="font-semibold">Leí y acepto</span> los Términos y
-              Condiciones de Uso de la plataforma Firma Digital Portal, incluyendo
+              Condiciones de Uso de la plataforma Firma Electrónica Portal, incluyendo
               las políticas de privacidad y tratamiento de datos personales.
             </span>
           </label>

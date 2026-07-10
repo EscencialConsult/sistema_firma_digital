@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle, Download, FileSignature, KeyRound, Move, XCircle } from "lucide-react";
-import { KeyboardEvent, MouseEvent, useEffect, useRef, useState } from "react";
+import { KeyboardEvent, MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/components/ui/Button";
 import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
@@ -68,6 +68,13 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
   const [otpSent, setOtpSent] = useState(false);
   const [otpCodeInput, setOtpCodeInput] = useState("");
   const [sendingOtp, setSendingOtp] = useState(false);
+
+  // Signature canvas state
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const sigCanvasRef = useRef<HTMLCanvasElement>(null);
+  const sigIsDrawing = useRef(false);
+  const sigLastPos = useRef<{ x: number; y: number } | null>(null);
+  const [sigHasStrokes, setSigHasStrokes] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
@@ -145,7 +152,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
   }, [request, token, id]);
 
   // Drag handlers
-  function handleMouseDown(e: MouseEvent<HTMLDivElement>) {
+  function handleMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
     if (signed || otpSent) return;
     isDragging.current = true;
     document.body.style.cursor = "grabbing";
@@ -226,6 +233,86 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
     }
   }
 
+  // Signature canvas — setup and drawing
+  useEffect(() => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    canvas.width  = Math.round(rect.width);
+    canvas.height = Math.round(rect.height);
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    function getPos(e: PointerEvent) {
+      return { x: e.offsetX, y: e.offsetY };
+    }
+
+    function drawTo(x: number, y: number) {
+      if (!sigIsDrawing.current) return;
+      const c = canvas!.getContext("2d");
+      if (!c) return;
+      c.lineWidth = 2.5; c.lineCap = "round"; c.lineJoin = "round";
+      c.strokeStyle = "#18181b";
+      if (sigLastPos.current) {
+        c.beginPath();
+        c.moveTo(sigLastPos.current.x, sigLastPos.current.y);
+        c.lineTo(x, y);
+        c.stroke();
+      }
+      sigLastPos.current = { x, y };
+      setSigHasStrokes(true);
+    }
+
+    const onPointerDown = (e: PointerEvent) => {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      sigIsDrawing.current = true;
+      const p = getPos(e);
+      sigLastPos.current = p;
+      drawTo(p.x, p.y);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      e.preventDefault();
+      const p = getPos(e);
+      drawTo(p.x, p.y);
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      if (canvas.hasPointerCapture(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId);
+      }
+      sigIsDrawing.current = false;
+      sigLastPos.current = null;
+    };
+
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerUp);
+
+    return () => {
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [otpSent]);
+
+  function confirmSignatureCanvas() {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    setSignatureData(canvas.toDataURL("image/png"));
+  }
+
+  function clearSignatureCanvas() {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    setSigHasStrokes(false);
+    setSignatureData(null);
+  }
+
   async function handleAcceptConformity() {
     if (!request) return;
     setAcceptingConformity(true);
@@ -288,6 +375,10 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
 
   async function handleSign() {
     if (!request) return;
+    if (!signatureData) {
+      setError("Dibujá y capturá tu firma manuscrita antes de confirmar.");
+      return;
+    }
     if (!otpCodeInput || otpCodeInput.length !== 6) {
       setError("Por favor, ingresá el código de verificación de 6 dígitos.");
       return;
@@ -311,6 +402,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
         body: {
           ...(token ? { token } : { requestId: id }),
           otp: otpCodeInput,
+          signatureData: signatureData ?? undefined,
           metadata: { x: pdfX, y: pdfY, width: pdfW, height: pdfH, page },
         },
       });
@@ -494,7 +586,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                       <Move size={12} />
                     </div>
                   )}
-                  <span className="text-emerald-700 tracking-widest text-[8px] uppercase font-mono font-bold">FIRMA DIGITAL · PÁG {page}</span>
+                  <span className="text-emerald-700 tracking-widest text-[8px] uppercase font-mono font-bold">FIRMA ELECTRÓNICA · PÁG {page}</span>
                   <span className="truncate text-zinc-900 mt-1 font-semibold text-[9px]">{request?.signer_name || request?.signer_email}</span>
                   <span className="text-zinc-400 mt-0.5 text-[8px] font-normal">
                     {otpSent ? "Posición confirmada" : "Arrastra para ubicar"}
@@ -582,13 +674,13 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                         Debes verificar tu identidad antes de poder firmar este documento.
                       </div>
                       <p className="text-xs text-zinc-500 leading-relaxed">
-                        Por favor, realiza el proceso de validación en la sección de <strong>Identidad</strong> de tu cuenta. Una vez que tu solicitud sea aprobada por un administrador, podrás aplicar tu firma digital.
+                        Por favor, realiza el proceso de validación en la sección de <strong>Identidad</strong> de tu cuenta. Una vez que tu solicitud sea aprobada por un administrador, podrás aplicar tu firma electrónica.
                       </p>
                     </div>
                   ) : !acceptedConformity ? (
                     <div className="space-y-4">
                       <div className="rounded-xl bg-amber-50/50 border border-amber-100 p-3.5 text-xs text-amber-800 leading-relaxed">
-                        Antes de aplicar tu firma digital, es un requisito legal registrar tu conformidad de que has leído y estás de acuerdo con el contenido completo del documento.
+                        Antes de aplicar tu firma electrónica, es un requisito legal registrar tu conformidad de que has leído y estás de acuerdo con el contenido completo del documento.
                       </div>
 
                       <label className="flex gap-3 text-xs text-zinc-700 cursor-pointer select-none leading-normal">
@@ -639,6 +731,40 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                         />
                       </div>
 
+                      {/* Signature Canvas */}
+                      <div className="border-t border-zinc-100 pt-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">
+                            Tu firma manuscrita
+                          </label>
+                          {sigHasStrokes && (
+                            <button type="button" onClick={clearSignatureCanvas}
+                              className="text-[10px] font-semibold text-zinc-400 hover:text-zinc-700 transition">
+                              Limpiar
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative rounded-xl border-2 border-zinc-200 bg-white overflow-hidden" style={{ height: "120px" }}>
+                          <canvas ref={sigCanvasRef} className="w-full h-full cursor-crosshair touch-none" style={{ display: "block" }} />
+                          {!sigHasStrokes && (
+                            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                              <p className="text-sm text-zinc-300 select-none">Firmá aquí</p>
+                            </div>
+                          )}
+                          <div className="pointer-events-none absolute bottom-8 left-6 right-6 border-b border-zinc-200" />
+                        </div>
+                        {signatureData && (
+                          <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 font-semibold">
+                            <CheckCircle size={12} /> Firma capturada
+                          </div>
+                        )}
+                        {!signatureData && sigHasStrokes && (
+                          <Button variant="secondary" className="w-full justify-center text-xs h-9" onClick={confirmSignatureCanvas}>
+                            Capturar firma
+                          </Button>
+                        )}
+                      </div>
+
                       <div className="flex gap-3 pt-2">
                         <Button
                           variant="secondary"
@@ -651,7 +777,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                         <Button
                           className="w-1/2 justify-center bg-emerald-600 hover:bg-emerald-700 text-white"
                           onClick={handleSign}
-                          disabled={signing || otpCodeInput.length !== 6}
+                          disabled={signing || otpCodeInput.length !== 6 || !signatureData}
                         >
                           {signing ? "Firmando..." : "Confirmar y Firmar"}
                         </Button>
@@ -741,7 +867,7 @@ export function PublicSigningPage({ token, id, onComplete }: { token?: string; i
                       </div>
 
                       <div className="border-t border-zinc-100 pt-4 text-xs text-zinc-500 leading-relaxed">
-                        Al firmar este documento, se incrustará una firma digital criptográfica que garantiza que el contenido no ha sido modificado y valida tu autoría.
+                        Al firmar este documento, se incrustará una firma electrónica criptográfica que garantiza que el contenido no ha sido modificado y valida tu autoría.
                       </div>
 
                       <Button 

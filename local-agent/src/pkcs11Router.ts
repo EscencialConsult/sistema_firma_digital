@@ -87,7 +87,7 @@ export async function signWithPkcs11Handler(req: Request, res: Response) {
       borderColor: rgb(0.05, 0.28, 0.62),
       borderWidth: 1.5,
     });
-    targetPage.drawText("FIRMA DIGITAL PKCS#11", {
+    targetPage.drawText("FIRMA ELECTRÓNICA PKCS#11", {
       x: metaX + 8, y: metaY + metaH - 13, size: 7,
       font: helveticaBold, color: rgb(0.05, 0.28, 0.62),
     });

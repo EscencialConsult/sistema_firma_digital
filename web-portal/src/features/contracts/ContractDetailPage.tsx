@@ -2,15 +2,19 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock3,
+  Download,
   FileSignature,
   Hash,
+  ShieldCheck,
   User,
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "../../shared/components/ui/Button";
+import { PdfViewer } from "../../shared/components/ui/PdfViewer";
 import { getContractById } from "../../shared/services/contracts.service";
+import { generateConsolidatedPdfBlob, tryGenerateConsolidatedPdf } from "../../shared/services/signing.service";
 import type { ContractDetail, ContractSigner } from "../../shared/types/contract";
 
 function signerStatus(status: ContractSigner["status"]) {
@@ -44,6 +48,8 @@ export function ContractDetailPage() {
   const navigate = useNavigate();
   const [contract, setContract] = useState<ContractDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -52,6 +58,23 @@ export function ContractDetailPage() {
       setLoading(false);
     });
   }, [id]);
+
+  useEffect(() => {
+    if (!contract || contract.status !== "COMPLETED") return;
+    if (contract.finalPdfUrl) {
+      setSignedPdfUrl(contract.finalPdfUrl);
+      return;
+    }
+    generateConsolidatedPdfBlob(contract.id).then((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        setSignedPdfUrl(url);
+        tryGenerateConsolidatedPdf(contract.id).then((uploadedUrl) => {
+          if (uploadedUrl) setSignedPdfUrl(uploadedUrl);
+        });
+      }
+    });
+  }, [contract]);
 
   if (loading) {
     return (
@@ -98,18 +121,57 @@ export function ContractDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* PDF preview */}
-        <div className="rounded-2xl border border-zinc-200/60 bg-white shadow-sm overflow-hidden">
-          <div className="border-b border-zinc-100 px-5 py-4">
-            <p className="font-semibold text-zinc-950">Documento</p>
-            <p className="text-xs text-zinc-400">{contract.fileName}</p>
-          </div>
-          <div className="flex h-72 flex-col items-center justify-center bg-zinc-50 text-center px-8">
-            <FileSignature size={40} className="text-zinc-300 mb-3" />
-            <p className="text-sm font-semibold text-zinc-500">Vista previa no disponible</p>
-            <p className="mt-1 text-xs text-zinc-400">
-              Cuando el sistema se conecte a Supabase Storage, el PDF se mostrará acá.
-            </p>
-          </div>
+        <div className="space-y-4">
+          <PdfViewer
+            url={contract.pdfUrl}
+            fileName={contract.fileName}
+          />
+
+          {/* Signed PDF */}
+          {signedPdfUrl && (
+            <div className="rounded-2xl border border-zinc-200/60 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-zinc-100 px-5 py-4">
+                <p className="font-semibold text-zinc-950">PDF Firmado</p>
+                <p className="text-xs text-zinc-400">
+                  Documento con firmas electrónicas registradas
+                </p>
+              </div>
+              <div className="border-b border-zinc-100 px-5 py-4">
+                <iframe
+                  src={signedPdfUrl.startsWith("blob:") ? signedPdfUrl : `${signedPdfUrl}#toolbar=0&navpanes=0`}
+                  className="w-full h-[500px] rounded-lg border border-zinc-200"
+                  title="PDF Firmado"
+                />
+              </div>
+              <div className="px-5 py-3 flex items-center justify-between bg-green-50">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-emerald-600" />
+                  <p className="text-sm font-medium text-emerald-800">
+                    Firma electrónica válida (Ley 25.506)
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (signedPdfUrl.startsWith("blob:")) {
+                      const link = document.createElement("a");
+                      link.href = signedPdfUrl;
+                      link.download = `firmado_${contract.fileName || "documento.pdf"}`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    } else {
+                      window.open(signedPdfUrl, "_blank", "noopener,noreferrer");
+                    }
+                  }}
+                >
+                  <Download size={13} />
+                  Descargar firmado
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sidebar: info + signers */}
@@ -179,12 +241,35 @@ export function ContractDetailPage() {
 
           {/* CTA: sign if pending */}
           {pendingSigner && (
-            <Link to={`/signing/sr-001`}>
+            <Link to={`/signing/${pendingSigner.id}`}>
               <Button className="h-11 w-full">
                 <FileSignature size={15} />
                 Firmar este documento
               </Button>
             </Link>
+          )}
+
+          {/* Download signed PDF */}
+          {contract.status === "COMPLETED" && signedPdfUrl && (
+            <Button
+              className="h-11 w-full"
+              variant="secondary"
+              onClick={() => {
+                if (signedPdfUrl.startsWith("blob:")) {
+                  const link = document.createElement("a");
+                  link.href = signedPdfUrl;
+                  link.download = `firmado_${contract.fileName || "documento.pdf"}`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                } else {
+                  window.open(signedPdfUrl, "_blank", "noopener,noreferrer");
+                }
+              }}
+            >
+              <Download size={15} />
+              Descargar PDF firmado
+            </Button>
           )}
         </div>
       </div>

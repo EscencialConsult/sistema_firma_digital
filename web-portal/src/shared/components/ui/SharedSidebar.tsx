@@ -33,7 +33,7 @@ interface SharedSidebarProps {
 }
 
 const USER_NAV = [
-  { path: "/dashboard",  label: "Dashboard",     icon: Gauge,      end: true },
+  { path: "/dashboard",  label: "Inicio",       icon: Gauge,      end: true },
   { path: "/signatures", label: "Mis contratos", icon: FileText },
   { path: "/audit",      label: "Historial",     icon: History },
   { path: "/profile",    label: "Perfil",        icon: UserCircle },
@@ -135,7 +135,7 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
         />
         <div className="min-w-0">
           <p className={`text-sm font-bold leading-none truncate ${textPrimary}`}>
-            {org?.name ?? (variant === "admin" ? "Admin Panel" : "Firma Digital")}
+            {org?.name ?? (variant === "admin" ? "Admin Panel" : "Firma Electrónica")}
           </p>
           <p className={`mt-0.5 truncate text-[11px] ${textSecondary}`}>
             {variant === "admin" ? "Panel de administración" : user?.email}

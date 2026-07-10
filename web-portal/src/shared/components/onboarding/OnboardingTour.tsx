@@ -17,7 +17,7 @@ interface TourStep {
 const STEPS: Record<OnboardingVariant, TourStep[]> = {
   kyc: [
     {
-      title: "Bienvenido a Firma Digital",
+      title: "Bienvenido a Firma Electrónica",
       body: "Antes de firmar o gestionar documentos, necesitamos validar tu identidad para proteger tu cuenta.",
       action: "Completa los datos personales y revisa que coincidan con tu documento.",
     },
@@ -35,7 +35,7 @@ const STEPS: Record<OnboardingVariant, TourStep[]> = {
   user: [
     {
       title: "Tu panel de contratos",
-      body: "En Dashboard ves un resumen de firmas pendientes, firmadas y actividad reciente.",
+      body: "En Inicio ves un resumen de firmas pendientes, firmadas y actividad reciente.",
       action: "Empeza revisando si tenes contratos pendientes.",
     },
     {
@@ -57,7 +57,7 @@ const STEPS: Record<OnboardingVariant, TourStep[]> = {
   admin: [
     {
       title: "Panel de administracion",
-      body: "El Dashboard resume usuarios, verificaciones KYC, contratos enviados y firmas completadas.",
+      body: "El Panel resume usuarios, verificaciones KYC, contratos enviados y firmas completadas.",
       action: "Usalo como vista diaria de seguimiento.",
     },
     {

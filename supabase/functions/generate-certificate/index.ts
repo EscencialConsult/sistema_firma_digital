@@ -67,7 +67,7 @@ serve(async (req) => {
       { name: "commonName", value: profile.full_name ?? user.email },
       { name: "countryName", value: "AR" },
       { name: "organizationName", value: "Escencial" },
-      { name: "organizationalUnitName", value: "Firma Digital Portal" },
+      { name: "organizationalUnitName", value: "Firma Electrónica Portal" },
       { name: "emailAddress", value: user.email },
     ];
     cert.setSubject(attrs);

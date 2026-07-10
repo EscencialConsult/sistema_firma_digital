@@ -27,12 +27,8 @@ function SignatureCanvas({ onConfirm }: { onConfirm: (dataUrl: string) => void }
   const lastPos    = useRef<{ x: number; y: number } | null>(null);
   const [hasStrokes, setHasStrokes] = useState(false);
 
-  function getPos(e: { clientX: number; clientY: number }, canvas: HTMLCanvasElement) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: (e.clientX - rect.left) * (canvas.width  / rect.width),
-      y: (e.clientY - rect.top)  * (canvas.height / rect.height),
-    };
+  function getPos(e: PointerEvent) {
+    return { x: e.offsetX, y: e.offsetY };
   }
 
   function draw(x: number, y: number) {
@@ -56,33 +52,41 @@ function SignatureCanvas({ onConfirm }: { onConfirm: (dataUrl: string) => void }
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    canvas.width  = rect.width  * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
+    canvas.width  = Math.round(rect.width);
+    canvas.height = Math.round(rect.height);
     const ctx = canvas.getContext("2d");
-    if (ctx) ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    if (ctx) ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    const onDown  = (e: MouseEvent) => { isDrawing.current = true; lastPos.current = getPos(e, canvas); };
-    const onMove  = (e: MouseEvent) => { const p = getPos(e, canvas); draw(p.x, p.y); };
-    const onUp    = () => { isDrawing.current = false; lastPos.current = null; };
-    const onTouchStart = (e: TouchEvent) => { e.preventDefault(); isDrawing.current = true; lastPos.current = getPos(e.touches[0], canvas); };
-    const onTouchMove  = (e: TouchEvent) => { e.preventDefault(); const p = getPos(e.touches[0], canvas); draw(p.x, p.y); };
-    const onTouchEnd   = () => { isDrawing.current = false; lastPos.current = null; };
+    const onPointerDown = (e: PointerEvent) => {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      isDrawing.current = true;
+      const p = getPos(e);
+      lastPos.current = p;
+      draw(p.x, p.y);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      e.preventDefault();
+      const p = getPos(e);
+      draw(p.x, p.y);
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      if (canvas.hasPointerCapture(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId);
+      }
+      isDrawing.current = false;
+      lastPos.current = null;
+    };
 
-    canvas.addEventListener("mousedown",  onDown);
-    canvas.addEventListener("mousemove",  onMove);
-    canvas.addEventListener("mouseup",    onUp);
-    canvas.addEventListener("mouseleave", onUp);
-    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
-    canvas.addEventListener("touchmove",  onTouchMove,  { passive: false });
-    canvas.addEventListener("touchend",   onTouchEnd);
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerUp);
     return () => {
-      canvas.removeEventListener("mousedown",  onDown);
-      canvas.removeEventListener("mousemove",  onMove);
-      canvas.removeEventListener("mouseup",    onUp);
-      canvas.removeEventListener("mouseleave", onUp);
-      canvas.removeEventListener("touchstart", onTouchStart);
-      canvas.removeEventListener("touchmove",  onTouchMove);
-      canvas.removeEventListener("touchend",   onTouchEnd);
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
     };
   }, []);
 

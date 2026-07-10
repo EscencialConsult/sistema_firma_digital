@@ -8,6 +8,23 @@ export type ContractStatus =
   | "COMPLETED"
   | "EXPIRED";
 
+export interface SignaturePosition {
+  /** "last" for last page, or a 0-based page index */
+  page: "last" | number;
+  /** X coordinate in mm from left edge */
+  x: number;
+  /** Y coordinate in mm from bottom edge */
+  y: number;
+  /** Width in mm */
+  width: number;
+  /** Height in mm */
+  height: number;
+}
+
+export const DEFAULT_SIGNATURE_POSITION: SignaturePosition = {
+  page: "last", x: 50, y: 50, width: 80, height: 30,
+};
+
 export interface Contract {
   id: string;
   title: string;
@@ -29,6 +46,9 @@ export interface Contract {
   updatedAt: string;
   templateId: string | null;
   templateFields: Record<string, string> | null;
+  contractTypeId: string | null;
+  paymentTemplateId: string | null;
+  signaturePosition: SignaturePosition;
 }
 
 export interface ContractDetail extends Contract {
