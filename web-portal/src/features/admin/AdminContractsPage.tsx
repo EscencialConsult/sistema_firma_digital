@@ -27,6 +27,7 @@ import {
   sendContractFromTemplate,
   sendDocumentToThirdParty,
   uploadContractPdf,
+  deleteContract,
 } from "../../shared/services/contracts.service";
 import { generateConsolidatedPdfBlob, tryGenerateConsolidatedPdf } from "../../shared/services/signing.service";
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
@@ -783,8 +784,8 @@ export function AdminContractsPage() {
   // Sending state
   const [sendingTemplate, setSendingTemplate] = useState<DbContractTemplate | null>(null);
 
-  const [toast, setToast] = useState({ visible: false, message: "" });
-  const showToast = (message: string) => setToast({ visible: true, message });
+  const [toast, setToast] = useState({ visible: false, message: "", type: "success" as "success" | "error" });
+  const showToast = (message: string, type: "success" | "error" = "success") => setToast({ visible: true, message, type });
 
   useEffect(() => {
     getAllContracts().then((c) => { setContracts(c); setLoading(false); });
@@ -901,6 +902,17 @@ export function AdminContractsPage() {
     }
   }
 
+  async function handleDeleteContract(contract: Contract) {
+    if (!window.confirm(`¿Eliminar el contrato "${contract.title}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      await deleteContract(contract.id);
+      setContracts((prev) => prev.filter((c) => c.id !== contract.id));
+      showToast("Contrato eliminado.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error al eliminar contrato", "error");
+    }
+  }
+
   // ─── Editor view ───────────────────────────────────────────────────────────
 
   if (view === "editor") {
@@ -947,12 +959,12 @@ export function AdminContractsPage() {
           </Button>
         </div>
 
-        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
-      </div>
-    );
-  }
+      <Toast message={toast.message} type={toast.type} visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
+    </div>
+  );
+}
 
-  // ─── Templates view ────────────────────────────────────────────────────────
+// ─── Templates view ────────────────────────────────────────────────────────
 
   if (view === "templates") {
     return (
@@ -1003,7 +1015,7 @@ export function AdminContractsPage() {
           </div>
         )}
 
-        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
+        <Toast message={toast.message} type={toast.type} visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
       </div>
     );
   }
@@ -1034,7 +1046,7 @@ export function AdminContractsPage() {
           onBack={() => setView("list")}
         />
 
-        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
+        <Toast message={toast.message} type={toast.type} visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
       </div>
     );
   }
@@ -1217,12 +1229,14 @@ export function AdminContractsPage() {
                               <Download size={11} /> {isPreparingPdf ? "Preparando..." : "PDF firmado"}
                             </button>
                           )}
-                          {!hasSignedPdf && (
-                            <button type="button" onClick={() => setViewContract(c)}
-                              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
-                              <Eye size={11} /> Ver
-                            </button>
-                          )}
+                          <button type="button" onClick={() => setViewContract(c)}
+                            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
+                            <Eye size={11} /> Ver
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteContract(c); }}
+                            className="flex items-center gap-1.5 rounded-lg border border-red-200 px-2.5 py-1 text-xs text-red-400 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition opacity-0 group-hover:opacity-100">
+                            <Trash2 size={11} />
+                          </button>
                         </div>
                       </div>
                     );

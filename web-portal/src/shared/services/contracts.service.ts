@@ -643,3 +643,47 @@ export async function updateContractFields(
   if (error) throw new Error(error.message);
 }
 
+/** Delete a contract and all its related data (signature_requests, document_versions, files in storage) */
+export async function deleteContract(documentId: string): Promise<void> {
+  // 1. Get document versions to remove storage files
+  const { data: versions, error: verErr } = await supabase
+    .from("document_versions")
+    .select("storage_path")
+    .eq("document_id", documentId);
+  if (verErr) console.warn("[deleteContract] error fetching versions:", verErr.message);
+
+  // 2. Remove storage files
+  if (versions && versions.length > 0) {
+    const paths = versions.map((v) => v.storage_path).filter(Boolean) as string[];
+    if (paths.length > 0) {
+      const { error: storageErr } = await supabase.storage.from("contract-pdfs").remove(paths);
+      if (storageErr) console.warn("[deleteContract] error removing storage files:", storageErr.message);
+    }
+  }
+
+  // 3. Unlink organization_authorities referencing this document (no ON DELETE CASCADE)
+  const { error: authErr } = await supabase
+    .from("organization_authorities")
+    .update({ document_id: null, signing_request_id: null })
+    .eq("document_id", documentId);
+  if (authErr) console.warn("[deleteContract] error unlinking authorities:", authErr.message);
+
+  // 4. Delete signature_requests (cascades signatures, conformity_acceptances, otp_challenges)
+  const { error: srErr } = await supabase
+    .from("signature_requests")
+    .delete()
+    .eq("document_id", documentId);
+  if (srErr) throw new Error(`Error al eliminar solicitudes de firma: ${srErr.message}`);
+
+  // 5. Delete document_versions
+  const { error: dvErr } = await supabase
+    .from("document_versions")
+    .delete()
+    .eq("document_id", documentId);
+  if (dvErr) console.warn("[deleteContract] error deleting versions:", dvErr.message);
+
+  // 6. Delete the document
+  const { error } = await supabase.from("documents").delete().eq("id", documentId);
+  if (error) throw new Error(`Error al eliminar documento: ${error.message}`);
+}
+

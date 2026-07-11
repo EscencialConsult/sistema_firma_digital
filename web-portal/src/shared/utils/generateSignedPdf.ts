@@ -165,8 +165,12 @@ function addSignatureBlocks(pdf: jsPDF, signers: PdfSigner[], y: number): number
   return currentY;
 }
 
-function addCertificatePage(pdf: jsPDF, document: SignedPdfDocumentInput, signers: PdfSigner[]) {
-  pdf.addPage();
+function addCertificatePage(pdf: jsPDF, document: SignedPdfDocumentInput, signers: PdfSigner[], useExistingPage = false) {
+  if (useExistingPage) {
+    pdf.setPage(1);
+  } else {
+    pdf.addPage();
+  }
   addHeader(pdf, "CERTIFICADO DE FIRMA ELECTRONICA", "Escencial Consultora - Firma Electrónica - Válido conforme Ley 25.506 Argentina");
 
   let y = 38;
@@ -321,7 +325,7 @@ export async function generateSignedPdf(
 
     // Append certificate pages
     const certificatePdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    addCertificatePage(certificatePdf, input, signers);
+    addCertificatePage(certificatePdf, input, signers, true);
     addFooter(certificatePdf);
     const certificateBytes = certificatePdf.output("arraybuffer");
     const certificateDoc = await PDFDocument.load(certificateBytes);
