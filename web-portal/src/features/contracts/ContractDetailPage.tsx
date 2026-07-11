@@ -16,6 +16,7 @@ import { PdfViewer } from "../../shared/components/ui/PdfViewer";
 import { getContractById } from "../../shared/services/contracts.service";
 import { generateConsolidatedPdfBlob, tryGenerateConsolidatedPdf } from "../../shared/services/signing.service";
 import type { ContractDetail, ContractSigner } from "../../shared/types/contract";
+import { signedPdfFileName } from "../../shared/utils/downloadFileName";
 
 function signerStatus(status: ContractSigner["status"]) {
   switch (status) {
@@ -157,7 +158,11 @@ export function ContractDetailPage() {
                     if (signedPdfUrl.startsWith("blob:")) {
                       const link = document.createElement("a");
                       link.href = signedPdfUrl;
-                      link.download = `firmado_${contract.fileName || "documento.pdf"}`;
+                      link.download = signedPdfFileName({
+                        title: contract.title,
+                        fileName: contract.fileName,
+                        sequence: contract.versionNumber,
+                      });
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
@@ -258,7 +263,11 @@ export function ContractDetailPage() {
                 if (signedPdfUrl.startsWith("blob:")) {
                   const link = document.createElement("a");
                   link.href = signedPdfUrl;
-                  link.download = `firmado_${contract.fileName || "documento.pdf"}`;
+                  link.download = signedPdfFileName({
+                    title: contract.title,
+                    fileName: contract.fileName,
+                    sequence: contract.versionNumber,
+                  });
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);

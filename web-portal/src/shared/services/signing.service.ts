@@ -16,6 +16,9 @@ function mapRowToSigningRequest(
   const latestV  = [...versions].sort(
     (a, b) => (b.version_number as number) - (a.version_number as number)
   )[0] ?? {};
+  const originalV = [...versions].sort(
+    (a, b) => (a.version_number as number) - (b.version_number as number)
+  )[0] ?? {};
 
   const pdfUrl = latestV.storage_path
     ? supabase.storage.from("contract-pdfs").getPublicUrl(latestV.storage_path as string).data.publicUrl
@@ -36,7 +39,8 @@ function mapRowToSigningRequest(
     status:             sr.status as SigningRequest["status"],
     acceptedConformity: (sr.accepted_conformity as boolean) ?? false,
     sha256Hash:         (latestV.sha256_hash as string) ?? "",
-    fileName:           (latestV.file_name as string) ?? "",
+    versionNumber:      (latestV.version_number as number) ?? 1,
+    fileName:           (originalV.file_name as string) ?? (latestV.file_name as string) ?? "",
     pdfUrl,
     finalPdfUrl:        (document.final_pdf_url as string) ?? null,
     sentAt:             sr.sent_at as string,

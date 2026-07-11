@@ -25,6 +25,7 @@ import {
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
 import { getMyOrganization } from "../../shared/services/organizations.service";
 import type { SigningRequest } from "../../shared/types/signing";
+import { downloadBlob, signedPdfFileName } from "../../shared/utils/downloadFileName";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("es-AR", {
@@ -296,14 +297,11 @@ function ContractCard({
                 onClick={async () => {
                   const blob = await generateConsolidatedPdfBlob(r.documentId);
                   if (blob) {
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = `firmado_${r.fileName || "documento.pdf"}`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
+                    downloadBlob(blob, signedPdfFileName({
+                      title: r.documentTitle,
+                      fileName: r.fileName,
+                      sequence: r.versionNumber,
+                    }));
                   }
                 }}
               >

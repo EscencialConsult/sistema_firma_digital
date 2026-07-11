@@ -213,6 +213,7 @@ export const MOCK_SIGNING_REQUESTS: SigningRequest[] = [
     status: "PENDING",
     acceptedConformity: false,
     sha256Hash: "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+    versionNumber: 1,
     fileName: "contrato_webdev_maria_gonzalez.pdf",
     pdfUrl: null,
     finalPdfUrl: null,

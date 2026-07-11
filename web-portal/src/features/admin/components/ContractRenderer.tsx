@@ -5,6 +5,7 @@
 
 import { Plus, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Contract, ContractDetail } from "../../../shared/types/contract";
 import {
   addContractSigner,
@@ -519,8 +520,6 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   DRAFT:               { label: "Borrador",           color: "text-zinc-400 bg-zinc-50 border-zinc-200" },
 };
 
-import { createPortal } from "react-dom";
-
 export function ContractDetailModal({
   contract,
   onClose,
@@ -584,18 +583,18 @@ export function ContractDetailModal({
   }
 
   const modalContent = (
-    <div className="fixed inset-0 z-[100] flex justify-end">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden p-4 sm:p-6">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm animate-in fade-in duration-300" 
+        className="absolute inset-0 bg-zinc-900/45 backdrop-blur-sm animate-in fade-in duration-300" 
         onClick={onClose} 
       />
 
       {/* Drawer */}
-      <div className="relative flex h-full w-full max-w-xl flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+      <div className="relative flex h-[min(92vh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
 
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-100 bg-white/80 px-6 py-5 backdrop-blur-md">
+        <div className="flex items-center justify-between border-b border-zinc-100 bg-white px-6 py-5 sm:px-7">
           <div className="min-w-0 pr-4">
             <div className="flex items-center gap-2 mb-1">
               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${st.color}`}>
@@ -615,7 +614,8 @@ export function ContractDetailModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto bg-zinc-50/60 p-5 sm:p-6 lg:grid-cols-[420px_minmax(0,1fr)] lg:overflow-hidden">
+          <div className="min-w-0 space-y-5 overflow-hidden lg:overflow-y-auto lg:pr-1">
           {/* Main Info */}
           <div className="space-y-4">
             <div className="flex items-center gap-4 flex-wrap">
@@ -651,7 +651,7 @@ export function ContractDetailModal({
             </div>
           )}
 
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-4">
+          <div className="min-w-0 space-y-4 overflow-hidden rounded-xl border border-zinc-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Firmantes requeridos</p>
@@ -662,28 +662,30 @@ export function ContractDetailModal({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <div className="grid min-w-0 grid-cols-1 gap-2">
               <input
                 value={signerName}
                 onChange={(e) => setSignerName(e.target.value)}
                 placeholder="Nombre del firmante"
-                className="h-9 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
+                className="h-9 min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
               />
-              <input
-                value={signerEmail}
-                onChange={(e) => setSignerEmail(e.target.value)}
-                placeholder="email@ejemplo.com"
-                type="email"
-                className="h-9 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
-              />
-              <button
-                type="button"
-                onClick={handleAddSigner}
-                disabled={!signerName.trim() || !signerEmail.trim() || savingSigner}
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <UserPlus size={13} /> Agregar
-              </button>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+                <input
+                  value={signerEmail}
+                  onChange={(e) => setSignerEmail(e.target.value)}
+                  placeholder="email@ejemplo.com"
+                  type="email"
+                  className="h-9 min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddSigner}
+                  disabled={!signerName.trim() || !signerEmail.trim() || savingSigner}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <UserPlus size={13} /> Agregar
+                </button>
+              </div>
             </div>
 
             {signerError && (
@@ -736,8 +738,10 @@ export function ContractDetailModal({
             </p>
           </div>
 
+          </div>
+
           {/* Document Preview */}
-          <div>
+          <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto">
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3 ml-1">Contenido Documental</p>
             <div className="overflow-hidden rounded-2xl border border-zinc-200 shadow-sm bg-white">
               <div className="bg-zinc-50 border-b border-zinc-200 p-3 flex justify-between items-center">

@@ -74,6 +74,12 @@ const PublicSigningPage = lazy(() =>
   }))
 );
 
+const PublicSignedPdfDownloadPage = lazy(() =>
+  import("../../features/download/PublicSignedPdfDownloadPage").then((m) => ({
+    default: m.PublicSignedPdfDownloadPage,
+  }))
+);
+
 // ─── Aceptación de autoridad (sin login requerido) ────────────────────────────
 const AuthorityAcceptPage = lazy(() =>
   import("../../features/authority/AuthorityAcceptPage").then((m) => ({
@@ -183,6 +189,7 @@ export function AppRouter() {
 
         {/* Firma pública (sin cuenta) */}
         <Route path="/sign/:id"    element={<PublicSigningPage />} />
+        <Route path="/d/:documentId" element={<PublicSignedPdfDownloadPage />} />
 
         {/* Aceptar invitación de autoridad (sin cuenta) */}
         <Route path="/authority/accept/:token" element={<AuthorityAcceptPage />} />

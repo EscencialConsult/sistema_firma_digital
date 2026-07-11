@@ -27,9 +27,16 @@ function latestVersion(versions: Array<Record<string, unknown>>) {
   )[0] ?? null;
 }
 
+function originalVersion(versions: Array<Record<string, unknown>>) {
+  return [...versions].sort(
+    (a, b) => (a.version_number as number) - (b.version_number as number)
+  )[0] ?? null;
+}
+
 function mapDocToContract(doc: Record<string, unknown>): Contract {
   const versions = (doc.document_versions as Array<Record<string, unknown>>) ?? [];
   const v = latestVersion(versions);
+  const originalV = originalVersion(versions);
   const owner = (doc.owner as Record<string, unknown>) ?? {};
   const rawFields = doc.template_fields as Record<string, unknown> | null;
   const pdfUrl = v?.storage_path
@@ -44,7 +51,7 @@ function mapDocToContract(doc: Record<string, unknown>): Contract {
     ownerEmail: (owner.email as string) ?? "",
     sha256Hash: (v?.sha256_hash as string) ?? "",
     versionNumber: (v?.version_number as number) ?? 1,
-    fileName: (v?.file_name as string) ?? "",
+    fileName: (originalV?.file_name as string) ?? (v?.file_name as string) ?? "",
     totalSigners: (doc.total_signers as number) ?? 0,
     completedSigners: (doc.completed_signers as number) ?? 0,
     finalPdfUrl: pdfUrl ?? (doc.final_pdf_url as string) ?? null,

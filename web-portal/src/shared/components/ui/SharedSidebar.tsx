@@ -33,7 +33,7 @@ interface SharedSidebarProps {
 }
 
 const USER_NAV = [
-  { path: "/dashboard",  label: "Inicio",       icon: Gauge,      end: true },
+  { path: "/dashboard",  label: "Portal de firmas", icon: Gauge,      end: true },
   { path: "/signatures", label: "Mis contratos", icon: FileText },
   { path: "/audit",      label: "Historial",     icon: History },
   { path: "/profile",    label: "Perfil",        icon: UserCircle },
@@ -42,7 +42,7 @@ const USER_NAV = [
 const ADMIN_EXTRA = [{ path: "/admin", label: "Panel admin", icon: UsersRound }];
 
 const ADMIN_NAV = [
-  { path: "/admin", label: "Panel general", icon: ShieldCheck, end: true },
+  { path: "/admin", label: "Panel admin", icon: ShieldCheck, end: true },
   { path: "/admin/users", label: "Usuarios", icon: Users },
   { path: "/admin/kyc", label: "Verificaciones KYC", icon: IdCard },
   { path: "/admin/contracts", label: "Contratos", icon: ClipboardList },
@@ -50,6 +50,8 @@ const ADMIN_NAV = [
   { path: "/admin/team", label: "Mi equipo", icon: UsersRound },
   { path: "/admin/settings", label: "Configuración", icon: Settings },
 ];
+
+const SIGNING_PORTAL_EXTRA = [{ path: "/dashboard", label: "Portal de firmas", icon: FileText }];
 
 const SUPER_ADMIN_NAV = [
   { path: "/super-admin", label: "Panel general", icon: LayoutDashboard, end: true },
@@ -78,12 +80,13 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
   if (variant === "user") {
     navItems = isAdminOrOrgAdmin ? [...USER_NAV, ...ADMIN_EXTRA] : USER_NAV;
   } else if (variant === "admin") {
-    navItems = ADMIN_NAV;
+    navItems = isAdminOrOrgAdmin ? [...ADMIN_NAV, ...SIGNING_PORTAL_EXTRA] : ADMIN_NAV;
   } else if (variant === "super-admin") {
     navItems = SUPER_ADMIN_NAV;
   }
 
   const verificationLabel = user?.verificationStatus === "VERIFIED" ? "Verificado" : "KYC pendiente";
+  const userModeLabel = isAdminOrOrgAdmin ? "Autoridad firmante - Admin" : verificationLabel;
 
   // Theme styles based on variant
   const isDark = variant === "super-admin";
@@ -138,7 +141,7 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
             {org?.name ?? (variant === "admin" ? "Admin Panel" : "Firma Electrónica")}
           </p>
           <p className={`mt-0.5 truncate text-[11px] ${textSecondary}`}>
-            {variant === "admin" ? "Panel de administración" : user?.email}
+            {variant === "admin" ? "Panel admin" : "Portal de firmas"}
           </p>
         </div>
       </div>
@@ -205,8 +208,8 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
             </span>
             <p className="text-xs font-semibold truncate">{user?.fullName}</p>
           </div>
-          <p className="text-[11px] opacity-60 capitalize">
-            {user?.role?.toLowerCase()} · {verificationLabel}
+          <p className="text-[11px] opacity-60">
+            {userModeLabel}
           </p>
         </div>
       </div>
@@ -257,3 +260,4 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
     </>
   );
 }
+

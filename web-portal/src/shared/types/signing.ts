@@ -10,6 +10,8 @@ export interface SigningRequest {
   status: "PENDING" | "VIEWED" | "CONFORMITY_ACCEPTED" | "SIGNED" | "REJECTED" | "EXPIRED";
   acceptedConformity: boolean;
   sha256Hash: string;
+  /** Number of the current document version */
+  versionNumber: number;
   fileName: string;
   pdfUrl: string | null;
   /** URL del PDF consolidado con todas las firmas, disponible cuando el doc está COMPLETED */
