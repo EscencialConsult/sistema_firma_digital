@@ -785,6 +785,7 @@ type PageView = "list" | "templates" | "editor" | "sending";
 export function AdminContractsPage() {
   const [activeTab, setActiveTab] = useState<"templates" | "contracts" | "upload" | "convenios" | "payments">("contracts");
   const [orgId, setOrgId]         = useState<string | null>(null);
+  const [orgName, setOrgName]     = useState<string | null>(null);
 
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -826,6 +827,7 @@ export function AdminContractsPage() {
     getMyOrganization().then((org) => {
       if (!org) return;
       setOrgId(org.id);
+      setOrgName(org.name);
     }).catch(() => {});
   }, []);
 
@@ -899,7 +901,7 @@ export function AdminContractsPage() {
         return;
       }
 
-      const { subject, body } = buildSignedPdfsEmail({ documents: withLinks });
+      const { subject, body } = buildSignedPdfsEmail({ documents: withLinks, organizationName: orgName ?? undefined });
       setShareSubject(subject);
       setShareBody(body);
     } catch (err) {

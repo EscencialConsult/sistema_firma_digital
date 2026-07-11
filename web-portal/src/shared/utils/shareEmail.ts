@@ -8,15 +8,21 @@ export interface SharedSignedPdfLink {
 export function buildSignedPdfsEmail(input: {
   documents: SharedSignedPdfLink[];
   senderLabel?: string;
+  organizationName?: string;
 }) {
   const count = input.documents.length;
+  const org = input.organizationName;
   const subject = count === 1
     ? `Envio de documento firmado disponible | ${input.documents[0].title}`
     : `Envio de documentos firmados disponibles | ${count} archivos`;
 
   const intro = count === 1
-    ? "Te compartimos el siguiente documento firmado para que puedas descargarlo desde el portal."
-    : "Te compartimos los siguientes documentos firmados para que puedas descargarlos desde el portal.";
+    ? org
+      ? `${org} te compartimos el siguiente documento firmado para que puedas descargarlo desde el portal.`
+      : "Te compartimos el siguiente documento firmado para que puedas descargarlo desde el portal."
+    : org
+      ? `${org} te compartimos los siguientes documentos firmados para que puedas descargarlos desde el portal.`
+      : "Te compartimos los siguientes documentos firmados para que puedas descargarlos desde el portal.";
 
   const line = "------------------------------------------------------------";
   const documentBlocks = input.documents.map((document, index) => [
@@ -45,7 +51,7 @@ export function buildSignedPdfsEmail(input: {
     "- Conserva este correo como referencia del envio.",
     "",
     "Saludos,",
-    input.senderLabel ?? "Equipo de Firma Digital",
+    input.senderLabel ?? org ?? "Equipo de Firma Digital",
   ].join("\n");
 
   return { subject, body };

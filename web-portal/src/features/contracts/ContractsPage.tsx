@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
+import { getOrganization } from "../../shared/services/organizations.service";
 import {
   generateConsolidatedPdfBlob,
   getMySigningRequests,
@@ -65,6 +66,12 @@ export function ContractsPage() {
   const [shareSubject, setShareSubject] = useState("");
   const [shareBody, setShareBody] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
+  const [orgName, setOrgName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.organizationId) return;
+    getOrganization(user.organizationId).then((org) => setOrgName(org?.name ?? null)).catch(() => {});
+  }, [user?.organizationId]);
 
   useEffect(() => {
     if (!user?.email) return;
@@ -128,7 +135,7 @@ export function ContractsPage() {
         return;
       }
 
-      const { subject, body } = buildSignedPdfsEmail({ documents: withLinks });
+      const { subject, body } = buildSignedPdfsEmail({ documents: withLinks, organizationName: orgName ?? undefined });
       setShareSubject(subject);
       setShareBody(body);
     } catch (err) {
