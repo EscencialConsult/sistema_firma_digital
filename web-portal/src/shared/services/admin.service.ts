@@ -92,11 +92,17 @@ function mapRowToUser(row: Record<string, unknown>): AdminUserSummary {
 
 const USER_SELECT = "id, email, full_name, role, verification_status, certificate_status, created_at, document_number, cuil_cuit, address";
 
-export async function getAllUsers(): Promise<AdminUserSummary[]> {
-  const { data, error } = await supabase
+export async function getAllUsers(organizationId?: string): Promise<AdminUserSummary[]> {
+  let query = supabase
     .from("users")
     .select(USER_SELECT)
     .order("created_at", { ascending: false });
+
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapRowToUser(row as Record<string, unknown>));

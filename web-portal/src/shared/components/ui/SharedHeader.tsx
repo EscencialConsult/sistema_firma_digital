@@ -70,8 +70,8 @@ export function getRelativeTime(dateString: string): string {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "Panel de Administración",
-  ORG_ADMIN: "Panel de Organización",
+  ADMIN: "Panel admin",
+  ORG_ADMIN: "Panel admin",
 };
 
 export function SharedHeader({ variant, onMobileOpen, title, showSearch = false }: SharedHeaderProps) {
@@ -108,7 +108,7 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
   };
 
   const defaultTitle = variant === "admin"
-    ? (ROLE_LABEL[user?.role ?? ""] ?? "Panel de Administración")
+    ? (ROLE_LABEL[user?.role ?? ""] ?? "Panel admin")
     : variant === "super-admin"
     ? "Panel Super Administrador"
     : "";
@@ -237,7 +237,7 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
   // Command palette navigation items
   const getSearchItems = (roleVariant: HeaderVariant, isOrgAdmin: boolean): SearchItem[] => {
     const userItems: SearchItem[] = [
-      { title: "Dashboard / Resumen", path: "/dashboard", description: "Ver tus estadísticas y firmas pendientes", category: "Navegación", icon: Gauge },
+      { title: "Portal de firmas", path: "/dashboard", description: "Ver tus documentos y firmas pendientes", category: "Navegacion", icon: Gauge },
       { title: "Mis Contratos", path: "/signatures", description: "Ver, descargar y firmar documentos", category: "Navegación", icon: FileText },
       { title: "Historial de Actividad", path: "/audit", description: "Ver bitácora de auditoría personal", category: "Seguridad", icon: History },
       { title: "Mi Perfil e Identidad", path: "/profile", description: "Gestionar tu firma y datos personales", category: "Configuración", icon: UserCircle },
@@ -263,12 +263,15 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
       if (isOrgAdmin) {
         return [
           ...userItems, 
-          { title: "Panel de Admin", path: "/admin", description: "Ir al panel administrativo de la organización", category: "Acceso Rápido", icon: ShieldCheck }
+          { title: "Panel admin", path: "/admin", description: "Ir al panel administrativo de la organizacion", category: "Acceso rapido", icon: ShieldCheck }
         ];
       }
       return userItems;
     } else if (roleVariant === "admin") {
-      return adminItems;
+      return [
+        ...adminItems,
+        { title: "Portal de firmas", path: "/dashboard", description: "Ir a tus documentos como autoridad firmante", category: "Acceso rapido", icon: FileText },
+      ];
     } else {
       return superAdminItems;
     }
@@ -413,11 +416,11 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
               className={`flex items-center justify-between gap-3 rounded-xl border px-3.5 py-1.5 text-sm transition duration-200 ${
                 isDark
                   ? "border-zinc-800 bg-zinc-900/40 text-zinc-300 focus-within:border-zinc-700 focus-within:bg-zinc-900/80"
-                  : "border-white/25 bg-white/10 focus-within:border-white/40 focus-within:bg-white/20"
+                  : "border-emerald-900/10 bg-white/75 shadow-sm shadow-emerald-900/5 focus-within:border-emerald-700/25 focus-within:bg-white"
               }`}
             >
               <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                <Search size={16} className="text-zinc-400 shrink-0" />
+                <Search size={16} className={`shrink-0 ${isDark ? "text-zinc-400" : "text-zinc-600"}`} />
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -426,7 +429,9 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                   placeholder="Buscar en el portal..."
-                  className={`w-full border-0 bg-transparent py-1 text-sm outline-none ${isDark ? "placeholder-zinc-400 text-zinc-300" : "placeholder-current opacity-80"}`}
+                  className={`w-full border-0 bg-transparent py-1 text-sm outline-none ${
+                    isDark ? "text-zinc-100 placeholder-zinc-500" : "text-zinc-950 placeholder-zinc-600"
+                  }`}
                 />
               </div>
               {searchQuery && (
@@ -442,7 +447,7 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
                 <kbd className={`hidden sm:inline-flex h-5 select-none items-center gap-0.5 rounded border px-1.5 font-mono text-[9px] font-medium transition shrink-0 ${
                   isDark
                     ? "bg-zinc-800 border-zinc-700 text-zinc-500"
-                    : "bg-white/15 border-white/25 opacity-60"
+                    : "bg-white/60 border-white/50 text-zinc-700"
                 }`}>
                   <span>Ctrl</span>K
                 </kbd>
@@ -569,6 +574,15 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
                 <p className="font-semibold">{user?.fullName}</p>
                 <p className="font-mono opacity-60">{user?.email}</p>
               </div>
+              {isOrgAdmin && (
+                <button
+                  className="hidden rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold opacity-80 transition hover:bg-white/10 hover:opacity-100 md:inline-flex"
+                  type="button"
+                  onClick={() => navigate("/admin")}
+                >
+                  Panel admin
+                </button>
+              )}
               <button
                 className="hidden primary-action px-4 py-2 md:inline-flex"
                 type="button"
@@ -577,6 +591,16 @@ export function SharedHeader({ variant, onMobileOpen, title, showSearch = false 
                 Mis contratos
               </button>
             </>
+          )}
+
+          {variant === "admin" && isOrgAdmin && (
+            <button
+              className="hidden rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold opacity-80 transition hover:bg-white/10 hover:opacity-100 md:inline-flex"
+              type="button"
+              onClick={() => navigate("/dashboard")}
+            >
+              Portal de firmas
+            </button>
           )}
 
           {/* Notifications Trigger & Popover */}

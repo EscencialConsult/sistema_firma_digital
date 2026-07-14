@@ -1,6 +1,9 @@
 import { supabase } from "../lib/supabase";
 import type { SigningRequest, SignatureResult } from "../types/signing";
+import type { SignaturePosition } from "../types/contract";
+import { DEFAULT_SIGNATURE_POSITION } from "../types/contract";
 import { generateSignedPdf } from "../utils/generateSignedPdf";
+import { generateSignedPdfImmediate, type SignerInfo } from "../utils/generateSignedPdfImmediate";
 
 // ─── Mapper ───────────────────────────────────────────────────────────────────
 
@@ -12,6 +15,9 @@ function mapRowToSigningRequest(
   const versions = (document.document_versions as Array<Record<string, unknown>>) ?? [];
   const latestV  = [...versions].sort(
     (a, b) => (b.version_number as number) - (a.version_number as number)
+  )[0] ?? {};
+  const originalV = [...versions].sort(
+    (a, b) => (a.version_number as number) - (b.version_number as number)
   )[0] ?? {};
 
   const pdfUrl = latestV.storage_path
@@ -33,7 +39,8 @@ function mapRowToSigningRequest(
     status:             sr.status as SigningRequest["status"],
     acceptedConformity: (sr.accepted_conformity as boolean) ?? false,
     sha256Hash:         (latestV.sha256_hash as string) ?? "",
-    fileName:           (latestV.file_name as string) ?? "",
+    versionNumber:      (latestV.version_number as number) ?? 1,
+    fileName:           (originalV.file_name as string) ?? (latestV.file_name as string) ?? "",
     pdfUrl,
     finalPdfUrl:        (document.final_pdf_url as string) ?? null,
     sentAt:             sr.sent_at as string,
@@ -255,15 +262,15 @@ export async function generateConsolidatedPdfBlob(documentId: string): Promise<B
       ? Object.fromEntries(Object.entries(rawFields).map(([k, v]) => [k, String(v ?? "")]))
       : null;
     const versions = (doc.document_versions as Array<Record<string, unknown>>) ?? [];
-    const latestVersion = [...versions].sort(
-      (a, b) => ((b.version_number as number) ?? 0) - ((a.version_number as number) ?? 0)
+    const originalVersion = [...versions].sort(
+      (a, b) => ((a.version_number as number) ?? 0) - ((b.version_number as number) ?? 0)
     )[0];
     let originalPdf: Blob | null = null;
 
-    if (latestVersion?.storage_path) {
+    if (originalVersion?.storage_path) {
       const { data: originalBlob, error: originalError } = await supabase.storage
         .from("contract-pdfs")
-        .download(latestVersion.storage_path as string);
+        .download(originalVersion.storage_path as string);
 
       if (originalError) {
         console.warn("[pdf] No se pudo descargar el PDF original, usando fallback de template:", originalError.message);
@@ -320,6 +327,101 @@ export async function tryGenerateConsolidatedPdf(documentId: string): Promise<st
     return urlData.publicUrl;
   } catch (err) {
     console.warn("[pdf] Error subiendo PDF consolidado:", err);
+    return null;
+  }
+}
+
+/**
+ * Immediately embeds all existing signatures into the current PDF version.
+ * Called after each user signs, so the PDF always reflects all signatures so far.
+ * Uploads the result as a new document version.
+ */
+export async function generatePerSignerSignedPdf(documentId: string): Promise<string | null> {
+  try {
+    // 1. Get document with versions and signature position
+    const { data: doc } = await supabase
+      .from("documents")
+      .select("title, signature_position, document_versions:document_versions!document_versions_document_id_fkey(*)")
+      .eq("id", documentId)
+      .single();
+
+    if (!doc) return null;
+
+    const versions = (doc.document_versions as Array<Record<string, unknown>>) ?? [];
+    const latestV = [...versions].sort(
+      (a, b) => ((b.version_number as number) ?? 0) - ((a.version_number as number) ?? 0)
+    )[0];
+
+    const originalV = [...versions].sort(
+      (a, b) => ((a.version_number as number) ?? 0) - ((b.version_number as number) ?? 0)
+    )[0];
+
+    if (!originalV?.storage_path) return null;
+
+    // 2. Download original PDF (clean version without signatures)
+    const { data: pdfBlob, error: dlErr } = await supabase.storage
+      .from("contract-pdfs")
+      .download(originalV.storage_path as string);
+
+    if (dlErr || !pdfBlob) return null;
+
+    // 3. Get all SIGNED requests for this document
+    const { data: srs } = await supabase
+      .from("signature_requests")
+      .select("id, signer_name, signer_email")
+      .eq("document_id", documentId)
+      .eq("status", "SIGNED");
+
+    if (!srs?.length) return null;
+
+    // 4. Get signature images for those requests
+    const srIds = srs.map((sr) => sr.id as string);
+    const { data: sigs } = await supabase
+      .from("signatures")
+      .select("signature_request_id, signature_data, signed_at")
+      .in("signature_request_id", srIds);
+
+    const signers: SignerInfo[] = srs.map((sr) => {
+      const sig = sigs?.find((s) => s.signature_request_id === sr.id);
+      return {
+        name: sr.signer_name as string,
+        email: sr.signer_email as string,
+        signedAt: (sig?.signed_at as string) ?? new Date().toISOString(),
+        signatureData: (sig?.signature_data as string) ?? null,
+      };
+    });
+
+    // 5. Generate PDF with embedded signatures
+    const pos = (doc.signature_position as SignaturePosition) ?? DEFAULT_SIGNATURE_POSITION;
+    const pdfWithSigs = await generateSignedPdfImmediate(pdfBlob, signers, pos);
+
+    // 6. Upload as new version
+    const versionNum = (latestV.version_number as number) + 1;
+    const safeName = (latestV.file_name as string).replace(/[^\w.\- ]+/g, "_");
+    const storagePath = `${documentId}/signed_v${versionNum}_${safeName}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from("contract-pdfs")
+      .upload(storagePath, pdfWithSigs, { contentType: "application/pdf", upsert: true });
+
+    if (uploadErr) return null;
+
+    // 7. Create new document_versions record
+    const hashBuffer = await crypto.subtle.digest("SHA-256", await pdfWithSigs.arrayBuffer());
+    const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+
+    await supabase.from("document_versions").insert({
+      document_id:    documentId,
+      version_number: versionNum,
+      file_name:      `firmado_v${versionNum}.pdf`,
+      storage_path:   storagePath,
+      sha256_hash:    hashHex,
+      file_size:      pdfWithSigs.size,
+    });
+
+    return storagePath;
+  } catch (err) {
+    console.warn("[pdf] Error generando PDF con firmas inmediatas:", err);
     return null;
   }
 }

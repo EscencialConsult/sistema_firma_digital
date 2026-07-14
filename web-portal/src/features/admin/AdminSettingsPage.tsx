@@ -1,19 +1,23 @@
 import {
+  Building2,
   CheckCircle2,
   Copy,
   Loader2,
+  MapPin,
   Palette,
   PenLine,
+  Phone,
   PlusCircle,
   Save,
   ShieldCheck,
   Sparkles,
   Trash2,
+  Upload,
   UserCheck,
   X,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
-import { getMyOrganization, updateOrganization } from "../../shared/services/organizations.service";
+import { type FormEvent, useEffect, useRef, useState } from "react";
+import { getMyOrganization, updateOrganization, uploadOrgLogo } from "../../shared/services/organizations.service";
 import { applyTheme, DEFAULT_THEME, getContrastText } from "../../shared/config/theme";
 import {
   getOrgAuthorities,
@@ -224,6 +228,20 @@ export function AdminSettingsPage() {
   const [savingColors, setSavingColors]       = useState(false);
   const [savedColors,  setSavedColors]        = useState(false);
 
+  // Datos de empresa
+  const [phone,      setPhone]      = useState("");
+  const [address,    setAddress]    = useState("");
+  const [city,       setCity]       = useState("");
+  const [province,   setProvince]   = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [taxId,      setTaxId]      = useState("");
+  const [website,    setWebsite]    = useState("");
+
+  // Logo upload
+  const darkLogoRef = useRef<HTMLInputElement>(null);
+  const lightLogoRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState<"dark" | "light" | null>(null);
+
   useEffect(() => {
     getMyOrganization()
       .then((o) => {
@@ -234,6 +252,13 @@ export function AdminSettingsPage() {
           if (o.brandSecondary)  setColorSecondary(o.brandSecondary);
           if (o.brandAccent)     setColorAccent(o.brandAccent);
           if (o.brandBackground) setColorBackground(o.brandBackground);
+          setPhone(o.phone ?? "");
+          setAddress(o.address ?? "");
+          setCity(o.city ?? "");
+          setProvince(o.province ?? "");
+          setPostalCode(o.postalCode ?? "");
+          setTaxId(o.taxId ?? "");
+          setWebsite(o.website ?? "");
           getOrgAuthorities(o.id)
             .then(setAuthorities)
             .catch(() => setAuthorities([]))
@@ -253,8 +278,27 @@ export function AdminSettingsPage() {
     setSaved(false);
     setError(null);
     try {
-      await updateOrganization(org.id, { contactEmail: contactEmail.trim() || undefined });
-      setOrg({ ...org, contactEmail: contactEmail.trim() || undefined });
+      await updateOrganization(org.id, {
+        contactEmail: contactEmail.trim() || undefined,
+        phone:      phone.trim()      || null,
+        address:    address.trim()    || null,
+        city:       city.trim()       || null,
+        province:   province.trim()   || null,
+        postalCode: postalCode.trim() || null,
+        taxId:      taxId.trim()      || null,
+        website:    website.trim()    || null,
+      });
+      setOrg({
+        ...org,
+        contactEmail: contactEmail.trim() || undefined,
+        phone:      phone.trim()      || undefined,
+        address:    address.trim()    || undefined,
+        city:       city.trim()       || undefined,
+        province:   province.trim()   || undefined,
+        postalCode: postalCode.trim() || undefined,
+        taxId:      taxId.trim()      || undefined,
+        website:    website.trim()    || undefined,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -304,6 +348,23 @@ export function AdminSettingsPage() {
     }
   }
 
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>, variant: "dark" | "light") {
+    const file = e.target.files?.[0];
+    if (!file || !org) return;
+    setUploadingLogo(variant);
+    try {
+      const url = await uploadOrgLogo(org.id, file, variant);
+      const updates = variant === "dark" ? { logoDarkUrl: url } : { logoLightUrl: url };
+      await updateOrganization(org.id, updates);
+      setOrg({ ...org, ...updates });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al subir logo");
+    } finally {
+      setUploadingLogo(null);
+      e.target.value = "";
+    }
+  }
+
   if (loading) {
     return (
       <div className="grid min-h-[30vh] place-items-center">
@@ -342,9 +403,12 @@ export function AdminSettingsPage() {
           <p className="mt-1 text-sm text-zinc-500">Personalizá tu organización en la plataforma.</p>
         </div>
 
-        {/* Info de solo lectura */}
+        {/* Info de solo lectura + Logo */}
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Tu organización</p>
+          <div className="flex items-center gap-2">
+            <Building2 size={15} className="text-zinc-400" />
+            <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Tu organización</p>
+          </div>
           <div className="flex items-center gap-4">
             <OrgLogo logoDarkUrl={org.logoDarkUrl} logoLightUrl={org.logoLightUrl} variant="light" size={52} />
             <div>
@@ -353,6 +417,57 @@ export function AdminSettingsPage() {
               <span className="mt-1 inline-block rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase text-zinc-500">
                 {org.maxUsers} usuarios máx.
               </span>
+            </div>
+          </div>
+
+          {/* Logo upload */}
+          <div className="border-t border-zinc-100 pt-4 space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-400">Logos</p>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Dark logo */}
+              <div>
+                <p className="text-xs font-semibold text-zinc-600 mb-1.5">Logo fondo oscuro</p>
+                <input ref={darkLogoRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoUpload(e, "dark")} />
+                <button
+                  type="button"
+                  disabled={uploadingLogo === "dark"}
+                  onClick={() => darkLogoRef.current?.click()}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-xs font-semibold text-zinc-600 hover:border-zinc-400 hover:bg-zinc-100 transition disabled:opacity-50"
+                >
+                  {uploadingLogo === "dark" ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : org.logoDarkUrl ? (
+                    <img src={org.logoDarkUrl} alt="Logo oscuro" className="h-8 w-auto object-contain" />
+                  ) : (
+                    <>
+                      <Upload size={14} />
+                      Subir logo
+                    </>
+                  )}
+                </button>
+              </div>
+              {/* Light logo */}
+              <div>
+                <p className="text-xs font-semibold text-zinc-600 mb-1.5">Logo fondo claro</p>
+                <input ref={lightLogoRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoUpload(e, "light")} />
+                <button
+                  type="button"
+                  disabled={uploadingLogo === "light"}
+                  onClick={() => lightLogoRef.current?.click()}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-xs font-semibold text-zinc-600 hover:border-zinc-400 hover:bg-zinc-100 transition disabled:opacity-50"
+                >
+                  {uploadingLogo === "light" ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : org.logoLightUrl ? (
+                    <img src={org.logoLightUrl} alt="Logo claro" className="h-8 w-auto object-contain" />
+                  ) : (
+                    <>
+                      <Upload size={14} />
+                      Subir logo
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -369,17 +484,106 @@ export function AdminSettingsPage() {
         {/* Email de contacto */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Datos de contacto</p>
-            <div>
-              <label htmlFor="contact-email" className="mb-1.5 block text-xs font-semibold text-zinc-500">Email de contacto</label>
-              <input
-                id="contact-email"
-                type="email"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                placeholder="admin@empresa.com"
-                className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-              />
+            <div className="flex items-center gap-2">
+              <Building2 size={15} className="text-zinc-400" />
+              <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Datos de la Empresa</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label htmlFor="org-name" className="mb-1.5 block text-xs font-semibold text-zinc-500">Nombre legal *</label>
+                <input
+                  id="org-name"
+                  value={org.name}
+                  disabled
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-500 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label htmlFor="tax-id" className="mb-1.5 block text-xs font-semibold text-zinc-500">CUIT / CUIL</label>
+                <input
+                  id="tax-id"
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value)}
+                  placeholder="30-12345678-9"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="contact-email" className="mb-1.5 block text-xs font-semibold text-zinc-500">Email de contacto</label>
+                <input
+                  id="contact-email"
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="admin@empresa.com"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="phone" className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-zinc-500">
+                  <Phone size={11} /> Teléfono
+                </label>
+                <input
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+54 11 1234-5678"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="website" className="mb-1.5 block text-xs font-semibold text-zinc-500">Sitio web</label>
+                <input
+                  id="website"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="https://empresa.com"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="address" className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-zinc-500">
+                  <MapPin size={11} /> Dirección
+                </label>
+                <input
+                  id="address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Av. Corrientes 1234, Piso 5°"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="city" className="mb-1.5 block text-xs font-semibold text-zinc-500">Ciudad</label>
+                <input
+                  id="city"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Ciudad Autónoma de Buenos Aires"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="province" className="mb-1.5 block text-xs font-semibold text-zinc-500">Provincia</label>
+                <input
+                  id="province"
+                  value={province}
+                  onChange={(e) => setProvince(e.target.value)}
+                  placeholder="Buenos Aires"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="postal-code" className="mb-1.5 block text-xs font-semibold text-zinc-500">Código postal</label>
+                <input
+                  id="postal-code"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                  placeholder="C1043AAH"
+                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
           <button
@@ -388,7 +592,7 @@ export function AdminSettingsPage() {
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white border border-zinc-200 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 transition disabled:opacity-50"
           >
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            {saving ? "Guardando..." : "Guardar cambios"}
+            {saving ? "Guardando..." : "Guardar datos de empresa"}
           </button>
         </form>
 

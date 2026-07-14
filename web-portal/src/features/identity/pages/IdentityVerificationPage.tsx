@@ -31,7 +31,7 @@ export function IdentityVerificationPage() {
         <PageHeader
           eyebrow="Validacion de identidad"
           title="Verificacion previa a la firma"
-          description="Monitorea el estado de tu validacion para habilitar la firma digital."
+          description="Monitorea el estado de tu validacion para habilitar la firma electrónica."
           action={<IdentityStatusBadge status={identity.status} />}
         />
         <div className="space-y-6">

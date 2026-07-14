@@ -3,13 +3,14 @@ import { Outlet, useLocation, NavLink } from "react-router-dom";
 import { SharedSidebar } from "../../shared/components/ui/SharedSidebar";
 import { SharedHeader } from "../../shared/components/ui/SharedHeader";
 import { OnboardingTour } from "../../shared/components/onboarding/OnboardingTour";
-import { ShieldCheck, IdCard, ClipboardList, Users } from "lucide-react";
+import { ShieldCheck, IdCard, ClipboardList, Users, FileText } from "lucide-react";
 
 const ADMIN_MOBILE_NAV = [
   { path: "/admin",           label: "Panel",       icon: ShieldCheck,   end: true },
   { path: "/admin/kyc",       label: "KYC",         icon: IdCard },
   { path: "/admin/contracts", label: "Contratos",   icon: ClipboardList },
   { path: "/admin/users",     label: "Usuarios",     icon: Users },
+  { path: "/dashboard",       label: "Firmas",       icon: FileText },
 ];
 
 export function AdminLayout() {

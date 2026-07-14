@@ -153,7 +153,7 @@ export const CONTRACT_TEMPLATES: ContractTemplateDef[] = [
     description: "Desarrollo de plataforma o sistema con especificación de entregables y propiedad intelectual.",
     accent: "purple",
     fields: {
-      plataforma_descripcion:  { label: "Descripción del proyecto",          type: "textarea", placeholder: "Plataforma web de gestión de firma digital con panel administrador, módulo KYC, flujo de firma electrónica y auditoría...", span: "full" },
+      plataforma_descripcion:  { label: "Descripción del proyecto",          type: "textarea", placeholder: "Plataforma web de gestión de firma electrónica con panel administrador, módulo KYC, flujo de firma electrónica y auditoría...", span: "full" },
       entregables:             { label: "Entregables comprometidos",         type: "textarea", placeholder: "1. Módulo de autenticación y verificación KYC\n2. Panel de administración\n3. Flujo de firma electrónica con OTP\n4. Documentación técnica y manual de usuario", span: "full" },
       precio_total:            { label: "Precio total del proyecto ($)",     type: "number",   placeholder: "800000", prefix: "$" },
       condiciones_pago:        { label: "Condiciones de pago",               type: "text",     placeholder: "50% al inicio · 25% en hito intermedio · 25% a la entrega", span: "full" },

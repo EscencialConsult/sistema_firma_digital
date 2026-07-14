@@ -7,6 +7,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+import { useAuth } from "../../app/providers/AuthProvider";
 import { createAdminUser, getAllUsers, updateUserRole } from "../../shared/services/admin.service";
 import type { AdminUserSummary, UserRole } from "../../shared/types/user";
 
@@ -113,17 +114,18 @@ function InviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
 }
 
 export function AdminTeamPage() {
+  const { user } = useAuth();
   const [users, setUsers]         = useState<AdminUserSummary[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    getAllUsers()
+    getAllUsers(user?.organizationId)
       .then(setUsers)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user?.organizationId]);
 
   async function handleRoleChange(userId: string, newRole: UserRole) {
     await updateUserRole(userId, newRole).catch(() => null);

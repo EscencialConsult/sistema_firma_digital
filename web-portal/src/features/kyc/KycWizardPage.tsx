@@ -635,6 +635,25 @@ function ProviderVerificationStep({
               Hacé clic en <span className="font-bold">Recargar</span> para generar una nueva sesión de verificación.
             </p>
           </div>
+          <div className="pt-2 border-t border-zinc-200">
+            <p className="text-xs text-zinc-400 mb-2">Modo desarrollo: simulá la verificación sin DIDIT</p>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                if (!user?.id) return;
+                const mockVerif = await kycService.mockCompleteKyc(user.id);
+                if (mockVerif) {
+                  await syncSessionVerificationProfile(mockVerif, "VERIFIED");
+                  updateUser({ verificationStatus: "VERIFIED" });
+                  setProviderCompleted(true);
+                  setVerifiedData(mockVerif);
+                }
+              }}
+              type="button"
+            >
+              <CheckCircle size={15} /> Simular verificación exitosa
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -861,7 +880,21 @@ export function KycWizardPage() {
         return;
       }
 
-      await kycService.startProviderVerification();
+      try {
+        await kycService.startProviderVerification();
+      } catch {
+        // Si DIDIT no está configurado (dev), usar mock KYC
+        const mockVerification = await kycService.mockCompleteKyc(user.id);
+        if (mockVerification) {
+          await syncSessionVerificationProfile(mockVerification, "VERIFIED");
+          updateUser({ verificationStatus: "VERIFIED" });
+          setVerification(mockVerification);
+          setStep(3);
+          setLoading(false);
+          return;
+        }
+        throw new Error("No se pudo iniciar la verificacion. Verificá la configuración de DIDIT.");
+      }
       const updatedVerification = await kycService.getMyVerification(user.id);
       if (!updatedVerification) {
         throw new Error("No se pudo iniciar la verificacion.");

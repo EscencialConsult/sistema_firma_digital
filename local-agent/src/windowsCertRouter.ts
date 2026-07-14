@@ -79,7 +79,7 @@ export async function signWithWindowsCertHandler(req: Request, res: Response) {
       borderColor: rgb(0.05, 0.28, 0.62),
       borderWidth: 1.5,
     });
-    targetPage.drawText("FIRMA DIGITAL WINDOWS", {
+    targetPage.drawText("FIRMA ELECTRÓNICA WINDOWS", {
       x: metaX + 8, y: metaY + metaH - 13, size: 7,
       font: helveticaBold, color: rgb(0.05, 0.28, 0.62),
     });

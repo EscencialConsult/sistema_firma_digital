@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
+  Download,
   Eye,
   FileSignature,
   PenLine,
@@ -10,7 +11,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Badge } from "../../shared/components/ui/Badge";
 import { Button } from "../../shared/components/ui/Button";
@@ -24,6 +25,7 @@ import {
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
 import { getMyOrganization } from "../../shared/services/organizations.service";
 import type { SigningRequest } from "../../shared/types/signing";
+import { downloadBlob, signedPdfFileName } from "../../shared/utils/downloadFileName";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("es-AR", {
@@ -95,9 +97,10 @@ export function SignaturesPage() {
 
   const pending = requests.filter((r) => r.status !== "SIGNED" && r.status !== "REJECTED" && !isExpired(r));
   const history = requests.filter((r) => r.status === "SIGNED" || r.status === "REJECTED" || isExpired(r));
+  const [activeTab, setActiveTab] = useState<"contracts" | "history">("contracts");
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Portal de firmas"
         title="Mis contratos"
@@ -150,30 +153,66 @@ export function SignaturesPage() {
 
       {error && <EmptyState icon={AlertCircle} title="Error al cargar" description={error} />}
 
-      {/* ─── Pendientes de firmar ─────────────────────────────────────────────── */}
+      {/* ─── Pestañas ─────────────────────────────────────────────────────────── */}
       {!loading && !error && (
-        <>
-          {pending.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
-                Pendientes de firma
-              </p>
-              {pending.map((r) => (
-                <ContractCard key={r.id} r={r} navigate={navigate} />
-              ))}
-            </div>
-          )}
+        <div className="space-y-4">
+          {/* Tab bar */}
+          <div className="flex gap-1 rounded-xl bg-zinc-100 p-1">
+            {([
+              { key: "contracts", label: "Mis contratos", count: pending.length },
+              { key: "history",   label: "Historial",    count: history.length },
+            ] as const).map(({ key, label, count }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
+                  activeTab === key
+                    ? "bg-white text-zinc-900 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-700"
+                }`}
+              >
+                {label}
+                {count > 0 && (
+                  <span className={`ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
+                    activeTab === key ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-600"
+                  }`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
 
-          {/* ─── Historial ──────────────────────────────────────────────────── */}
-          {history.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
-                Historial
-              </p>
-              {history.map((r) => (
-                <ContractCard key={r.id} r={r} navigate={navigate} />
-              ))}
-            </div>
+          {/* Contenido de pestañas */}
+          {activeTab === "contracts" ? (
+            pending.length > 0 ? (
+              <div className="space-y-3">
+                {pending.map((r) => (
+                  <ContractCard key={r.id} r={r} navigate={navigate} />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={FileSignature}
+                title="Sin contratos pendientes"
+                description="No tenés contratos que requieran tu firma en este momento."
+              />
+            )
+          ) : (
+            history.length > 0 ? (
+              <div className="space-y-3">
+                {history.map((r) => (
+                  <ContractCard key={r.id} r={r} navigate={navigate} />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={FileSignature}
+                title="Sin historial"
+                description="Tus contratos firmados, rechazados o expirados van a aparecer acá."
+              />
+            )
           )}
 
           {requests.length === 0 && !myAuthority && (
@@ -183,7 +222,7 @@ export function SignaturesPage() {
               description="Cuando un documento requiera tu firma, va a aparecer acá."
             />
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -247,9 +286,33 @@ function ContractCard({
               <PenLine size={13} /> Firmar ahora
             </Button>
           ) : r.status === "SIGNED" ? (
-            <Button onClick={openDocument} disabled={refreshingPdf} className="h-9 px-4 text-xs">
-              <Eye size={13} /> {refreshingPdf ? "Preparando..." : "Ver PDF completo"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button onClick={openDocument} disabled={refreshingPdf} className="h-9 px-4 text-xs">
+                <Eye size={13} /> {refreshingPdf ? "Preparando..." : "Ver PDF"}
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-9 px-4 text-xs"
+                disabled={refreshingPdf}
+                onClick={async () => {
+                  const blob = await generateConsolidatedPdfBlob(r.documentId);
+                  if (blob) {
+                    downloadBlob(blob, signedPdfFileName({
+                      title: r.documentTitle,
+                      fileName: r.fileName,
+                      sequence: r.versionNumber,
+                    }));
+                  }
+                }}
+              >
+                <Download size={13} /> Descargar
+              </Button>
+              <Link to={`/contracts/${r.documentId}`}>
+                <Button variant="secondary" className="h-9 px-4 text-xs">
+                  Detalle
+                </Button>
+              </Link>
+            </div>
           ) : (
             <Button variant="secondary" onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">
               Ver detalles

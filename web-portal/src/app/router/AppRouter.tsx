@@ -55,6 +55,9 @@ const ProfilePage = lazy(() =>
 const AuditPage = lazy(() =>
   import("../../features/audit/AuditPage").then((m) => ({ default: m.AuditPage }))
 );
+const SignatureAuditPage = lazy(() =>
+  import("../../features/audit/SignatureAuditPage").then((m) => ({ default: m.SignatureAuditPage }))
+);
 const IdentityPage = lazy(() =>
   import("../../features/identity/IdentityPage").then((m) => ({ default: m.IdentityPage }))
 );
@@ -68,6 +71,12 @@ const CertificatesPage = lazy(() =>
 const PublicSigningPage = lazy(() =>
   import("../../features/signatures/PublicSigningPage").then((m) => ({
     default: m.PublicSigningPage,
+  }))
+);
+
+const PublicSignedPdfDownloadPage = lazy(() =>
+  import("../../features/download/PublicSignedPdfDownloadPage").then((m) => ({
+    default: m.PublicSignedPdfDownloadPage,
   }))
 );
 
@@ -180,6 +189,7 @@ export function AppRouter() {
 
         {/* Firma pública (sin cuenta) */}
         <Route path="/sign/:id"    element={<PublicSigningPage />} />
+        <Route path="/d/:documentId" element={<PublicSignedPdfDownloadPage />} />
 
         {/* Aceptar invitación de autoridad (sin cuenta) */}
         <Route path="/authority/accept/:token" element={<AuthorityAcceptPage />} />
@@ -218,6 +228,7 @@ export function AppRouter() {
               <Route path="/identity"         element={<IdentityPage />} />
               <Route path="/certificates"     element={<CertificatesPage />} />
               <Route path="/audit"            element={<AuditPage />} />
+              <Route path="/audit/signature/:signatureId" element={<SignatureAuditPage />} />
             </Route>
 
             {/* ── Solo admins (ADMIN / ORG_ADMIN) ── */}

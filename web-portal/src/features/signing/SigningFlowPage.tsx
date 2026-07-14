@@ -21,6 +21,7 @@ import { Stepper } from "../../shared/components/ui/Stepper";
 import {
   acceptConformity,
   executeSignature,
+  generatePerSignerSignedPdf,
   getSigningRequest,
   tryGenerateConsolidatedPdf,
   verifyFaceLocal,
@@ -57,7 +58,7 @@ function ConformityStep({
       if (!wrapper) return;
 
       const cached = loadOrgCache();
-      const orgName = cached?.name ?? 'Firma Digital';
+      const orgName = cached?.name ?? 'Firma Electrónica';
       const logoUrl = cached?.logoLightUrl ?? cached?.logoDarkUrl ?? null;
 
       // Contenedor off-screen — position:fixed;top:0 para coordenadas simples sin corrección de scroll
@@ -491,13 +492,10 @@ function SignaturePadStep({ onConfirm }: { onConfirm: (dataUrl: string) => void 
   const lastPos      = useRef<{ x: number; y: number } | null>(null);
   const [hasStrokes, setHasStrokes] = useState(false);
 
-  function getPos(e: { clientX: number; clientY: number }, canvas: HTMLCanvasElement) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width  / rect.width;
-    const scaleY = canvas.height / rect.height;
+  function getPos(e: PointerEvent) {
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top)  * scaleY,
+      x: e.offsetX,
+      y: e.offsetY,
     };
   }
 
@@ -524,47 +522,45 @@ function SignaturePadStep({ onConfirm }: { onConfirm: (dataUrl: string) => void 
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Size canvas to display size
+    // Match the drawing surface exactly to the visible canvas.
+    // Using devicePixelRatio here can offset strokes when the browser/layout scales the element.
     const rect = canvas.getBoundingClientRect();
-    canvas.width  = rect.width  * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
+    canvas.width  = Math.round(rect.width);
+    canvas.height = Math.round(rect.height);
     const ctx = canvas.getContext("2d");
-    if (ctx) ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    if (ctx) ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Mouse
-    const onMouseDown = (e: MouseEvent) => { isDrawing.current = true; lastPos.current = getPos(e, canvas); };
-    const onMouseMove = (e: MouseEvent) => { const p = getPos(e, canvas); draw(p.x, p.y); };
-    const onMouseUp   = () => { isDrawing.current = false; lastPos.current = null; };
-
-    // Touch
-    const onTouchStart = (e: TouchEvent) => {
+    const onPointerDown = (e: PointerEvent) => {
       e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
       isDrawing.current = true;
-      lastPos.current = getPos(e.touches[0], canvas);
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-      const p = getPos(e.touches[0], canvas);
+      const p = getPos(e);
+      lastPos.current = p;
       draw(p.x, p.y);
     };
-    const onTouchEnd = () => { isDrawing.current = false; lastPos.current = null; };
+    const onPointerMove = (e: PointerEvent) => {
+      e.preventDefault();
+      const p = getPos(e);
+      draw(p.x, p.y);
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      if (canvas.hasPointerCapture(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId);
+      }
+      isDrawing.current = false;
+      lastPos.current = null;
+    };
 
-    canvas.addEventListener("mousedown",  onMouseDown);
-    canvas.addEventListener("mousemove",  onMouseMove);
-    canvas.addEventListener("mouseup",    onMouseUp);
-    canvas.addEventListener("mouseleave", onMouseUp);
-    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
-    canvas.addEventListener("touchmove",  onTouchMove,  { passive: false });
-    canvas.addEventListener("touchend",   onTouchEnd);
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerUp);
 
     return () => {
-      canvas.removeEventListener("mousedown",  onMouseDown);
-      canvas.removeEventListener("mousemove",  onMouseMove);
-      canvas.removeEventListener("mouseup",    onMouseUp);
-      canvas.removeEventListener("mouseleave", onMouseUp);
-      canvas.removeEventListener("touchstart", onTouchStart);
-      canvas.removeEventListener("touchmove",  onTouchMove);
-      canvas.removeEventListener("touchend",   onTouchEnd);
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
     };
   }, []);
 
@@ -768,9 +764,11 @@ export function SigningFlowPage() {
         signedAt:      new Date().toISOString(),
         signatureData: signatureDataUrl,
       });
+      // Generar PDF con firma visual inmediata (no bloquea el flujo)
+      generatePerSignerSignedPdf(request.documentId).catch(() => {});
       // Intentar generar PDF consolidado si el documento quedó COMPLETED
       // (no bloquea el flujo si falla)
-      tryGenerateConsolidatedPdf(request.documentId);
+      tryGenerateConsolidatedPdf(request.documentId).catch(() => {});
       setResult(sig);
       setStep(3);
     } catch (err) {
@@ -860,7 +858,7 @@ export function SigningFlowPage() {
         <div className="flex items-center justify-between">
           {printLogoUrl
             ? <img src={printLogoUrl} alt="Logo" style={{ height: 40, objectFit: "contain" }} />
-            : <span className="font-bold text-lg text-zinc-900">{orgCache?.name ?? "Firma Digital"}</span>
+            : <span className="font-bold text-lg text-zinc-900">{orgCache?.name ?? "Firma Electrónica"}</span>
           }
           <div className="text-right">
             <p className="text-sm font-semibold text-zinc-900">{request.documentTitle}</p>

@@ -77,7 +77,7 @@ serve(async (req) => {
         <body style="font-family:Arial,sans-serif;background:#f4f4f5;margin:0;padding:32px 0;">
           <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e4e4e7;">
             <div style="background:#18181b;padding:28px 32px;">
-              <p style="color:#fff;font-size:18px;font-weight:700;margin:0;">Firma Digital · Escencial</p>
+              <p style="color:#fff;font-size:18px;font-weight:700;margin:0;">Firma Electrónica · Escencial</p>
             </div>
             <div style="padding:32px;">
               <h2 style="font-size:20px;font-weight:700;color:#18181b;margin:0 0 12px;">
@@ -97,7 +97,7 @@ serve(async (req) => {
               </p>
               <hr style="border:none;border-top:1px solid #f4f4f5;margin:24px 0;" />
               <p style="color:#a1a1aa;font-size:11px;margin:0;">
-                Escencial Consultora S.A.S. · Firma Digital bajo Ley N° 25.506
+                Escencial Consultora S.A.S. · Firma Electrónica bajo Ley N° 25.506
               </p>
             </div>
           </div>
@@ -113,7 +113,7 @@ serve(async (req) => {
         <body style="font-family:Arial,sans-serif;background:#f4f4f5;margin:0;padding:32px 0;">
           <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e4e4e7;">
             <div style="background:#18181b;padding:28px 32px;">
-              <p style="color:#fff;font-size:18px;font-weight:700;margin:0;">Firma Digital · Escencial</p>
+              <p style="color:#fff;font-size:18px;font-weight:700;margin:0;">Firma Electrónica · Escencial</p>
             </div>
             <div style="padding:32px;">
               <h2 style="font-size:20px;font-weight:700;color:#18181b;margin:0 0 12px;">
@@ -123,7 +123,7 @@ serve(async (req) => {
                 Hola <strong>${nombre}</strong>,
               </p>
               <p style="color:#71717a;font-size:14px;line-height:1.6;margin:0 0 24px;">
-                <strong>Escencial Consultora</strong> requiere tu firma digital en el siguiente documento:
+                <strong>Escencial Consultora</strong> requiere tu firma electrónica en el siguiente documento:
               </p>
               <div style="background:#f4f4f5;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
                 <p style="font-size:15px;font-weight:700;color:#18181b;margin:0;">${documentTitle}</p>
@@ -137,7 +137,7 @@ serve(async (req) => {
               </p>
               <hr style="border:none;border-top:1px solid #f4f4f5;margin:24px 0;" />
               <p style="color:#a1a1aa;font-size:11px;margin:0;">
-                Escencial Consultora S.A.S. · Firma Digital bajo Ley N° 25.506
+                Escencial Consultora S.A.S. · Firma Electrónica bajo Ley N° 25.506
               </p>
             </div>
           </div>

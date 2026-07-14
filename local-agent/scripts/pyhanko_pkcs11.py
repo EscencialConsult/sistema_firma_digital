@@ -69,8 +69,8 @@ def sign(args):
         writer = IncrementalPdfFileWriter(inf)
         meta = signers.PdfSignatureMetadata(
             field_name="SignaturePKCS11",
-            reason="Firma Digital PKCS#11",
-            location="Firma Digital Portal",
+            reason="Firma Electrónica PKCS#11",
+            location="Firma Electrónica Portal",
             contact_info=args.contact_info,
             name=args.signer_name,
         )

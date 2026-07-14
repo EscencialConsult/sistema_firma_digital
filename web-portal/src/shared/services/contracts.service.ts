@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase";
-import type { Contract, ContractDetail, ContractSigner } from "../types/contract";
+import type { Contract, ContractDetail, ContractSigner, SignaturePosition } from "../types/contract";
+import { DEFAULT_SIGNATURE_POSITION } from "../types/contract";
 
 // ─── Convenio types ───────────────────────────────────────────────────────────
 
@@ -26,11 +27,21 @@ function latestVersion(versions: Array<Record<string, unknown>>) {
   )[0] ?? null;
 }
 
+function originalVersion(versions: Array<Record<string, unknown>>) {
+  return [...versions].sort(
+    (a, b) => (a.version_number as number) - (b.version_number as number)
+  )[0] ?? null;
+}
+
 function mapDocToContract(doc: Record<string, unknown>): Contract {
   const versions = (doc.document_versions as Array<Record<string, unknown>>) ?? [];
   const v = latestVersion(versions);
+  const originalV = originalVersion(versions);
   const owner = (doc.owner as Record<string, unknown>) ?? {};
   const rawFields = doc.template_fields as Record<string, unknown> | null;
+  const pdfUrl = v?.storage_path
+    ? supabase.storage.from("contract-pdfs").getPublicUrl(v.storage_path as string).data.publicUrl
+    : null;
 
   return {
     id: doc.id as string,
@@ -40,16 +51,19 @@ function mapDocToContract(doc: Record<string, unknown>): Contract {
     ownerEmail: (owner.email as string) ?? "",
     sha256Hash: (v?.sha256_hash as string) ?? "",
     versionNumber: (v?.version_number as number) ?? 1,
-    fileName: (v?.file_name as string) ?? "",
+    fileName: (originalV?.file_name as string) ?? (v?.file_name as string) ?? "",
     totalSigners: (doc.total_signers as number) ?? 0,
     completedSigners: (doc.completed_signers as number) ?? 0,
-    finalPdfUrl: (doc.final_pdf_url as string) ?? null,
+    finalPdfUrl: pdfUrl ?? (doc.final_pdf_url as string) ?? null,
     createdAt: doc.created_at as string,
     updatedAt: doc.updated_at as string,
     templateId: (doc.template_id as string) ?? null,
     templateFields: rawFields
       ? Object.fromEntries(Object.entries(rawFields).map(([k, v]) => [k, String(v ?? "")]))
       : null,
+    contractTypeId: (doc.contract_type_id as string) ?? null,
+    paymentTemplateId: (doc.payment_template_id as string) ?? null,
+    signaturePosition: (doc.signature_position as SignaturePosition) ?? DEFAULT_SIGNATURE_POSITION,
   };
 }
 
@@ -259,12 +273,96 @@ export async function sendDocumentToThirdParty(
     .eq("id", documentId);
 }
 
+export async function addContractSigner(
+  documentId: string,
+  signer: { email: string; name: string; cuil?: string | null }
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("title, total_signers")
+    .eq("id", documentId)
+    .single();
+
+  const { data: sr, error: srErr } = await supabase
+    .from("signature_requests")
+    .insert({
+      document_id: documentId,
+      signer_email: signer.email,
+      signer_name: signer.name,
+      signer_cuil: signer.cuil ?? null,
+      status: "PENDING",
+      expires_at: expiresAt,
+      signing_order: (doc?.total_signers as number ?? 0),
+    })
+    .select("id")
+    .single();
+  if (srErr || !sr) throw new Error(srErr?.message ?? "Error agregando firmante");
+
+  await supabase
+    .from("documents")
+    .update({
+      total_signers: ((doc?.total_signers as number) ?? 0) + 1,
+      status: "SENT",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", documentId);
+
+  await supabase.functions.invoke("send-signing-email", {
+    body: {
+      signerEmail: signer.email,
+      signerName: signer.name,
+      documentTitle: (doc?.title as string) ?? "Documento",
+      requestId: sr.id,
+    },
+  }).catch(() => {});
+}
+
+export async function removeContractSigner(signatureRequestId: string): Promise<void> {
+  const { data: sr, error: srErr } = await supabase
+    .from("signature_requests")
+    .select("id, document_id, status")
+    .eq("id", signatureRequestId)
+    .single();
+  if (srErr || !sr) throw new Error(srErr?.message ?? "Firmante no encontrado");
+  if (sr.status === "SIGNED") throw new Error("No se puede quitar un firmante que ya firmó.");
+
+  const documentId = sr.document_id as string;
+  const { error: deleteErr } = await supabase
+    .from("signature_requests")
+    .delete()
+    .eq("id", signatureRequestId);
+  if (deleteErr) throw new Error(deleteErr.message);
+
+  const { data: remaining } = await supabase
+    .from("signature_requests")
+    .select("status")
+    .eq("document_id", documentId);
+
+  const total = remaining?.length ?? 0;
+  const completed = (remaining ?? []).filter((r) => r.status === "SIGNED").length;
+  const status = total === 0 ? "DRAFT" : completed >= total ? "COMPLETED" : "SENT";
+
+  const { error: updateErr } = await supabase
+    .from("documents")
+    .update({
+      total_signers: total,
+      completed_signers: completed,
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", documentId);
+  if (updateErr) throw new Error(updateErr.message);
+}
+
 /** Create a new contract document — if no signers, stays DRAFT until assignContractToUser is called */
 export async function createContract(input: {
   title: string;
   description: string;
   templateId?: string;
   templateFields?: Record<string, string>;
+  signaturePosition?: SignaturePosition;
   signers: { email: string; name: string }[];
 }): Promise<Contract> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -278,6 +376,7 @@ export async function createContract(input: {
       owner_id: user.id,
       template_id: input.templateId ?? null,
       template_fields: input.templateFields ?? null,
+      signature_position: input.signaturePosition ?? DEFAULT_SIGNATURE_POSITION,
       total_signers: input.signers.length,
       status: "DRAFT",
     })
@@ -384,6 +483,8 @@ export async function sendContractFromTemplate(input: {
     email:        string;
     signatureUrl?: string | null;
   };
+  paymentTemplateId?: string | null;
+  signaturePosition?: SignaturePosition;
 }): Promise<Contract> {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   if (!authUser) throw new Error("No autenticado");
@@ -414,13 +515,15 @@ export async function sendContractFromTemplate(input: {
   const { data: doc, error: docError } = await supabase
     .from("documents")
     .insert({
-      title:           input.title,
-      description:     input.description,
-      owner_id:        authUser.id,
-      template_id:     "custom",
-      template_fields: allFields,
-      total_signers:   1,
-      status:          "SENT",
+      title:               input.title,
+      description:         input.description,
+      owner_id:            authUser.id,
+      template_id:         "custom",
+      template_fields:     allFields,
+      signature_position:  input.signaturePosition ?? DEFAULT_SIGNATURE_POSITION,
+      total_signers:       1,
+      status:              "SENT",
+      payment_template_id: input.paymentTemplateId ?? null,
     })
     .select("*, owner:users!owner_id(email), document_versions:document_versions!document_versions_document_id_fkey(*)")
     .single();
@@ -441,6 +544,100 @@ export async function sendContractFromTemplate(input: {
   return mapDocToContract(doc as Record<string, unknown>);
 }
 
+/** Upload a PDF file and create a signing request for it.
+ *  Steps: upload file → compute SHA-256 → create document → create version → create signature_request.
+ *  Returns the created Contract with the signature_request ID. */
+export async function uploadContractPdf(input: {
+  file: File;
+  title: string;
+  description?: string;
+  signerName: string;
+  signerEmail: string;
+  signerCuil?: string;
+  ownerId: string;
+  signaturePosition?: SignaturePosition;
+}): Promise<{ contract: Contract; requestId: string }> {
+  const { file, title, description, signerName, signerEmail, signerCuil, ownerId } = input;
+
+  // 1. Compute SHA-256
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const sha256Hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  // 2. Upload file to storage
+  const storagePath = `${ownerId}/${Date.now()}_${file.name}`;
+  const { error: uploadError } = await supabase.storage
+    .from("contract-pdfs")
+    .upload(storagePath, file, { upsert: true, contentType: file.type });
+  if (uploadError) throw new Error(`Error al subir PDF: ${uploadError.message}`);
+
+  // 3. Create document
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: doc, error: docError } = await supabase
+    .from("documents")
+    .insert({
+      title: title || file.name,
+      description: description || null,
+      owner_id: ownerId,
+      template_id: "custom",
+      template_fields: {
+        nombre_firmante: signerName,
+        email_firmante: signerEmail,
+        cuil_firmante: signerCuil ?? "",
+        nombre_usuario: signerName,
+        email_usuario: signerEmail,
+      },
+      signature_position: input.signaturePosition ?? DEFAULT_SIGNATURE_POSITION,
+      total_signers: 1,
+      status: "SENT",
+    })
+    .select("*, owner:users!owner_id(email)")
+    .single();
+  if (docError || !doc) throw new Error(docError?.message ?? "Error creando documento");
+
+  // 4. Create document version
+  const { error: verError } = await supabase.from("document_versions").insert({
+    document_id: doc.id,
+    version_number: 1,
+    file_name: file.name,
+    storage_path: storagePath,
+    sha256_hash: sha256Hash,
+    file_size: file.size,
+    uploaded_by: ownerId,
+  });
+  if (verError) throw new Error(verError.message);
+
+  // 5. Create signature_request
+  const { data: sr, error: srError } = await supabase
+    .from("signature_requests")
+    .insert({
+      document_id: doc.id,
+      document_version_id: undefined,
+      signer_email: signerEmail,
+      signer_name: signerName,
+      signer_cuil: signerCuil || null,
+      status: "PENDING",
+      expires_at: expiresAt,
+      signing_order: 0,
+    })
+    .select("id")
+    .single();
+  if (srError || !sr) throw new Error(srError?.message ?? "Error creando solicitud de firma");
+
+  // 6. Try to send email (silent if fails)
+  await supabase.functions.invoke("send-signing-email", {
+    body: {
+      signerEmail,
+      signerName,
+      documentTitle: title || file.name,
+      requestId: sr.id,
+    },
+  }).catch(() => {});
+
+  return { contract: mapDocToContract(doc as Record<string, unknown>), requestId: sr.id };
+}
+
 /** Update template fields of an existing DRAFT contract */
 export async function updateContractFields(
   documentId: string,
@@ -451,5 +648,49 @@ export async function updateContractFields(
     .update({ template_fields: templateFields })
     .eq("id", documentId);
   if (error) throw new Error(error.message);
+}
+
+/** Delete a contract and all its related data (signature_requests, document_versions, files in storage) */
+export async function deleteContract(documentId: string): Promise<void> {
+  // 1. Get document versions to remove storage files
+  const { data: versions, error: verErr } = await supabase
+    .from("document_versions")
+    .select("storage_path")
+    .eq("document_id", documentId);
+  if (verErr) console.warn("[deleteContract] error fetching versions:", verErr.message);
+
+  // 2. Remove storage files
+  if (versions && versions.length > 0) {
+    const paths = versions.map((v) => v.storage_path).filter(Boolean) as string[];
+    if (paths.length > 0) {
+      const { error: storageErr } = await supabase.storage.from("contract-pdfs").remove(paths);
+      if (storageErr) console.warn("[deleteContract] error removing storage files:", storageErr.message);
+    }
+  }
+
+  // 3. Unlink organization_authorities referencing this document (no ON DELETE CASCADE)
+  const { error: authErr } = await supabase
+    .from("organization_authorities")
+    .update({ document_id: null, signing_request_id: null })
+    .eq("document_id", documentId);
+  if (authErr) console.warn("[deleteContract] error unlinking authorities:", authErr.message);
+
+  // 4. Delete signature_requests (cascades signatures, conformity_acceptances, otp_challenges)
+  const { error: srErr } = await supabase
+    .from("signature_requests")
+    .delete()
+    .eq("document_id", documentId);
+  if (srErr) throw new Error(`Error al eliminar solicitudes de firma: ${srErr.message}`);
+
+  // 5. Delete document_versions
+  const { error: dvErr } = await supabase
+    .from("document_versions")
+    .delete()
+    .eq("document_id", documentId);
+  if (dvErr) console.warn("[deleteContract] error deleting versions:", dvErr.message);
+
+  // 6. Delete the document
+  const { error } = await supabase.from("documents").delete().eq("id", documentId);
+  if (error) throw new Error(`Error al eliminar documento: ${error.message}`);
 }
 

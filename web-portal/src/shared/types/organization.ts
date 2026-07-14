@@ -16,6 +16,14 @@ export interface Organization {
   brandSecondary?:  string;
   brandAccent?:     string;
   brandBackground?: string;
+  /** Datos de la empresa */
+  phone?:     string;
+  address?:   string;
+  city?:      string;
+  province?:  string;
+  postalCode?: string;
+  taxId?:     string;
+  website?:   string;
 }
 
 export interface OrganizationStats {

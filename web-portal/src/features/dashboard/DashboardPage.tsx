@@ -100,7 +100,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Dashboard</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Portal de firmas</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-950">
           Hola, {user?.fullName?.split(" ")[0]}
         </h1>

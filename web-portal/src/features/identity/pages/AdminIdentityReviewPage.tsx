@@ -407,7 +407,7 @@ export function AdminIdentityReviewPage() {
             <header className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
               <div>
                 <h3 className="text-base font-bold text-zinc-950">Aprobar Identidad</h3>
-                <p className="text-xs text-zinc-500 mt-0.5 font-medium">Confirmación de emisión de firma digital.</p>
+                <p className="text-xs text-zinc-500 mt-0.5 font-medium">Confirmación de emisión de firma electrónica.</p>
               </div>
               <button
                 type="button"

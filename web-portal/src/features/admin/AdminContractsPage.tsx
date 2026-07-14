@@ -8,21 +8,29 @@ import {
   FileText,
   Files,
   LayoutTemplate,
+  Mail,
   Pencil,
   Plus,
   Search,
   Send,
   ShieldCheck,
   Trash2,
+  Upload,
   User,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useAuth } from "../../app/providers/AuthProvider";
 import { Toast } from "../../shared/components/ui/Toast";
 import { Button } from "../../shared/components/ui/Button";
+import { Input } from "../../shared/components/ui/Input";
 import {
   getAllContracts,
   sendContractFromTemplate,
   sendDocumentToThirdParty,
+  uploadContractPdf,
+  deleteContract,
 } from "../../shared/services/contracts.service";
 import { generateConsolidatedPdfBlob, tryGenerateConsolidatedPdf } from "../../shared/services/signing.service";
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
@@ -33,16 +41,26 @@ import {
   createContractTemplate,
   updateContractTemplate,
   deleteContractTemplate,
+  cloneContractTemplate,
   extractVariables,
   AUTO_FILL_VARS,
   VAR_LABELS,
   type DbContractTemplate,
 } from "../../shared/services/contractTemplates.service";
-import type { Contract } from "../../shared/types/contract";
+import {
+  computeInstallmentAmount,
+  FREQUENCY_LABELS,
+  getPaymentTemplates,
+  type PaymentTemplate,
+} from "../../shared/services/paymentTemplates.service";
+import { DEFAULT_SIGNATURE_POSITION, type Contract, type SignaturePosition } from "../../shared/types/contract";
 import type { AdminUserSummary } from "../../shared/types/user";
+import { downloadBlob, signedPdfDownloadUrl, signedPdfFileName } from "../../shared/utils/downloadFileName";
+import { buildSignedPdfsEmail } from "../../shared/utils/shareEmail";
 import { ContractDocument, ContractDetailModal } from "./components/ContractRenderer";
 import { RichTextEditor } from "./components/RichTextEditor";
 import { AdminConveniosTab } from "./AdminConveniosTab";
+import { AdminPaymentTemplatesTab } from "./AdminPaymentTemplatesTab";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -60,6 +78,27 @@ function statusMeta(status: string) {
   }
 }
 
+type EmailProvider = "mailto" | "gmail" | "outlook";
+
+function openEmailComposer(provider: EmailProvider, input: { to: string; subject: string; body: string }) {
+  const encodedTo = encodeURIComponent(input.to);
+  const encodedSubject = encodeURIComponent(input.subject);
+  const encodedBody = encodeURIComponent(input.body);
+  const toParam = input.to.trim() ? `to=${encodedTo}&` : "";
+  const mailtoTo = input.to.trim() ? encodedTo : "";
+  const href = provider === "gmail"
+    ? `https://mail.google.com/mail/?view=cm&fs=1&${toParam}su=${encodedSubject}&body=${encodedBody}`
+    : provider === "outlook"
+      ? `https://outlook.office.com/mail/deeplink/compose?${toParam}subject=${encodedSubject}&body=${encodedBody}`
+      : `mailto:${mailtoTo}?subject=${encodedSubject}&body=${encodedBody}`;
+
+  window.open(href, "_blank", "noopener,noreferrer");
+}
+
+function hasShareableSignedPdf(contract: Contract) {
+  return contract.status === "SIGNED" || contract.status === "COMPLETED" || contract.completedSigners > 0;
+}
+
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   function copy() {
@@ -72,6 +111,67 @@ function CopyButton({ value }: { value: string }) {
       className="grid h-5 w-5 shrink-0 place-items-center rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition">
       {copied ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
     </button>
+  );
+}
+
+function SignaturePositionEditor({
+  value,
+  onChange,
+}: {
+  value: SignaturePosition;
+  onChange: (value: SignaturePosition) => void;
+}) {
+  function setNumber(key: "x" | "y" | "width" | "height", raw: string) {
+    const next = Math.max(0, Number(raw) || 0);
+    onChange({ ...value, [key]: next });
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-3">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Posicion de firma</p>
+        <p className="mt-1 text-xs text-zinc-400">Valores en puntos PDF, medidos desde la esquina superior izquierda.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div>
+          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Pagina</label>
+          <select
+            value={value.page === "last" ? "last" : "custom"}
+            onChange={(e) => onChange({ ...value, page: e.target.value === "last" ? "last" : 0 })}
+            className="h-9 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500"
+          >
+            <option value="last">Ultima</option>
+            <option value="custom">Numero</option>
+          </select>
+        </div>
+        {value.page !== "last" && (
+          <div>
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Nro.</label>
+            <input
+              type="number"
+              min="1"
+              value={value.page + 1}
+              onChange={(e) => onChange({ ...value, page: Math.max(0, (Number(e.target.value) || 1) - 1) })}
+              className="h-9 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500"
+            />
+          </div>
+        )}
+        {(["x", "y", "width", "height"] as const).map((key) => (
+          <div key={key}>
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+              {key === "width" ? "Ancho" : key === "height" ? "Alto" : key.toUpperCase()}
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={value[key]}
+              onChange={(e) => setNumber(key, e.target.value)}
+              className="h-9 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -146,12 +246,13 @@ function SendThirdPartyModal({
 // ─── Template Card ────────────────────────────────────────────────────────────
 
 function TemplateCard({
-  template, onSend, onEdit, onDelete,
+  template, onSend, onEdit, onDelete, onClone,
 }: {
   template: DbContractTemplate;
   onSend:   () => void;
   onEdit:   () => void;
   onDelete: () => void;
+  onClone:  () => void;
 }) {
   const vars      = extractVariables(template.contentHtml);
   const adminVars = vars.filter((v) => !AUTO_FILL_VARS.has(v));
@@ -171,11 +272,18 @@ function TemplateCard({
         </div>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
           <button type="button" onClick={onEdit}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
+            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition"
+            title="Editar">
             <Pencil size={12} />
           </button>
+          <button type="button" onClick={onClone}
+            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition"
+            title="Clonar plantilla">
+            <Copy size={12} />
+          </button>
           <button type="button" onClick={onDelete}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition">
+            className="grid h-7 w-7 place-items-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition"
+            title="Eliminar">
             <Trash2 size={12} />
           </button>
         </div>
@@ -234,6 +342,11 @@ function SendingFlow({
   const [selectedUser, setSelectedUser] = useState<AdminUserSummary | null>(null);
   const [userSearch, setUserSearch]     = useState("");
 
+  // Payment plan
+  const [paymentTemplates, setPaymentTemplates] = useState<PaymentTemplate[]>([]);
+  const [loadingPayments, setLoadingPayments]   = useState(true);
+  const [selectedPayment, setSelectedPayment]   = useState<PaymentTemplate | null>(null);
+
   // Variables
   const allVars   = useMemo(() => extractVariables(template.contentHtml), [template]);
   const adminVars = allVars.filter((v) => !AUTO_FILL_VARS.has(v));
@@ -268,8 +381,27 @@ function SendingFlow({
     getOrgAuthorities(orgId)
       .then((all) => setAuthorities(all.filter((a) => a.status === "ACTIVE" && a.type === "PERMANENT")))
       .finally(() => setLoadingAuth(false));
-    getAllUsers().then(setUsers).finally(() => setLoadingUsers(false));
+    getAllUsers(orgId).then(setUsers).finally(() => setLoadingUsers(false));
+    getPaymentTemplates().then(setPaymentTemplates).finally(() => setLoadingPayments(false));
   }, [orgId]);
+
+  useEffect(() => {
+    if (!selectedPayment) return;
+    const installment = selectedPayment.installmentAmount ?? computeInstallmentAmount(selectedPayment.totalAmount, selectedPayment.installmentCount);
+    setVarValues((prev) => ({
+      ...prev,
+      plan_pago: selectedPayment.name,
+      descripcion_pago: selectedPayment.description ?? "",
+      monto: String(selectedPayment.totalAmount),
+      monto_total: String(selectedPayment.totalAmount),
+      cuotas: String(selectedPayment.installmentCount),
+      cantidad_cuotas: String(selectedPayment.installmentCount),
+      valor_cuota: String(installment),
+      frecuencia_pago: FREQUENCY_LABELS[selectedPayment.frequency] ?? selectedPayment.frequency,
+      mora: selectedPayment.hasMora ? `${selectedPayment.moraRate}% mensual` : "Sin mora",
+      tasa_mora: selectedPayment.hasMora ? String(selectedPayment.moraRate) : "0",
+    }));
+  }, [selectedPayment]);
 
   const filteredAuth = useMemo(() => {
     if (!authSearch) return authorities;
@@ -289,9 +421,10 @@ function SendingFlow({
   const previewFields = useMemo(() => ({
     _templateContent: template.contentHtml,
     _legalTitle:      template.name,
-    _dbTemplateId:    template.id,
-    ...varValues,
-  }), [template, varValues]);
+        _dbTemplateId:    template.id,
+        _paymentTemplateId: selectedPayment?.id ?? "",
+        ...varValues,
+  }), [template, selectedPayment, varValues]);
 
   async function handleSend() {
     if (!selectedAuth || !selectedUser) return;
@@ -302,6 +435,7 @@ function SendingFlow({
         _templateContent: template.contentHtml,
         _legalTitle:      template.name,
         _dbTemplateId:    template.id,
+        _paymentTemplateId: selectedPayment?.id ?? "",
         ...varValues,
       };
       const contract = await sendContractFromTemplate({
@@ -321,6 +455,8 @@ function SendingFlow({
           email:        selectedAuth.email,
           signatureUrl: selectedAuth.signatureUrl,
         },
+        paymentTemplateId: selectedPayment?.id ?? null,
+        signaturePosition: template.signaturePosition,
       });
       setSentContract(contract);
       setDone(true);
@@ -511,6 +647,57 @@ function SendingFlow({
 
           {/* Datos del usuario (referencia) */}
           <div className="space-y-4">
+            <div className="space-y-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Plan de pago</p>
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
+                {loadingPayments ? (
+                  <p className="text-xs text-zinc-400">Cargando planes de pago...</p>
+                ) : paymentTemplates.length === 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-zinc-800">Sin plantillas de pago</p>
+                    <p className="text-xs text-zinc-500">Creá una desde la pestaña Pagos para poder asociarla al contrato.</p>
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      value={selectedPayment?.id ?? ""}
+                      onChange={(e) => setSelectedPayment(paymentTemplates.find((p) => p.id === e.target.value) ?? null)}
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-500 transition"
+                    >
+                      <option value="">Sin plan de pago</option>
+                      {paymentTemplates.map((payment) => (
+                        <option key={payment.id} value={payment.id}>
+                          {payment.name}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedPayment ? (
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-900 space-y-1.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-emerald-700">Monto total</span>
+                          <strong>${selectedPayment.totalAmount.toLocaleString("es-AR")}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-emerald-700">Cuotas</span>
+                          <strong>{selectedPayment.installmentCount} x ${(selectedPayment.installmentAmount ?? computeInstallmentAmount(selectedPayment.totalAmount, selectedPayment.installmentCount)).toLocaleString("es-AR")}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-emerald-700">Frecuencia</span>
+                          <strong>{FREQUENCY_LABELS[selectedPayment.frequency] ?? selectedPayment.frequency}</strong>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-emerald-700">Mora</span>
+                          <strong>{selectedPayment.hasMora ? `${selectedPayment.moraRate}%` : "No aplica"}</strong>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-400">Opcional. Si lo seleccionás, queda asociado al contrato y completa las variables de pago.</p>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
             <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Datos del usuario</p>
             {selectedUser && (
               <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
@@ -596,8 +783,9 @@ function SendingFlow({
 type PageView = "list" | "templates" | "editor" | "sending";
 
 export function AdminContractsPage() {
-  const [activeTab, setActiveTab] = useState<"contracts" | "convenios">("contracts");
+  const [activeTab, setActiveTab] = useState<"templates" | "contracts" | "upload" | "convenios" | "payments">("contracts");
   const [orgId, setOrgId]         = useState<string | null>(null);
+  const [orgName, setOrgName]     = useState<string | null>(null);
 
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -606,6 +794,14 @@ export function AdminContractsPage() {
   const [viewContract, setViewContract]     = useState<Contract | null>(null);
   const [sendThirdParty, setSendThirdParty] = useState<Contract | null>(null);
   const [preparingPdfId, setPreparingPdfId] = useState<string | null>(null);
+  const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharePreparing, setSharePreparing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareTo, setShareTo] = useState("");
+  const [shareSubject, setShareSubject] = useState("");
+  const [shareBody, setShareBody] = useState("");
+  const [shareCopied, setShareCopied] = useState(false);
 
   const [dbTemplates, setDbTemplates]           = useState<DbContractTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -617,19 +813,21 @@ export function AdminContractsPage() {
   const [tplName, setTplName] = useState("");
   const [tplDesc, setTplDesc] = useState("");
   const [tplHtml, setTplHtml] = useState("");
+  const [tplSignaturePosition, setTplSignaturePosition] = useState<SignaturePosition>(DEFAULT_SIGNATURE_POSITION);
   const [savingTpl, setSavingTpl] = useState(false);
 
   // Sending state
   const [sendingTemplate, setSendingTemplate] = useState<DbContractTemplate | null>(null);
 
-  const [toast, setToast] = useState({ visible: false, message: "" });
-  const showToast = (message: string) => setToast({ visible: true, message });
+  const [toast, setToast] = useState({ visible: false, message: "", type: "success" as "success" | "error" });
+  const showToast = (message: string, type: "success" | "error" = "success") => setToast({ visible: true, message, type });
 
   useEffect(() => {
     getAllContracts().then((c) => { setContracts(c); setLoading(false); });
     getMyOrganization().then((org) => {
       if (!org) return;
       setOrgId(org.id);
+      setOrgName(org.name);
     }).catch(() => {});
   }, []);
 
@@ -651,17 +849,112 @@ export function AdminContractsPage() {
     return list;
   }, [contracts, filter, search]);
 
+  const selectedSignedContracts = contracts.filter((c) =>
+    selectedContractIds.includes(c.id) && hasShareableSignedPdf(c)
+  );
+  const visibleSignedContracts = filtered.filter(hasShareableSignedPdf);
+  const allVisibleSignedSelected = visibleSignedContracts.length > 0 &&
+    visibleSignedContracts.every((c) => selectedContractIds.includes(c.id));
+
+  function toggleSelectedContract(id: string) {
+    setSelectedContractIds((current) =>
+      current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
+    );
+  }
+
+  function toggleVisibleSignedContracts() {
+    if (allVisibleSignedSelected) {
+      const visibleIds = new Set(visibleSignedContracts.map((c) => c.id));
+      setSelectedContractIds((current) => current.filter((id) => !visibleIds.has(id)));
+      return;
+    }
+
+    setSelectedContractIds((current) =>
+      Array.from(new Set([...current, ...visibleSignedContracts.map((c) => c.id)]))
+    );
+  }
+
+  async function prepareShareDraft() {
+    if (selectedSignedContracts.length === 0) return;
+    setSharePreparing(true);
+    setShareError(null);
+    setShareCopied(false);
+
+    try {
+      const prepared = await Promise.all(selectedSignedContracts.map(async (contract) => {
+        const url = contract.finalPdfUrl ?? await tryGenerateConsolidatedPdf(contract.id);
+        return {
+          title: contract.title,
+          ownerEmail: contract.ownerEmail,
+          fileName: signedPdfFileName({
+            title: contract.title,
+            fileName: contract.fileName,
+            sequence: contract.versionNumber,
+          }),
+          url: url ? signedPdfDownloadUrl(contract.id) : null,
+        };
+      }));
+
+      const withLinks = prepared.filter((item): item is typeof item & { url: string } => !!item.url);
+      if (withLinks.length === 0) {
+        setShareError("No se pudieron preparar links de descarga para los PDFs seleccionados.");
+        return;
+      }
+
+      const { subject, body } = buildSignedPdfsEmail({ documents: withLinks, organizationName: orgName ?? undefined });
+      setShareSubject(subject);
+      setShareBody(body);
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : "No se pudo preparar el email.");
+    } finally {
+      setSharePreparing(false);
+    }
+  }
+
+  function openShareModal() {
+    setShareOpen(true);
+    void prepareShareDraft();
+  }
+
+  function handleShareByEmail(provider: EmailProvider) {
+    if (!shareSubject.trim() || !shareBody.trim()) {
+      setShareError("Primero prepará el mensaje para enviar.");
+      return;
+    }
+
+    openEmailComposer(provider, {
+      to: shareTo,
+      subject: shareSubject,
+      body: shareBody,
+    });
+    setShareOpen(false);
+  }
+
+  async function copyShareMessage() {
+    const text = [
+      shareTo.trim() ? `Para: ${shareTo.trim()}` : "",
+      `Asunto: ${shareSubject}`,
+      "",
+      shareBody,
+    ].filter(Boolean).join("\n");
+    await navigator.clipboard.writeText(text);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 1500);
+  }
+
   // ── Template editor ──
 
   function openNewTemplate() {
     setEditingTemplate(null);
     setTplName(""); setTplDesc(""); setTplHtml("");
+    setTplSignaturePosition(DEFAULT_SIGNATURE_POSITION);
     setView("editor");
   }
 
   function openEditTemplate(tpl: DbContractTemplate) {
     setEditingTemplate(tpl);
     setTplName(tpl.name); setTplDesc(tpl.description); setTplHtml(tpl.contentHtml);
+    setTplSignaturePosition(tpl.signaturePosition);
     setView("editor");
   }
 
@@ -671,13 +964,24 @@ export function AdminContractsPage() {
     setSavingTpl(true);
     try {
       if (editingTemplate) {
-        await updateContractTemplate(editingTemplate.id, { name: tplName, description: tplDesc, contentHtml: tplHtml });
+        await updateContractTemplate(editingTemplate.id, {
+          name: tplName,
+          description: tplDesc,
+          contentHtml: tplHtml,
+          signaturePosition: tplSignaturePosition,
+        });
         setDbTemplates((prev) => prev.map((t) => t.id === editingTemplate.id
-          ? { ...t, name: tplName, description: tplDesc, contentHtml: tplHtml }
+          ? { ...t, name: tplName, description: tplDesc, contentHtml: tplHtml, signaturePosition: tplSignaturePosition }
           : t));
         showToast("Plantilla actualizada.");
       } else if (orgId) {
-        const created = await createContractTemplate({ orgId, name: tplName, description: tplDesc, contentHtml: tplHtml });
+        const created = await createContractTemplate({
+          orgId,
+          name: tplName,
+          description: tplDesc,
+          contentHtml: tplHtml,
+          signaturePosition: tplSignaturePosition,
+        });
         setDbTemplates((prev) => [created, ...prev]);
         showToast("Plantilla creada.");
       }
@@ -696,6 +1000,16 @@ export function AdminContractsPage() {
     showToast("Plantilla eliminada.");
   }
 
+  async function handleCloneTemplate(id: string) {
+    try {
+      const cloned = await cloneContractTemplate(id);
+      setDbTemplates((prev) => [cloned, ...prev]);
+      showToast("Plantilla clonada.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error al clonar");
+    }
+  }
+
   async function openSignedPdf(contract: Contract) {
     setPreparingPdfId(contract.id);
     try {
@@ -709,11 +1023,25 @@ export function AdminContractsPage() {
         return;
       }
 
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      downloadBlob(pdfBlob, signedPdfFileName({
+        title: contract.title,
+        fileName: contract.fileName,
+        sequence: contract.versionNumber,
+      }));
       void tryGenerateConsolidatedPdf(contract.id);
     } finally {
       setPreparingPdfId(null);
+    }
+  }
+
+  async function handleDeleteContract(contract: Contract) {
+    if (!window.confirm(`¿Eliminar el contrato "${contract.title}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      await deleteContract(contract.id);
+      setContracts((prev) => prev.filter((c) => c.id !== contract.id));
+      showToast("Contrato eliminado.");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Error al eliminar contrato", "error");
     }
   }
 
@@ -752,6 +1080,8 @@ export function AdminContractsPage() {
         <RichTextEditor value={tplHtml} onChange={setTplHtml}
           placeholder="Redactá el contrato. Usá las variables del panel derecho para insertar datos dinámicos..." />
 
+        <SignaturePositionEditor value={tplSignaturePosition} onChange={setTplSignaturePosition} />
+
         <div className="flex justify-between">
           <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-5 text-zinc-700">
             <ArrowLeft size={14} /> Cancelar
@@ -761,12 +1091,12 @@ export function AdminContractsPage() {
           </Button>
         </div>
 
-        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
-      </div>
-    );
-  }
+      <Toast message={toast.message} type={toast.type} visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
+    </div>
+  );
+}
 
-  // ─── Templates view ────────────────────────────────────────────────────────
+// ─── Templates view ────────────────────────────────────────────────────────
 
   if (view === "templates") {
     return (
@@ -811,12 +1141,13 @@ export function AdminContractsPage() {
                 onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
                 onEdit={() => openEditTemplate(tpl)}
                 onDelete={() => handleDeleteTemplate(tpl.id)}
+                onClone={() => handleCloneTemplate(tpl.id)}
               />
             ))}
           </div>
         )}
 
-        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
+        <Toast message={toast.message} type={toast.type} visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
       </div>
     );
   }
@@ -847,7 +1178,7 @@ export function AdminContractsPage() {
           onBack={() => setView("list")}
         />
 
-        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
+        <Toast message={toast.message} type={toast.type} visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
       </div>
     );
   }
@@ -856,11 +1187,120 @@ export function AdminContractsPage() {
 
   return (
     <>
-      {viewContract && <ContractDetailModal contract={viewContract} onClose={() => setViewContract(null)} />}
+      {viewContract && (
+        <ContractDetailModal
+          contract={viewContract}
+          onClose={() => setViewContract(null)}
+          onUpdated={(updated) => {
+            setViewContract(updated);
+            setContracts((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+          }}
+        />
+      )}
       {sendThirdParty && (
         <SendThirdPartyModal contract={sendThirdParty} onClose={() => setSendThirdParty(null)}
           onSent={(id) => setContracts((prev) => prev.map((x) => x.id === id ? { ...x, status: "SENT", totalSigners: x.totalSigners + 1 } : x))} />
       )}
+      {shareOpen && createPortal((
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/40 p-6 backdrop-blur-sm">
+          <div className="flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-7 py-5">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Email</p>
+                <h2 className="mt-1 text-xl font-bold text-zinc-950">Compartir contratos firmados</h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Revisá el destinatario y el mensaje antes de abrir tu correo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareOpen(false)}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto px-7 py-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:overflow-hidden">
+              <div className="space-y-3 lg:self-start">
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm font-bold text-zinc-800">
+                    {selectedSignedContracts.length} {selectedSignedContracts.length === 1 ? "PDF seleccionado" : "PDFs seleccionados"}
+                  </p>
+                  <div className="mt-3 max-h-52 space-y-2 overflow-auto pr-1">
+                    {selectedSignedContracts.map((contract) => (
+                      <div key={contract.id} className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
+                        <p className="truncate text-xs font-semibold text-zinc-700">
+                          {signedPdfFileName({ title: contract.title, fileName: contract.fileName, sequence: contract.versionNumber })}
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] text-zinc-400">{contract.title}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Links seguros</p>
+                  <p className="mt-1 text-xs leading-relaxed text-emerald-800">
+                    El correo incluye links cortos del portal. Los PDFs no se adjuntan automaticamente.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex min-h-0 min-w-0 flex-col gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-500">Para</label>
+                  <input
+                    type="text"
+                    value={shareTo}
+                    onChange={(e) => setShareTo(e.target.value)}
+                    placeholder="destinatario@empresa.com"
+                    className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-zinc-500">Asunto</label>
+                  <input
+                    type="text"
+                    value={shareSubject}
+                    onChange={(e) => setShareSubject(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
+                  />
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <label className="mb-1 block text-xs font-semibold text-zinc-500">Mensaje</label>
+                  <textarea
+                    value={shareBody}
+                    onChange={(e) => setShareBody(e.target.value)}
+                    rows={14}
+                    className="min-h-0 flex-1 resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 font-mono text-xs leading-relaxed text-zinc-800 outline-none focus:border-zinc-500"
+                  />
+                </div>
+              </div>
+
+              {shareError && (
+                <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 lg:col-span-2">
+                  {shareError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-zinc-100 bg-white px-7 py-4 sm:flex-row sm:items-center">
+              <Button disabled={sharePreparing || !shareBody.trim()} onClick={() => handleShareByEmail("gmail")} className="h-10 w-full sm:w-auto sm:px-8">
+                <Mail size={14} /> {sharePreparing ? "Preparando..." : "Abrir Gmail"}
+              </Button>
+              <Button disabled={sharePreparing || !shareBody.trim()} variant="secondary" onClick={() => handleShareByEmail("outlook")} className="h-10 w-full sm:w-auto sm:px-6">
+                <Mail size={14} /> Abrir Outlook
+              </Button>
+              <Button disabled={sharePreparing || !shareBody.trim()} variant="secondary" onClick={() => handleShareByEmail("mailto")} className="h-10 w-full sm:w-auto sm:px-6">
+                <Mail size={14} /> Abrir app de correo
+              </Button>
+              <Button disabled={!shareBody.trim()} variant="ghost" onClick={copyShareMessage} className="h-10 w-full sm:ml-auto sm:w-auto sm:px-5">
+                {shareCopied ? "Mensaje copiado" : "Copiar mensaje"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
 
       <div className="space-y-6">
         <div className="space-y-4">
@@ -869,7 +1309,13 @@ export function AdminContractsPage() {
             <h1 className="mt-1 text-2xl font-bold text-zinc-900">Documentos</h1>
           </div>
           <div className="flex items-center gap-1 border-b border-zinc-200">
-            {([{ key: "contracts", label: "Contratos" }, { key: "convenios", label: "Convenios" }] as const).map((tab) => (
+            {([
+              { key: "templates", label: "Modelos" },
+              { key: "contracts", label: "Contratos" },
+              { key: "upload", label: "Subir PDF" },
+              { key: "convenios", label: "Convenios" },
+              { key: "payments", label: "Pagos" },
+            ] as const).map((tab) => (
               <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-2.5 text-sm font-semibold transition border-b-2 -mb-px ${
                   activeTab === tab.key ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-700"}`}>
@@ -882,16 +1328,84 @@ export function AdminContractsPage() {
         {activeTab === "convenios" && orgId && <AdminConveniosTab orgId={orgId} />}
         {activeTab === "convenios" && !orgId && <p className="text-sm text-zinc-400">Cargando organización...</p>}
 
+        {activeTab === "payments" && <AdminPaymentTemplatesTab />}
+
+        {activeTab === "upload" && <AdminUploadPdfTab />}
+
+        {activeTab === "templates" && (
+          <>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-zinc-500">{dbTemplates.length} plantillas creadas</p>
+              <Button onClick={openNewTemplate} className="h-10 px-4 shrink-0">
+                <Plus size={14} /> Nueva plantilla
+              </Button>
+            </div>
+            {loadingTemplates ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array(3).fill(null).map((_, i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-zinc-100" />)}
+              </div>
+            ) : dbTemplates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
+                  <LayoutTemplate size={28} className="text-zinc-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-zinc-700">Sin plantillas</p>
+                  <p className="text-sm text-zinc-400 mt-1">Creá tu primera plantilla para enviar contratos.</p>
+                </div>
+                <Button onClick={openNewTemplate} className="h-10 px-5">
+                  <Plus size={14} /> Crear primera plantilla
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {dbTemplates.map((tpl) => (
+                  <TemplateCard
+                    key={tpl.id}
+                    template={tpl}
+                    onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
+                    onEdit={() => openEditTemplate(tpl)}
+                    onDelete={() => handleDeleteTemplate(tpl.id)}
+                    onClone={() => handleCloneTemplate(tpl.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         {activeTab === "contracts" && (
           <>
             <div className="flex items-start justify-between gap-4">
               <p className="text-sm text-zinc-500">{contracts.filter((c) => c.status !== "DRAFT").length} contratos enviados</p>
-              <Button onClick={() => setView("templates")} className="h-10 px-4 shrink-0">
-                <LayoutTemplate size={14} /> Plantillas y envío
-                {dbTemplates.length > 0 && (
-                  <span className="ml-1 rounded-full bg-white/20 text-white text-[10px] px-1.5 py-0.5 font-bold">{dbTemplates.length}</span>
+              <div className="flex gap-2">
+                {visibleSignedContracts.length > 0 && (
+                  <Button onClick={toggleVisibleSignedContracts} className="h-10 px-4 shrink-0" variant="secondary">
+                    {allVisibleSignedSelected ? "Quitar firmados" : "Seleccionar firmados"}
+                  </Button>
                 )}
-              </Button>
+                <Button
+                  onClick={openShareModal}
+                  disabled={selectedSignedContracts.length === 0}
+                  className="h-10 px-4 shrink-0"
+                  variant="secondary"
+                >
+                  <Mail size={14} /> Enviar por email
+                  {selectedSignedContracts.length > 0 && (
+                    <span className="rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {selectedSignedContracts.length}
+                    </span>
+                  )}
+                </Button>
+                {dbTemplates.length > 0 && (
+                  <Button onClick={() => setView("templates")} className="h-10 px-4 shrink-0" variant="secondary">
+                    <LayoutTemplate size={14} /> Plantillas
+                  </Button>
+                )}
+                <Button onClick={() => setActiveTab("upload")} className="h-10 px-4 shrink-0">
+                  <Upload size={14} /> Subir PDF
+                </Button>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
@@ -933,6 +1447,15 @@ export function AdminContractsPage() {
                       <div key={c.id}
                         className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-50 transition sm:flex-row sm:items-center sm:justify-between group">
                         <div className="flex items-center gap-3 min-w-0">
+                          {hasSignedPdf && (
+                            <input
+                              type="checkbox"
+                              checked={selectedContractIds.includes(c.id)}
+                              onChange={() => toggleSelectedContract(c.id)}
+                              className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                              aria-label={`Seleccionar ${c.title}`}
+                            />
+                          )}
                           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-50">
                             <Files size={14} className="text-zinc-500" />
                           </div>
@@ -965,12 +1488,14 @@ export function AdminContractsPage() {
                               <Download size={11} /> {isPreparingPdf ? "Preparando..." : "PDF firmado"}
                             </button>
                           )}
-                          {!hasSignedPdf && (
-                            <button type="button" onClick={() => setViewContract(c)}
-                              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
-                              <Eye size={11} /> Ver
-                            </button>
-                          )}
+                          <button type="button" onClick={() => setViewContract(c)}
+                            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
+                            <Eye size={11} /> Ver
+                          </button>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteContract(c); }}
+                            className="flex items-center gap-1.5 rounded-lg border border-red-200 px-2.5 py-1 text-xs text-red-400 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition opacity-0 group-hover:opacity-100">
+                            <Trash2 size={11} />
+                          </button>
                         </div>
                       </div>
                     );
@@ -984,5 +1509,131 @@ export function AdminContractsPage() {
 
       <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
     </>
+  );
+}
+
+// ─── Upload PDF Tab ────────────────────────────────────────────────────────────
+
+function AdminUploadPdfTab() {
+  const { user } = useAuth();
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [signerName, setSignerName] = useState("");
+  const [signerEmail, setSignerEmail] = useState("");
+  const [signerCuil, setSignerCuil] = useState("");
+  const [signaturePosition, setSignaturePosition] = useState<SignaturePosition>(DEFAULT_SIGNATURE_POSITION);
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    if (!file || !signerName.trim() || !signerEmail.trim() || !user?.id) return;
+    setSending(true);
+    setError("");
+    try {
+      await uploadContractPdf({
+        file,
+        title: title.trim() || file.name,
+        signerName: signerName.trim(),
+        signerEmail: signerEmail.trim(),
+        signerCuil: signerCuil.trim() || undefined,
+        ownerId: user.id,
+        signaturePosition,
+      });
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al subir PDF");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function resetForm() {
+    setFile(null);
+    setTitle("");
+    setSignerName("");
+    setSignerEmail("");
+    setSignerCuil("");
+    setSignaturePosition(DEFAULT_SIGNATURE_POSITION);
+    setDone(false);
+    setError("");
+  }
+
+  const inputCls = "w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition";
+
+  if (done) {
+    return (
+      <div className="flex flex-col items-center py-16 text-center max-w-sm mx-auto gap-4">
+        <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
+          <Check size={36} className="text-emerald-600" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-zinc-900">PDF enviado a firmar</h3>
+          <p className="text-sm text-zinc-500 mt-2">{signerName} recibió el documento y puede firmarlo.</p>
+        </div>
+        <Button onClick={resetForm} className="h-10 px-6 mt-2">
+          <Upload size={14} /> Subir otro PDF
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-xl space-y-6">
+      <div>
+        <p className="text-sm text-zinc-500">Subí un PDF para enviarlo a firmar digitalmente.</p>
+      </div>
+
+      <div className="space-y-4">
+        {/* PDF file */}
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Archivo PDF *</label>
+          <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-8 transition ${file ? "border-emerald-300 bg-emerald-50" : "border-zinc-200 bg-zinc-50 hover:border-zinc-300"}`}>
+            <Upload size={24} className={file ? "text-emerald-500" : "text-zinc-400"} />
+            {file ? (
+              <div className="text-center">
+                <p className="text-sm font-semibold text-zinc-800">{file.name}</p>
+                <p className="text-xs text-zinc-500">{(file.size / 1024).toFixed(1)} KB</p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-sm font-semibold text-zinc-600">Hacé clic para seleccionar un PDF</p>
+                <p className="text-xs text-zinc-400 mt-1">o arrastrá el archivo aquí</p>
+              </div>
+            )}
+            <input type="file" accept=".pdf,application/pdf" className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f && f.type === "application/pdf") setFile(f);
+                else setError("Solo se aceptan archivos PDF");
+              }} />
+          </label>
+        </div>
+
+        <Input label="Título del documento (opcional)" value={title}
+          onChange={(e) => setTitle(e.target.value)} placeholder={file?.name ?? "Ej: Contrato de servicios"} />
+
+        <Input label="Nombre del firmante *" value={signerName}
+          onChange={(e) => setSignerName(e.target.value)} placeholder="Juan José Gimenez" />
+
+        <Input label="Email del firmante *" type="email" value={signerEmail}
+          onChange={(e) => setSignerEmail(e.target.value)} placeholder="juan@ejemplo.com" />
+
+        <Input label="CUIL / CUIT (opcional)" value={signerCuil}
+          onChange={(e) => setSignerCuil(e.target.value)} placeholder="20-40123456-7" />
+
+        <SignaturePositionEditor value={signaturePosition} onChange={setSignaturePosition} />
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+          {error}
+        </div>
+      )}
+
+      <Button onClick={handleSubmit} disabled={!file || !signerName.trim() || !signerEmail.trim() || sending} className="h-12 w-full">
+        {sending ? "Subiendo y enviando..." : <><Upload size={15} /> Subir PDF y enviar a firmar</>}
+      </Button>
+    </div>
   );
 }

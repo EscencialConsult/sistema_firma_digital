@@ -14,7 +14,7 @@ export function KycLayout() {
               <ShieldCheck size={18} className="text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold text-zinc-950 leading-none">Firma Digital</p>
+              <p className="text-sm font-bold text-zinc-950 leading-none">Firma Electrónica</p>
               <p className="text-[11px] text-zinc-500 mt-0.5">Verificación de identidad</p>
             </div>
           </div>

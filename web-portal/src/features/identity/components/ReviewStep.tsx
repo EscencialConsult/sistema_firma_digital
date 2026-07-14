@@ -2,7 +2,7 @@ import { CheckCircle2, FileImage, ShieldCheck, UserRound } from "lucide-react";
 import type { IdentityDocumentType, PersonalData } from "../types/identity.types";
 
 const TERMS_SUMMARY =
-  "Acepto los Términos y Condiciones de Uso de la plataforma Firma Digital Portal, incluyendo las políticas de privacidad y tratamiento de datos personales conforme a la Ley N° 25.326.";
+  "Acepto los Términos y Condiciones de Uso de la plataforma Firma Electrónica Portal, incluyendo las políticas de privacidad y tratamiento de datos personales conforme a la Ley N° 25.326.";
 
 export function ReviewStep({
   personalData,

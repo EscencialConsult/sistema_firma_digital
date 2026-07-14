@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
 export interface PdfSigner {
   name: string;
@@ -91,7 +91,7 @@ function addFooter(pdf: jsPDF) {
     pdf.setFontSize(7);
     pdf.setTextColor(150, 150, 160);
     pdf.text(`Pagina ${i} de ${pages}`, PAGE_W - MARGIN, 286, { align: "right" });
-    pdf.text("Escencial Consultora - Sistema Firma Digital - Ley 25.506 Argentina", MARGIN, 286);
+    pdf.text("Escencial Consultora - Sistema Firma Electrónica - Ley 25.506 Argentina", MARGIN, 286);
   }
 }
 
@@ -165,9 +165,13 @@ function addSignatureBlocks(pdf: jsPDF, signers: PdfSigner[], y: number): number
   return currentY;
 }
 
-function addCertificatePage(pdf: jsPDF, document: SignedPdfDocumentInput, signers: PdfSigner[]) {
-  pdf.addPage();
-  addHeader(pdf, "CERTIFICADO DE FIRMA ELECTRONICA", "Escencial Consultora - Firma Digital - Valido conforme Ley 25.506 Argentina");
+function addCertificatePage(pdf: jsPDF, document: SignedPdfDocumentInput, signers: PdfSigner[], useExistingPage = false) {
+  if (useExistingPage) {
+    pdf.setPage(1);
+  } else {
+    pdf.addPage();
+  }
+  addHeader(pdf, "CERTIFICADO DE FIRMA ELECTRONICA", "Escencial Consultora - Firma Electrónica - Válido conforme Ley 25.506 Argentina");
 
   let y = 38;
   pdf.setTextColor(24, 24, 27);
@@ -210,20 +214,125 @@ export async function generateSignedPdf(
     : document;
 
   if (input.originalPdf) {
+    const originalBytes = await input.originalPdf.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(originalBytes);
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // Add a new page specifically for the signature stamps to avoid overlapping the contract text
+    let targetPage = pdfDoc.addPage();
+    let { width: pageW, height: pageH } = targetPage.getSize();
+
+    // Draw page header/title
+    targetPage.drawText("HOJA DE FIRMAS", {
+      x: 50,
+      y: pageH - 45,
+      size: 12,
+      font: helveticaBold,
+      color: rgb(0.06, 0.46, 0.24),
+    });
+
+    targetPage.drawLine({
+      start: { x: 50, y: pageH - 55 },
+      end: { x: pageW - 50, y: pageH - 55 },
+      thickness: 1,
+      color: rgb(0.8, 0.8, 0.8),
+    });
+
+    let currentY = pageH - 130;
+    const stampX = 50;
+    const stampW = pageW - 100;
+    const stampH = 60;
+    const gap = 20;
+
+    for (const signer of signers) {
+      if (currentY < 50 + stampH) {
+        targetPage = pdfDoc.addPage();
+        const size = targetPage.getSize();
+        pageW = size.width;
+        pageH = size.height;
+
+        targetPage.drawText("HOJA DE FIRMAS (Cont.)", {
+          x: 50,
+          y: pageH - 45,
+          size: 12,
+          font: helveticaBold,
+          color: rgb(0.06, 0.46, 0.24),
+        });
+
+        targetPage.drawLine({
+          start: { x: 50, y: pageH - 55 },
+          end: { x: pageW - 50, y: pageH - 55 },
+          thickness: 1,
+          color: rgb(0.8, 0.8, 0.8),
+        });
+
+        currentY = pageH - 130;
+      }
+
+      targetPage.drawRectangle({
+        x: stampX,
+        y: currentY,
+        width: stampW,
+        height: stampH,
+        color: rgb(0.96, 0.98, 0.96),
+        borderColor: rgb(0.06, 0.46, 0.24),
+        borderWidth: 1.5,
+      });
+
+      targetPage.drawText("FIRMA ELECTRONICA", {
+        x: stampX + 12, y: currentY + stampH - 12,
+        size: 8, font: helveticaBold, color: rgb(0.06, 0.46, 0.24),
+      });
+      targetPage.drawText(`Firmante: ${signer.name || signer.email}`, {
+        x: stampX + 12, y: currentY + stampH - 24,
+        size: 7.5, font: helveticaFont, color: rgb(0.1, 0.1, 0.1),
+      });
+      targetPage.drawText(`Email: ${signer.email}`, {
+        x: stampX + 12, y: currentY + stampH - 34,
+        size: 7, font: helveticaFont, color: rgb(0.3, 0.3, 0.3),
+      });
+      const dateStr = new Date(signer.signedAt).toLocaleString("es-AR");
+      targetPage.drawText(`Fecha: ${dateStr}`, {
+        x: stampX + 12, y: currentY + stampH - 44,
+        size: 6.5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
+      });
+      targetPage.drawText("Metodo: OTP + facial + firma manuscrita", {
+        x: stampX + 12, y: currentY + stampH - 54,
+        size: 6, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
+      });
+
+      if (signer.signatureData) {
+        try {
+          const sigImage = await pdfDoc.embedPng(signer.signatureData);
+          targetPage.drawImage(sigImage, {
+            x: stampX + stampW - 62, y: currentY + 19, width: 52, height: 22,
+          });
+        } catch {
+          try {
+            const sigJpg = await pdfDoc.embedJpg(signer.signatureData);
+            targetPage.drawImage(sigJpg, {
+              x: stampX + stampW - 62, y: currentY + 19, width: 52, height: 22,
+            });
+          } catch {
+            // signature image not embeddable, skip
+          }
+        }
+      }
+
+      currentY -= (stampH + gap);
+    }
+
+    // Append certificate pages
     const certificatePdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    addCertificatePage(certificatePdf, input, signers);
+    addCertificatePage(certificatePdf, input, signers, true);
     addFooter(certificatePdf);
-
-    const [originalBytes, certificateBytes] = await Promise.all([
-      input.originalPdf.arrayBuffer(),
-      Promise.resolve(certificatePdf.output("arraybuffer")),
-    ]);
-
-    const mergedPdf = await PDFDocument.load(originalBytes);
+    const certificateBytes = certificatePdf.output("arraybuffer");
     const certificateDoc = await PDFDocument.load(certificateBytes);
-    const certificatePages = await mergedPdf.copyPages(certificateDoc, certificateDoc.getPageIndices());
-    certificatePages.forEach((page) => mergedPdf.addPage(page));
-    const mergedBytes = await mergedPdf.save();
+    const certificatePages = await pdfDoc.copyPages(certificateDoc, certificateDoc.getPageIndices());
+    certificatePages.forEach((page) => pdfDoc.addPage(page));
+
+    const mergedBytes = await pdfDoc.save();
     const mergedBuffer = new ArrayBuffer(mergedBytes.byteLength);
     new Uint8Array(mergedBuffer).set(mergedBytes);
 
@@ -231,7 +340,7 @@ export async function generateSignedPdf(
   }
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  addHeader(pdf, "CONTRATO FIRMADO ELECTRONICAMENTE", "Escencial Consultora - Sistema Firma Digital");
+  addHeader(pdf, "CONTRATO FIRMADO ELECTRONICAMENTE", "Escencial Consultora - Sistema Firma Electrónica");
 
   let y = 38;
   pdf.setTextColor(24, 24, 27);

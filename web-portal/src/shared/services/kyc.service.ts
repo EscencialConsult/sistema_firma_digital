@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { APP_CONFIG } from "../config/app";
 import type { KycVerification, KycPersonalData, KycDocument, KycDocumentType, KycStatus } from "../types/kyc";
 
 const BUCKET = "kyc-documents";
@@ -119,6 +120,51 @@ export async function startProviderVerification(): Promise<{
   const { data, error } = await supabase.functions.invoke("kyc-create-session");
   if (error) throw new Error(error.message);
   return data;
+}
+
+/** Mock KYC: marca la verificación como VERIFIED sin llamar a DIDIT.
+ *  Se usa cuando no hay DIDIT configurado (desarrollo/testing). */
+export async function mockCompleteKyc(userId: string): Promise<KycVerification | null> {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error("No autenticado");
+
+  const { data: existing } = await supabase
+    .from("identity_verifications")
+    .select("id")
+    .eq("user_id", userId)
+    .in("status", ["PENDING", "IN_REVIEW"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const verificationId = existing?.id ?? (
+    await supabase
+      .from("identity_verifications")
+      .insert({ user_id: userId, status: "PENDING", provider: "mock" })
+      .select("id")
+      .single()
+  ).data?.id;
+
+  if (!verificationId) throw new Error("No se pudo crear la verificación");
+
+  await supabase
+    .from("identity_verifications")
+    .update({
+      status: "VERIFIED",
+      provider: "mock",
+      provider_session_url: null,
+      provider_session_id: null,
+      provider_session_token: null,
+      submitted_at: new Date().toISOString(),
+    })
+    .eq("id", verificationId);
+
+  await supabase
+    .from("users")
+    .update({ verification_status: "VERIFIED" })
+    .eq("id", userId);
+
+  return getMyVerification(userId);
 }
 
 export async function savePersonalData(
