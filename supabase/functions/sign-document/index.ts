@@ -319,74 +319,81 @@ serve(async (req) => {
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const pages = pdfDoc.getPageCount();
-    const configuredPosition = signatureRequest.documents?.signature_position ?? signatureRequest.signature_position;
-    const position = body.metadata ?? configuredPosition ?? { page: "last", x: 50, y: 50, width: 200, height: 60 };
-    const pageIndex = body.metadata?.page
-      ? Math.min(Math.max(0, body.metadata.page - 1), pages - 1)
-      : position.page === "last"
-        ? pages - 1
-        : Math.min(Math.max(0, Number(position.page) || 0), pages - 1);
-    const targetPage = pdfDoc.getPage(pageIndex);
-    const lastPage = targetPage;
-    const { width: pageW, height: pageH } = targetPage.getSize();
+    // Siempre agregar una página nueva dedicada a la firma
+    // para no superponer el sello sobre el contenido del PDF subido
+    const sigPage = pdfDoc.addPage();
+    const { width: pageW, height: pageH } = sigPage.getSize();
 
-    const metaX = Math.max(0, Math.min(Number(position.x) || 50, pageW - 40));
-    const metaW = Math.max(80, Math.min(Number(position.width) || 200, pageW - metaX));
-    const metaH = Math.max(40, Number(position.height) || 60);
-    const metaY = body.metadata
-      ? Math.max(0, Math.min(Number(position.y) || 50, pageH - metaH))
-      : Math.max(0, Math.min(pageH - (Number(position.y) || 50) - metaH, pageH - metaH));
+    // Encabezado de la hoja de firmas
+    sigPage.drawText("HOJA DE FIRMAS", {
+      x: 50, y: pageH - 45,
+      size: 14, font: helveticaBold, color: rgb(0.06, 0.46, 0.24),
+    });
+    sigPage.drawText("Firma Electrónica — Escencial Consultora — Ley 25.506 Argentina", {
+      x: 50, y: pageH - 62,
+      size: 8, font: helveticaFont, color: rgb(0.4, 0.4, 0.4),
+    });
+    sigPage.drawLine({
+      start: { x: 50, y: pageH - 70 },
+      end: { x: pageW - 50, y: pageH - 70 },
+      thickness: 1, color: rgb(0.8, 0.8, 0.8),
+    });
 
-    lastPage.drawRectangle({
-      x: metaX, y: metaY, width: metaW, height: metaH,
+    // Bloque de firma
+    const stampX = 50;
+    const stampW = pageW - 100;
+    const stampH = 80;
+    const stampY = pageH - 170;
+
+    sigPage.drawRectangle({
+      x: stampX, y: stampY, width: stampW, height: stampH,
       color: rgb(0.96, 0.98, 0.96),
       borderColor: rgb(0.06, 0.46, 0.24),
       borderWidth: 1.5,
     });
 
-    lastPage.drawText("FIRMA ELECTRÓNICA SEGURA", {
-      x: metaX + 8, y: metaY + metaH - 12,
-      size: 7, font: helveticaBold, color: rgb(0.06, 0.46, 0.24),
+    sigPage.drawText("FIRMA ELECTRÓNICA SEGURA", {
+      x: stampX + 12, y: stampY + stampH - 14,
+      size: 8, font: helveticaBold, color: rgb(0.06, 0.46, 0.24),
     });
-    lastPage.drawText(`Firmante: ${signerName || signerEmail}`, {
-      x: metaX + 8, y: metaY + metaH - 24,
-      size: 6.5, font: helveticaFont, color: rgb(0.1, 0.1, 0.1),
+    sigPage.drawText(`Firmante: ${signerName || signerEmail}`, {
+      x: stampX + 12, y: stampY + stampH - 28,
+      size: 7.5, font: helveticaFont, color: rgb(0.1, 0.1, 0.1),
     });
     const dateStr = new Date().toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
-    lastPage.drawText(`Fecha: ${dateStr}`, {
-      x: metaX + 8, y: metaY + metaH - 34,
-      size: 6, font: helveticaFont, color: rgb(0.3, 0.3, 0.3),
+    sigPage.drawText(`Fecha y hora: ${dateStr}`, {
+      x: stampX + 12, y: stampY + stampH - 40,
+      size: 7, font: helveticaFont, color: rgb(0.3, 0.3, 0.3),
     });
-    lastPage.drawText(`ID: ${srId.slice(0, 8)}...`, {
-      x: metaX + 8, y: metaY + metaH - 44,
-      size: 5.5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
+    sigPage.drawText(`Email: ${signerEmail}`, {
+      x: stampX + 12, y: stampY + stampH - 52,
+      size: 7, font: helveticaFont, color: rgb(0.3, 0.3, 0.3),
     });
-    lastPage.drawText(`Email: ${signerEmail}`, {
-      x: metaX + 8, y: metaY + metaH - 54,
-      size: 5.5, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
+    sigPage.drawText(`ID solicitud: ${srId.slice(0, 16)}...`, {
+      x: stampX + 12, y: stampY + stampH - 64,
+      size: 6, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
+    });
+    sigPage.drawText("Método: OTP + verificación facial + firma manuscrita digital", {
+      x: stampX + 12, y: stampY + stampH - 74,
+      size: 6, font: helveticaFont, color: rgb(0.5, 0.5, 0.5),
     });
 
-    // Embed signature image if provided
+    // Imagen de firma manuscrita
     if (body.signatureData) {
       try {
-        // Strip data URL prefix if present
         const base64 = body.signatureData.replace(/^data:image\/\w+;base64,/, "");
         const sigBytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
         const sigImage = await pdfDoc.embedPng(sigBytes);
-        // Draw at right side of stamp box, larger size (realistic signature)
-        lastPage.drawImage(sigImage, {
-          x: metaX + metaW - 90, y: metaY + 8, width: 80, height: 30,
+        sigPage.drawImage(sigImage, {
+          x: stampX + stampW - 110, y: stampY + 20, width: 95, height: 38,
         });
-        // Draw line under signature
-        lastPage.drawLine({
-          start: { x: metaX + metaW - 90, y: metaY + 6 },
-          end: { x: metaX + metaW - 10, y: metaY + 6 },
-          color: rgb(0.3, 0.3, 0.3),
-          thickness: 0.5,
+        sigPage.drawLine({
+          start: { x: stampX + stampW - 110, y: stampY + 18 },
+          end: { x: stampX + stampW - 15, y: stampY + 18 },
+          color: rgb(0.3, 0.3, 0.3), thickness: 0.5,
         });
       } catch {
-        // Signature image not embeddable, skip silently
+        // firma no embeddable, omitir
       }
     }
 
