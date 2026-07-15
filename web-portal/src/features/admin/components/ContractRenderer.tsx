@@ -555,6 +555,7 @@ export function ContractDetailModal({
   const [signerEmail, setSignerEmail] = useState("");
   const [savingSigner, setSavingSigner] = useState(false);
   const [signerError, setSignerError] = useState("");
+  const [addingSignerOpen, setAddingSignerOpen] = useState(false);
   const displayContract = detail ?? contract;
   const st = STATUS_LABELS[displayContract.status] ?? { label: displayContract.status, color: "text-zinc-400 bg-zinc-50 border-zinc-200" };
 
@@ -753,33 +754,48 @@ export function ContractDetailModal({
                 )}
               </div>
 
-              {/* Agregar firmante */}
-              <div className="border-t border-zinc-100 p-3 space-y-2 bg-zinc-50/60">
-                <input
-                  value={signerName}
-                  onChange={(e) => setSignerName(e.target.value)}
-                  placeholder="Nombre del firmante"
-                  className="h-9 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-zinc-400 transition"
-                />
-                <div className="flex gap-2">
-                  <input
-                    value={signerEmail}
-                    onChange={(e) => setSignerEmail(e.target.value)}
-                    placeholder="email@ejemplo.com"
-                    type="email"
-                    className="h-9 flex-1 min-w-0 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-zinc-400 transition"
-                  />
+              {/* Agregar firmante — colapsable */}
+              <div className="border-t border-zinc-100">
+                {addingSignerOpen ? (
+                  <div className="p-3 space-y-2 bg-zinc-50/60">
+                    <input
+                      value={signerName}
+                      onChange={(e) => setSignerName(e.target.value)}
+                      placeholder="Nombre del firmante"
+                      className="h-9 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-zinc-400 transition"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={signerEmail}
+                        onChange={(e) => setSignerEmail(e.target.value)}
+                        placeholder="email@ejemplo.com"
+                        type="email"
+                        className="h-9 flex-1 min-w-0 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-zinc-400 transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => { await handleAddSigner(); setAddingSignerOpen(false); }}
+                        disabled={!signerName.trim() || !signerEmail.trim() || savingSigner}
+                        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <UserPlus size={13} /> Agregar
+                      </button>
+                    </div>
+                    {signerError && (
+                      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{signerError}</p>
+                    )}
+                    <button type="button" onClick={() => setAddingSignerOpen(false)} className="text-xs text-zinc-400 hover:text-zinc-600 transition">
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={handleAddSigner}
-                    disabled={!signerName.trim() || !signerEmail.trim() || savingSigner}
-                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={() => setAddingSignerOpen(true)}
+                    className="flex w-full items-center gap-2 px-4 py-3 text-xs font-semibold text-zinc-500 hover:text-zinc-800 hover:bg-zinc-50 transition"
                   >
-                    <UserPlus size={13} /> Agregar
+                    <Plus size={13} /> Agregar firmante
                   </button>
-                </div>
-                {signerError && (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{signerError}</p>
                 )}
               </div>
             </div>
@@ -822,31 +838,38 @@ export function ContractDetailModal({
             </div>
 
             {/* Contenido */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6">
               {pdfUrl ? (
                 <iframe
                   src={pdfUrl}
-                  className="h-full w-full border-0"
+                  className="h-full w-full border-0 rounded-xl"
+                  style={{ minHeight: "60vh" }}
                   title="Vista previa del contrato"
                 />
+              ) : displayContract.templateId || displayContract.templateFields ? (
+                <ContractDocument
+                  templateId={displayContract.templateId ?? "custom"}
+                  fields={displayContract.templateFields ?? {}}
+                  alumnos={detail?.signers?.map((s) => ({
+                    nombre: s.name ?? "",
+                    dni: "",
+                    cuil: "",
+                    email: s.email ?? "",
+                    domicilio: "",
+                  })) ?? []}
+                  logoHeader
+                />
               ) : (
-                <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
-                  {/* Preview skeleton estilizado */}
-                  <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm space-y-4">
-                    <div className="space-y-1 border-b border-zinc-100 pb-4 mb-2">
-                      <div className="h-2.5 bg-zinc-200 rounded-full w-3/4 mx-auto" />
-                      <div className="h-2 bg-zinc-100 rounded-full w-1/2 mx-auto" />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="h-2 bg-zinc-100 rounded-full w-full" />
-                      <div className="h-2 bg-zinc-100 rounded-full w-5/6" />
-                      <div className="h-2 bg-zinc-100 rounded-full w-4/6" />
-                      <div className="h-2 bg-zinc-100 rounded-full w-full" />
-                      <div className="h-2 bg-zinc-100 rounded-full w-3/4" />
-                    </div>
+                <div className="flex flex-col items-center justify-center h-full gap-3 py-16 text-center">
+                  <div className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-6 space-y-3">
+                    <div className="h-2.5 bg-zinc-200 rounded-full w-3/4 mx-auto" />
+                    <div className="h-2 bg-zinc-100 rounded-full w-1/2 mx-auto mb-4" />
+                    <div className="h-2 bg-zinc-100 rounded-full w-full" />
+                    <div className="h-2 bg-zinc-100 rounded-full w-5/6" />
+                    <div className="h-2 bg-zinc-100 rounded-full w-4/6" />
                   </div>
                   <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
-                    Este contrato aún no tiene una versión PDF generada. Se creará automáticamente cuando se procese la firma.
+                    No hay contenido disponible para previsualizar.
                   </p>
                 </div>
               )}
