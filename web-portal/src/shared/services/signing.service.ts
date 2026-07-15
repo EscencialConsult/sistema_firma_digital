@@ -124,6 +124,16 @@ export async function executeSignature(
 
   const signedAt = new Date().toISOString();
 
+  // Capture client public IP
+  let clientIp: string | null = null;
+  try {
+    const ipRes = await fetch("https://api.ipify.org?format=json");
+    if (ipRes.ok) {
+      const ipJson = await ipRes.json() as { ip?: string };
+      clientIp = ipJson.ip ?? null;
+    }
+  } catch { /* ignore — non-critical */ }
+
   // 1. Insert signature record
   const { data: sig, error: sigError } = await supabase
     .from("signatures")
@@ -135,7 +145,7 @@ export async function executeSignature(
       signer_email:         request.signerEmail,
       signer_name:          request.signerName,
       document_hash:        request.sha256Hash || `manual-signature:${requestId}:${signedAt}`,
-      ip_address:           null,
+      ip_address:           clientIp,
       user_agent:           navigator.userAgent,
       signed_at:            signedAt,
       signature_method:     "CANVAS",
@@ -160,7 +170,7 @@ export async function executeSignature(
     entity_type:   "signature_request",
     entity_id:     requestId,
     document_hash: request.sha256Hash ?? null,
-    ip_address:    null,
+    ip_address:    clientIp,
     user_agent:    navigator.userAgent,
     metadata:      { signatureId: sig.id, method: "CANVAS+FACIAL" },
   });
@@ -171,7 +181,7 @@ export async function executeSignature(
     signedAt,
     signerEmail:  request.signerEmail,
     signerName:   request.signerName,
-    ipAddress:    "—",
+    ipAddress:    clientIp ?? "—",
   };
 }
 
@@ -232,7 +242,7 @@ export async function generateConsolidatedPdfBlob(documentId: string): Promise<B
     // 1. Chequear si el documento está COMPLETED y no tiene PDF aún
     const { data: doc } = await supabase
       .from("documents")
-      .select("title, status, organization_id, template_id, template_fields, document_versions:document_versions!document_versions_document_id_fkey(*)")
+      .select("title, status, organization_id, template_id, template_fields, document_versions:document_versions!document_versions_document_id_fkey(*), organization:organizations!organization_id(name)")
       .eq("id", documentId)
       .single();
 
@@ -254,13 +264,13 @@ export async function generateConsolidatedPdfBlob(documentId: string): Promise<B
       .select("signature_request_id, signature_data, signed_at")
       .in("signature_request_id", srIds);
 
-    const signers = srs.map((sr) => {
+    const signers: { name: string; email: string; signedAt: string; signatureData: string | null }[] = srs.map((sr) => {
       const sig = sigs?.find((s) => s.signature_request_id === sr.id);
       return {
         name:          sr.signer_name as string,
         email:         sr.signer_email as string,
         signedAt:      (sig?.signed_at as string) ?? new Date().toISOString(),
-        signatureData: (sig?.signature_data as string) ?? null,
+        signatureData: (sig?.signature_data as string | null) ?? null,
       };
     });
 
@@ -269,6 +279,37 @@ export async function generateConsolidatedPdfBlob(documentId: string): Promise<B
     const templateFields = rawFields
       ? Object.fromEntries(Object.entries(rawFields).map(([k, v]) => [k, String(v ?? "")]))
       : null;
+
+    // Include authority as a signer if present in template_fields
+    const autorNombre = rawFields?.autoridad_nombre as string | undefined;
+    const autorSigUrl = rawFields?.autoridad_signature_url as string | undefined;
+    const autorEmail  = rawFields?.autoridad_email as string | undefined;
+    if (autorNombre && autorSigUrl) {
+      let autorSigData: string | null = null;
+      try {
+        const imgRes = await fetch(autorSigUrl);
+        if (imgRes.ok) {
+          const imgBlob = await imgRes.blob();
+          autorSigData = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(imgBlob);
+          });
+        }
+      } catch { /* no signature image available */ }
+      signers.unshift({
+        name:          autorNombre,
+        email:         autorEmail ?? "",
+        signedAt:      new Date().toISOString(),
+        signatureData: autorSigData as string | null,
+      });
+    }
+
+    const orgRaw = doc.organization as unknown;
+    const orgItem = Array.isArray(orgRaw) ? (orgRaw as Array<Record<string, unknown>>)[0] : (orgRaw as Record<string, unknown> | null);
+    const organizationName = (orgItem?.name as string) ?? null;
+
     const versions = (doc.document_versions as Array<Record<string, unknown>>) ?? [];
     const originalVersion = [...versions].sort(
       (a, b) => ((a.version_number as number) ?? 0) - ((b.version_number as number) ?? 0)
@@ -293,6 +334,7 @@ export async function generateConsolidatedPdfBlob(documentId: string): Promise<B
       templateId:     (doc.template_id as string) ?? null,
       templateFields,
       originalPdf,
+      organizationName,
     }, documentId, signers);
 
     // 5. Subir a Storage — path: {org_id}/{doc_id}/firmado.pdf

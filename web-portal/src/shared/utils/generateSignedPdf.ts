@@ -14,6 +14,7 @@ export interface SignedPdfDocumentInput {
   templateId?: string | null;
   templateFields?: Record<string, string> | null;
   originalPdf?: Blob | null;
+  organizationName?: string | null;
 }
 
 const PAGE_W = 210;
@@ -83,7 +84,7 @@ function ensurePage(pdf: jsPDF, y: number, needed = 12): number {
   return 22;
 }
 
-function addFooter(pdf: jsPDF) {
+function addFooter(pdf: jsPDF, orgName = "Escencial Consultora") {
   const pages = pdf.getNumberOfPages();
   for (let i = 1; i <= pages; i += 1) {
     pdf.setPage(i);
@@ -91,7 +92,7 @@ function addFooter(pdf: jsPDF) {
     pdf.setFontSize(7);
     pdf.setTextColor(150, 150, 160);
     pdf.text(`Pagina ${i} de ${pages}`, PAGE_W - MARGIN, 286, { align: "right" });
-    pdf.text("Escencial Consultora - Sistema Firma Electrónica - Ley 25.506 Argentina", MARGIN, 286);
+    pdf.text(`${orgName} - Sistema Firma Electrónica - Ley 25.506 Argentina`, MARGIN, 286);
   }
 }
 
@@ -165,13 +166,13 @@ function addSignatureBlocks(pdf: jsPDF, signers: PdfSigner[], y: number): number
   return currentY;
 }
 
-function addCertificatePage(pdf: jsPDF, document: SignedPdfDocumentInput, signers: PdfSigner[], useExistingPage = false) {
+function addCertificatePage(pdf: jsPDF, document: SignedPdfDocumentInput, signers: PdfSigner[], useExistingPage = false, orgName = "Escencial Consultora") {
   if (useExistingPage) {
     pdf.setPage(1);
   } else {
     pdf.addPage();
   }
-  addHeader(pdf, "CERTIFICADO DE FIRMA ELECTRONICA", "Escencial Consultora - Firma Electrónica - Válido conforme Ley 25.506 Argentina");
+  addHeader(pdf, "CERTIFICADO DE FIRMA ELECTRONICA", `${orgName} - Firma Electrónica - Válido conforme Ley 25.506 Argentina`);
 
   let y = 38;
   pdf.setTextColor(24, 24, 27);
@@ -212,6 +213,8 @@ export async function generateSignedPdf(
   const input: SignedPdfDocumentInput = typeof document === "string"
     ? { title: document, id: legacyDocumentId }
     : document;
+
+  const orgName = input.organizationName ?? "Escencial Consultora";
 
   if (input.originalPdf) {
     const originalBytes = await input.originalPdf.arrayBuffer();
@@ -325,8 +328,8 @@ export async function generateSignedPdf(
 
     // Append certificate pages
     const certificatePdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    addCertificatePage(certificatePdf, input, signers, true);
-    addFooter(certificatePdf);
+    addCertificatePage(certificatePdf, input, signers, true, orgName);
+    addFooter(certificatePdf, orgName);
     const certificateBytes = certificatePdf.output("arraybuffer");
     const certificateDoc = await PDFDocument.load(certificateBytes);
     const certificatePages = await pdfDoc.copyPages(certificateDoc, certificateDoc.getPageIndices());
@@ -340,14 +343,18 @@ export async function generateSignedPdf(
   }
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  addHeader(pdf, "CONTRATO FIRMADO ELECTRONICAMENTE", "Escencial Consultora - Sistema Firma Electrónica");
+  addHeader(pdf, "CONTRATO FIRMADO ELECTRONICAMENTE", `${orgName} - Sistema Firma Electrónica`);
 
   let y = 38;
-  pdf.setTextColor(24, 24, 27);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(14);
-  pdf.text(pdf.splitTextToSize(input.title, CONTENT_W), MARGIN, y);
-  y += 16;
+
+  // Only render standalone title for non-template contracts (templates already include the title in their content)
+  if (!input.templateId) {
+    pdf.setTextColor(24, 24, 27);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text(pdf.splitTextToSize(input.title, CONTENT_W), MARGIN, y);
+    y += 16;
+  }
 
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(8);
@@ -367,8 +374,8 @@ export async function generateSignedPdf(
   y = addWrappedText(pdf, contractText(input), MARGIN, y, CONTENT_W, 5.2);
 
   y = addSignatureBlocks(pdf, signers, y + 4);
-  addCertificatePage(pdf, input, signers);
-  addFooter(pdf);
+  addCertificatePage(pdf, input, signers, false, orgName);
+  addFooter(pdf, orgName);
 
   return pdf.output("blob");
 }

@@ -68,6 +68,10 @@ function mapDocToContract(doc: Record<string, unknown>): Contract {
 }
 
 function mapSrToSigner(sr: Record<string, unknown>): ContractSigner {
+  const sigs = (sr.signatures as Array<Record<string, unknown>>) ?? [];
+  const latestSig = [...sigs].sort(
+    (a, b) => new Date(b.signed_at as string).getTime() - new Date(a.signed_at as string).getTime()
+  )[0];
   return {
     id: sr.id as string,
     email: sr.signer_email as string,
@@ -76,7 +80,7 @@ function mapSrToSigner(sr: Record<string, unknown>): ContractSigner {
     sentAt: sr.sent_at as string,
     viewedAt: (sr.viewed_at as string) ?? null,
     signedAt: (sr.signed_at as string) ?? null,
-    signatureUrl: (sr.signature_url as string) ?? null,
+    signatureUrl: (latestSig?.signature_data as string) ?? (sr.signature_url as string) ?? null,
   };
 }
 
@@ -105,7 +109,7 @@ export async function getContractById(id: string): Promise<ContractDetail | null
       *,
       owner:users!owner_id(email),
       document_versions:document_versions!document_versions_document_id_fkey(*),
-      signature_requests(*)
+      signature_requests(*, signatures(signature_data, signed_at))
     `)
     .eq("id", id)
     .single();
