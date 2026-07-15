@@ -531,15 +531,32 @@ export async function sendContractFromTemplate(input: {
 
   if (docError || !doc) throw new Error(docError?.message ?? "Error creando contrato");
 
+  // Cargar nombre y logo de la org del usuario para guardarlo en la fila del firmante
+  const { data: userRow } = await supabase
+    .from("users").select("organization_id").eq("id", authUser.id).maybeSingle();
+  let orgName: string | null = null;
+  let orgLogo: string | null = null;
+  if (userRow?.organization_id) {
+    const { data: orgRow } = await supabase
+      .from("organizations")
+      .select("name, logo_light_url, logo_dark_url")
+      .eq("id", userRow.organization_id)
+      .maybeSingle();
+    orgName = (orgRow?.name as string) ?? null;
+    orgLogo = ((orgRow?.logo_light_url ?? orgRow?.logo_dark_url) as string) ?? null;
+  }
+
   const { error: srErr } = await supabase.from("signature_requests").insert({
-    document_id:    doc.id,
-    document_title: input.title,
-    signer_email:   input.user.email,
-    signer_name:    input.user.name,
-    signer_cuil:    input.user.cuil ?? null,
-    status:         "PENDING",
-    expires_at:     expiresAt,
-    signing_order:  0,
+    document_id:       doc.id,
+    document_title:    input.title,
+    organization_name: orgName,
+    organization_logo: orgLogo,
+    signer_email:      input.user.email,
+    signer_name:       input.user.name,
+    signer_cuil:       input.user.cuil ?? null,
+    status:            "PENDING",
+    expires_at:        expiresAt,
+    signing_order:     0,
   });
   if (srErr) throw new Error(srErr.message);
 

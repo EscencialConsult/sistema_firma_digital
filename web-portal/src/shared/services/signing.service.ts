@@ -49,11 +49,12 @@ function mapRowToSigningRequest(
     templateId:         (document.template_id as string) ?? undefined,
     templateFields,
     // Nombre de la org: lo sacamos de los templateFields del contrato (ya completados al enviar)
-    organizationName:   (rawFields?.razon_social_consultora as string)
+    organizationName:   (sr.organization_name as string)
+                     ?? (rawFields?.razon_social_consultora as string)
                      ?? (rawFields?.nombre_consultora as string)
                      ?? (rawFields?.nombre_empresa as string)
-                     ?? (rawFields?.razon_social_empresa as string)
                      ?? null,
+    organizationLogo:   (sr.organization_logo as string) ?? null,
     senderName:         (rawFields?.autoridad_nombre as string) ?? null,
   };
 }

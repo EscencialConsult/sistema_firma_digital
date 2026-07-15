@@ -283,29 +283,34 @@ function ContractCard({
       <div className="p-5 space-y-4">
         {/* Fila principal */}
         <div className="flex items-start gap-3 min-w-0">
-          {/* Ícono doc */}
-          <div className={`mt-0.5 shrink-0 h-10 w-10 rounded-xl flex items-center justify-center ${
-            r.status === "SIGNED" ? "bg-emerald-50" : expired ? "bg-zinc-100" : "bg-amber-50"
+          {/* Logo de org o ícono fallback */}
+          <div className={`shrink-0 h-12 w-12 rounded-xl flex items-center justify-center overflow-hidden border border-zinc-100 ${
+            r.organizationLogo ? "bg-white p-1" : r.status === "SIGNED" ? "bg-emerald-50" : expired ? "bg-zinc-100" : "bg-amber-50"
           }`}>
-            <StatusIcon r={r} />
+            {r.organizationLogo
+              ? <img src={r.organizationLogo} alt={r.organizationName ?? ""} className="h-full w-full object-contain" />
+              : <StatusIcon r={r} />
+            }
           </div>
 
           <div className="min-w-0 flex-1">
+            {/* Empresa emisora */}
+            {r.organizationName && (
+              <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5 flex items-center gap-1">
+                <Building2 size={10} /> {r.organizationName}
+              </p>
+            )}
+
             <div className="flex items-start justify-between gap-3 flex-wrap">
-              <p className="font-bold text-zinc-900 leading-tight">{r.documentTitle}</p>
+              <p className="font-bold text-zinc-900 leading-tight">{r.documentTitle || "Contrato pendiente"}</p>
               <Badge status={expired ? "EXPIRED" : r.status} />
             </div>
 
             {/* Metadatos */}
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-              {r.organizationName && (
-                <span className="flex items-center gap-1 text-xs text-zinc-500">
-                  <Building2 size={11} className="shrink-0" /> {r.organizationName}
-                </span>
-              )}
+            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5">
               {r.senderName && (
                 <span className="flex items-center gap-1 text-xs text-zinc-500">
-                  <User size={11} className="shrink-0" /> Firma: {r.senderName}
+                  <User size={11} className="shrink-0" /> Firma: <strong>{r.senderName}</strong>
                 </span>
               )}
               <span className="flex items-center gap-1 text-xs text-zinc-400">

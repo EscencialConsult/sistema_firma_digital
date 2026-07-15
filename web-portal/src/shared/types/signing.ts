@@ -24,6 +24,8 @@ export interface SigningRequest {
   templateFields?: Record<string, string>;
   /** Nombre de la organización que envió el contrato */
   organizationName?: string | null;
+  /** Logo URL de la org */
+  organizationLogo?: string | null;
   /** Nombre de quien envía (autoridad firmante) */
   senderName?: string | null;
 }
