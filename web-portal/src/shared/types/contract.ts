@@ -65,6 +65,7 @@ export interface ContractSigner {
   sentAt: string;
   viewedAt: string | null;
   signedAt: string | null;
+  signatureUrl: string | null;
 }
 
 export interface ContractTemplate {

@@ -58,34 +58,51 @@ function DocClause({ n, title, children }: { n: string; title: string; children:
   );
 }
 
-function DocSig({ label, name, sub, signatureUrl }: { label: string; name: string; sub: string; signatureUrl?: string }) {
+function DocSig({ label, name, sub, signatureUrl }: { label: string; name: string; sub: string; signatureUrl?: string | null }) {
   return (
-    <div className="text-center">
-      <div className="relative mt-14">
-        {signatureUrl && (
+    <div className="flex flex-col items-center text-center">
+      {/* Área de firma — altura fija para alinear la línea base */}
+      <div className="flex items-end justify-center w-full" style={{ height: 80 }}>
+        {signatureUrl ? (
           <img
             src={signatureUrl}
             alt="Firma"
-            className="mx-auto mb-1 h-12 object-contain"
-            style={{ maxWidth: 160 }}
+            className="object-contain mb-1"
+            style={{ maxHeight: 72, maxWidth: 220 }}
           />
+        ) : (
+          <span className="text-zinc-300 text-[11px] italic mb-2">—</span>
         )}
-        <div className="border-t-2 border-zinc-500 pt-3">
-          <p className="font-bold text-xs uppercase font-sans">{name}</p>
-          <p className="text-[11px] text-zinc-500">{sub}</p>
-          <p className="text-[11px] text-zinc-500 italic">{label}</p>
-        </div>
+      </div>
+      <div className="border-t-2 border-zinc-700 pt-2.5 w-full">
+        <p className="font-bold text-xs uppercase font-sans tracking-wide">{name}</p>
+        {sub && <p className="text-[11px] text-zinc-500 mt-0.5">{sub}</p>}
+        <p className="text-[11px] text-zinc-400 italic mt-0.5">{label}</p>
       </div>
     </div>
   );
 }
 
-function DocSigEmpty({ label }: { label: string }) {
+function DocSigEmpty({ label, name, signatureUrl }: { label: string; name?: string; signatureUrl?: string | null }) {
   return (
-    <div className="text-center">
-      <div className="border-t-2 border-zinc-300 pt-3 mt-14">
-        <p className="text-[11px] text-zinc-400 italic">{label}</p>
-        <p className="text-[11px] text-zinc-300">Firma pendiente</p>
+    <div className="flex flex-col items-center text-center">
+      <div className="flex items-end justify-center w-full" style={{ height: 80 }}>
+        {signatureUrl ? (
+          <img
+            src={signatureUrl}
+            alt="Firma"
+            className="object-contain mb-1"
+            style={{ maxHeight: 72, maxWidth: 220 }}
+          />
+        ) : (
+          <span className="text-zinc-300 text-[11px] italic mb-2">Firma pendiente</span>
+        )}
+      </div>
+      <div className="border-t-2 border-zinc-300 pt-2.5 w-full">
+        {name && <p className="font-bold text-xs uppercase font-sans tracking-wide text-zinc-700">{name}</p>}
+        <p className={`text-[11px] italic mt-0.5 ${signatureUrl ? "text-emerald-600" : "text-zinc-400"}`}>
+          {signatureUrl ? "Firmado electrónicamente" : label}
+        </p>
       </div>
     </div>
   );
@@ -93,7 +110,7 @@ function DocSigEmpty({ label }: { label: string }) {
 
 function DocSignatures({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border-t-2 border-zinc-200 pt-6 mt-4 grid grid-cols-2 gap-12">
+    <div className="border-t border-zinc-200 pt-8 mt-6 grid grid-cols-2 gap-10">
       {children}
     </div>
   );
@@ -159,9 +176,9 @@ function FormacionDoc({ f, alumno }: { f: Record<string, string>; alumno: Alumno
           label="Representante Legal — Escencial Consultora S.A.S."
           name={f.autoridad_nombre || "—"}
           sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
-          signatureUrl={f.autoridad_signature_url || undefined}
+          signatureUrl={f.autoridad_signature_url}
         />
-        <DocSigEmpty label="El/La Alumno/a" />
+        <DocSigEmpty label="El/La Alumno/a" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -216,7 +233,7 @@ function InmuebleDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
       </DocClause>
       <DocSignatures>
         <DocSig label="Propietario/a" name={f.locador_nombre || "—"} sub={`DNI: ${f.locador_dni || "—"}`} />
-        <DocSigEmpty label="Locatario/a" />
+        <DocSigEmpty label="Locatario/a" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -270,7 +287,7 @@ function ReservaDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
       </DocClause>
       <DocSignatures>
         <DocSig label="Vendedor/a" name={f.vendedor_nombre || "—"} sub={`DNI: ${f.vendedor_dni || "—"}`} />
-        <DocSigEmpty label="Comprador/a" />
+        <DocSigEmpty label="Comprador/a" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -333,7 +350,7 @@ function SoftwareDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
           sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
           signatureUrl={f.autoridad_signature_url || undefined}
         />
-        <DocSigEmpty label="Comitente" />
+        <DocSigEmpty label="Comitente" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -393,7 +410,7 @@ function SoporteDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
           sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
           signatureUrl={f.autoridad_signature_url || undefined}
         />
-        <DocSigEmpty label="Comitente" />
+        <DocSigEmpty label="Comitente" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
       <DocFooter />
     </DocWrapper>
@@ -486,7 +503,7 @@ function CustomDoc({ f, alumno, logoHeader, logoWatermark, logoUrl }: {
         />
         <DocSignatures>
           <DocSig label="Firma Autorizada" name={f.autoridad_nombre || "—"} sub={`CUIL/CUIT: ${f.autoridad_cuil || "—"}`} signatureUrl={f.autoridad_signature_url || undefined} />
-          <DocSigEmpty label={alumno.nombre || "Firmante"} />
+          <DocSigEmpty label="Firmante" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
         </DocSignatures>
         <DocFooter />
       </div>
@@ -858,6 +875,7 @@ export function ContractDetailModal({
                       cuil: "",
                       email: s.email ?? "",
                       domicilio: "",
+                      signatureUrl: s.signatureUrl ?? null,
                     })) ?? []}
                     logoHeader
                   />

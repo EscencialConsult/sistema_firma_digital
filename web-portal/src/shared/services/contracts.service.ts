@@ -76,6 +76,7 @@ function mapSrToSigner(sr: Record<string, unknown>): ContractSigner {
     sentAt: sr.sent_at as string,
     viewedAt: (sr.viewed_at as string) ?? null,
     signedAt: (sr.signed_at as string) ?? null,
+    signatureUrl: (sr.signature_url as string) ?? null,
   };
 }
 

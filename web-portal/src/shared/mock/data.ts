@@ -196,6 +196,7 @@ export const MOCK_CONTRACT_DETAIL: ContractDetail = {
       sentAt: "2026-06-10T09:30:00Z",
       viewedAt: null,
       signedAt: null,
+      signatureUrl: null,
     },
   ],
 };

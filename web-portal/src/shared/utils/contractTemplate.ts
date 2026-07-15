@@ -11,6 +11,7 @@ export interface AlumnoData {
   dni: string;
   cuil: string;
   domicilio: string;
+  signatureUrl?: string | null;
 }
 
 export interface TemplateFieldDef {
