@@ -1,13 +1,16 @@
 import {
   AlertCircle,
   ArrowRight,
+  Building2,
   CheckCircle2,
   Clock,
   Download,
   Eye,
   FileSignature,
+  FileText,
   PenLine,
   ShieldCheck,
+  User,
   XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -268,54 +271,76 @@ function ContractCard({
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-5 hover:border-zinc-300 transition">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className={`rounded-2xl border bg-white transition hover:shadow-sm ${canSign ? "border-zinc-300 shadow-sm" : "border-zinc-200"}`}>
+      {/* Franja superior de estado */}
+      {canSign && (
+        <div className="rounded-t-2xl px-5 py-2 flex items-center gap-2" style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+          <Clock size={12} />
+          <span className="text-[11px] font-bold uppercase tracking-widest">Requiere tu firma</span>
+        </div>
+      )}
+
+      <div className="p-5 space-y-4">
+        {/* Fila principal */}
         <div className="flex items-start gap-3 min-w-0">
-          <div className="mt-0.5 shrink-0">
+          {/* Ícono doc */}
+          <div className={`mt-0.5 shrink-0 h-10 w-10 rounded-xl flex items-center justify-center ${
+            r.status === "SIGNED" ? "bg-emerald-50" : expired ? "bg-zinc-100" : "bg-amber-50"
+          }`}>
             <StatusIcon r={r} />
           </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-zinc-950 truncate">{r.documentTitle}</p>
-            <p className="mt-1 text-xs text-zinc-400">{getStatusDetail(r)}</p>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <p className="font-bold text-zinc-900 leading-tight">{r.documentTitle}</p>
+              <Badge status={expired ? "EXPIRED" : r.status} />
+            </div>
+
+            {/* Metadatos */}
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              {r.organizationName && (
+                <span className="flex items-center gap-1 text-xs text-zinc-500">
+                  <Building2 size={11} className="shrink-0" /> {r.organizationName}
+                </span>
+              )}
+              {r.senderName && (
+                <span className="flex items-center gap-1 text-xs text-zinc-500">
+                  <User size={11} className="shrink-0" /> Firma: {r.senderName}
+                </span>
+              )}
+              <span className="flex items-center gap-1 text-xs text-zinc-400">
+                <Clock size={11} className="shrink-0" /> {getStatusDetail(r)}
+              </span>
+            </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Badge status={expired ? "EXPIRED" : r.status} />
+
+        {/* Acciones */}
+        <div className="flex items-center justify-end gap-2 pt-1 border-t border-zinc-100">
           {canSign ? (
-            <Button onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">
+            <Button onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-5 text-xs">
               <PenLine size={13} /> Firmar ahora
             </Button>
           ) : r.status === "SIGNED" ? (
-            <div className="flex items-center gap-2">
-              <Button onClick={openDocument} disabled={refreshingPdf} className="h-9 px-4 text-xs">
-                <Eye size={13} /> {refreshingPdf ? "Preparando..." : "Ver PDF"}
-              </Button>
+            <>
               <Button
                 variant="secondary"
                 className="h-9 px-4 text-xs"
                 disabled={refreshingPdf}
                 onClick={async () => {
                   const blob = await generateConsolidatedPdfBlob(r.documentId);
-                  if (blob) {
-                    downloadBlob(blob, signedPdfFileName({
-                      title: r.documentTitle,
-                      fileName: r.fileName,
-                      sequence: r.versionNumber,
-                    }));
-                  }
+                  if (blob) downloadBlob(blob, signedPdfFileName({ title: r.documentTitle, fileName: r.fileName, sequence: r.versionNumber }));
                 }}
               >
                 <Download size={13} /> Descargar
               </Button>
-              <Link to={`/contracts/${r.documentId}`}>
-                <Button variant="secondary" className="h-9 px-4 text-xs">
-                  Detalle
-                </Button>
-              </Link>
-            </div>
+              <Button onClick={openDocument} disabled={refreshingPdf} className="h-9 px-4 text-xs">
+                <Eye size={13} /> {refreshingPdf ? "Preparando..." : "Ver PDF"}
+              </Button>
+            </>
           ) : (
             <Button variant="secondary" onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">
-              Ver detalles
+              <FileText size={13} /> Ver detalles
             </Button>
           )}
         </div>

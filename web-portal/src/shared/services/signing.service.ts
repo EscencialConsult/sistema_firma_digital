@@ -48,6 +48,8 @@ function mapRowToSigningRequest(
     expiresAt:          sr.expires_at as string,
     templateId:         (document.template_id as string) ?? undefined,
     templateFields,
+    organizationName:   (document.organization as Record<string, unknown> | undefined)?.name as string ?? null,
+    senderName:         (rawFields?.autoridad_nombre as string) ?? null,
   };
 }
 
@@ -59,7 +61,7 @@ export async function getMySigningRequests(email: string): Promise<SigningReques
 
   const { data, error } = await supabase
     .from("signature_requests")
-    .select("*, documents(*, document_versions:document_versions!document_versions_document_id_fkey(*))")
+    .select("*, documents(*, organization:organizations(name), document_versions:document_versions!document_versions_document_id_fkey(*))")
     .ilike("signer_email", email)
     .order("created_at", { ascending: false });
 
@@ -71,7 +73,7 @@ export async function getMySigningRequests(email: string): Promise<SigningReques
 export async function getSigningRequest(id: string): Promise<SigningRequest | null> {
   const { data, error } = await supabase
     .from("signature_requests")
-    .select("*, documents(*, document_versions:document_versions!document_versions_document_id_fkey(*))")
+    .select("*, documents(*, organization:organizations(name), document_versions:document_versions!document_versions_document_id_fkey(*))")
     .eq("id", id)
     .maybeSingle();
 

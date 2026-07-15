@@ -22,6 +22,10 @@ export interface SigningRequest {
   /** Set when the document was created from a template in the admin panel */
   templateId?: string;
   templateFields?: Record<string, string>;
+  /** Nombre de la organización que envió el contrato */
+  organizationName?: string | null;
+  /** Nombre de quien envía (autoridad firmante) */
+  senderName?: string | null;
 }
 
 export interface OtpChallenge {
