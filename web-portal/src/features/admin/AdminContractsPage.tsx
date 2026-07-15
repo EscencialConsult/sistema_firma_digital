@@ -551,18 +551,58 @@ function SendingFlow({
 
   if (done && sentContract) {
     return (
-      <div className="flex flex-col items-center py-20 text-center max-w-sm mx-auto gap-4">
-        <div className="grid h-20 w-20 place-items-center rounded-full bg-emerald-100 border border-emerald-200">
-          <Check size={36} className="text-emerald-600" />
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        {/* Ícono de éxito con color de marca */}
+        <div
+          className="h-24 w-24 rounded-full flex items-center justify-center mb-6 shadow-lg"
+          style={{ background: "var(--brand-primary)" }}
+        >
+          <Check size={44} strokeWidth={2.5} style={{ color: "var(--brand-primary-text)" }} />
         </div>
-        <div>
-          <h3 className="text-xl font-bold text-zinc-900">Contrato enviado</h3>
-          <p className="text-sm text-zinc-500 mt-2">
-            <strong>{selectedUser?.fullName}</strong> verá el contrato pendiente en su panel.<br />
-            Firma por Escencial: <strong>{selectedAuth?.fullName}</strong>.
-          </p>
+
+        <h2 className="text-2xl font-bold text-zinc-900 mb-1">¡Contrato enviado!</h2>
+        <p className="text-sm text-zinc-400 mb-8 max-w-xs">
+          El contrato fue generado y está listo para ser firmado.
+        </p>
+
+        {/* Cards de resumen */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md mb-8 text-left">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-0.5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Destinatario</p>
+            <p className="text-sm font-semibold text-zinc-800">{selectedUser?.fullName ?? "—"}</p>
+            <p className="text-xs text-zinc-400">{selectedUser?.email ?? ""}</p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-0.5">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Firma autoridad</p>
+            <p className="text-sm font-semibold text-zinc-800">{selectedAuth?.fullName ?? "—"}</p>
+            <p className="text-xs text-zinc-400">{orgName ?? ""}</p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-0.5 sm:col-span-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Plantilla</p>
+            <p className="text-sm font-semibold text-zinc-800">{template.name}</p>
+          </div>
         </div>
-        <Button onClick={onBack} className="h-10 px-6 mt-2">Ver contratos</Button>
+
+        {/* Acciones */}
+        <div className="flex gap-3">
+          <Button variant="secondary" onClick={onBack} className="h-10 px-5 text-zinc-700">
+            Ver contratos
+          </Button>
+          <Button
+            onClick={() => {
+              setDone(false);
+              setSentContract(null);
+              setStep(0);
+              setSelectedAuth(null);
+              setSelectedUser(null);
+              setVarValues({});
+            }}
+            className="h-10 px-6"
+            style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}
+          >
+            <Send size={14} /> Enviar otro
+          </Button>
+        </div>
       </div>
     );
   }
