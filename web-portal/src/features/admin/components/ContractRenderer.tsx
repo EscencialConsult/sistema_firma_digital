@@ -3,7 +3,7 @@
  * Also includes ContractDetailView for viewing existing contracts.
  */
 
-import { Plus, Trash2, UserPlus, X } from "lucide-react";
+import { Calendar, Check, Clock, FileText, Hash, Mail, Plus, Shield, Trash2, User, UserPlus, X } from "lucide-react";
 import { loadOrgCache } from "../../../shared/config/orgCache";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -603,206 +603,256 @@ export function ContractDetailModal({
     }
   }
 
+  const signersDone = displayContract.completedSigners;
+  const signersTotal = displayContract.totalSigners;
+  const allSigned = signersDone > 0 && signersDone === signersTotal;
+  const pdfUrl = displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl;
+
   const modalContent = (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden p-4 sm:p-6">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center overflow-hidden p-0 sm:p-6">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-zinc-900/45 backdrop-blur-sm animate-in fade-in duration-300" 
-        onClick={onClose} 
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+        onClick={onClose}
       />
 
-      {/* Drawer */}
-      <div className="relative flex h-[min(92vh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-        {/* Header */}
+      {/* Modal */}
+      <div className="relative flex h-[min(96vh,900px)] w-full max-w-6xl flex-col overflow-hidden rounded-t-[24px] sm:rounded-[24px] bg-white shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
 
-        <div className="flex items-center justify-between border-b border-zinc-100 bg-white px-6 py-5 sm:px-7">
-          <div className="min-w-0 pr-4">
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${st.color}`}>
-                {st.label}
-              </span>
-              <p className="text-[10px] text-zinc-500 font-mono tracking-widest">#{displayContract.id.split("-")[0]}</p>
+        {/* Header con gradiente sutil */}
+        <div className="flex items-start justify-between gap-4 px-6 py-5 sm:px-7 border-b border-zinc-100">
+          <div className="flex items-start gap-3 min-w-0">
+            {/* Ícono de documento */}
+            <div className="mt-0.5 shrink-0 h-10 w-10 rounded-2xl bg-zinc-100 flex items-center justify-center">
+              <FileText size={18} className="text-zinc-500" />
             </div>
-            <h2 className="font-bold text-zinc-900 text-lg leading-tight truncate">{displayContract.title}</h2>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${st.color}`}>
+                  {st.label}
+                </span>
+                <span className="text-[10px] text-zinc-400 font-mono">#{displayContract.id.split("-")[0]}</span>
+                <span className="text-[10px] text-zinc-400">v{displayContract.versionNumber}</span>
+              </div>
+              <h2 className="font-bold text-zinc-900 text-base leading-tight">{displayContract.title}</h2>
+            </div>
           </div>
           <button
             onClick={onClose}
             type="button"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 transition"
+            className="mt-1 shrink-0 grid h-8 w-8 place-items-center rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition"
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto bg-zinc-50/60 p-5 sm:p-6 lg:grid-cols-[420px_minmax(0,1fr)] lg:overflow-hidden">
-          <div className="min-w-0 space-y-5 overflow-hidden lg:overflow-y-auto lg:pr-1">
-          {/* Main Info */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-600 flex items-center gap-2 shadow-sm">
-                <span>Versión {displayContract.versionNumber}</span>
+        {/* Body: 2 columnas */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)] overflow-hidden">
+
+          {/* ── Panel izquierdo ── */}
+          <div className="flex flex-col gap-4 overflow-y-auto border-r border-zinc-100 p-5 sm:p-6 bg-zinc-50/50">
+
+            {/* Progreso de firmas */}
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Progreso de firmas</p>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${allSigned ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-zinc-200 bg-zinc-50 text-zinc-600"}`}>
+                  {signersDone}/{signersTotal}
+                </span>
               </div>
-              <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 flex items-center gap-2 shadow-sm">
-                <span>{displayContract.completedSigners} / {displayContract.totalSigners} firmas</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Creado el</p>
-              <p className="text-sm font-medium text-zinc-800">{fmtDate(displayContract.createdAt)}</p>
-            </div>
-            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Última actualización</p>
-              <p className="text-sm font-medium text-zinc-800">{fmtDate(displayContract.updatedAt)}</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Propietario</p>
-            <p className="text-sm font-medium text-zinc-800">{displayContract.ownerEmail}</p>
-          </div>
-
-          {displayContract.description && (
-            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4 transition hover:bg-zinc-100/50">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1.5">Descripción y Destinatarios</p>
-              <p className="text-sm text-zinc-600 leading-relaxed">{displayContract.description}</p>
-            </div>
-          )}
-
-          <div className="min-w-0 space-y-4 overflow-hidden rounded-xl border border-zinc-200 bg-white p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Firmantes requeridos</p>
-                <p className="mt-1 text-xs text-zinc-500">Agregá firmantes o quitá los que todavía no hayan firmado.</p>
-              </div>
-              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-600">
-                {displayContract.completedSigners}/{displayContract.totalSigners}
-              </span>
-            </div>
-
-            <div className="grid min-w-0 grid-cols-1 gap-2">
-              <input
-                value={signerName}
-                onChange={(e) => setSignerName(e.target.value)}
-                placeholder="Nombre del firmante"
-                className="h-9 min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
-              />
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
-                <input
-                  value={signerEmail}
-                  onChange={(e) => setSignerEmail(e.target.value)}
-                  placeholder="email@ejemplo.com"
-                  type="email"
-                  className="h-9 min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-800 outline-none focus:border-zinc-500"
+              {/* Barra de progreso */}
+              <div className="h-1.5 w-full rounded-full bg-zinc-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: signersTotal > 0 ? `${(signersDone / signersTotal) * 100}%` : "0%",
+                    background: allSigned ? "#10b981" : "var(--brand-primary, #18181b)",
+                  }}
                 />
-                <button
-                  type="button"
-                  onClick={handleAddSigner}
-                  disabled={!signerName.trim() || !signerEmail.trim() || savingSigner}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <UserPlus size={13} /> Agregar
-                </button>
               </div>
             </div>
 
-            {signerError && (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{signerError}</p>
+            {/* Metadatos */}
+            <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+              <div className="divide-y divide-zinc-100">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Calendar size={14} className="shrink-0 text-zinc-400" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Creado</p>
+                    <p className="text-sm font-medium text-zinc-800 truncate">{fmtDate(displayContract.createdAt)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Clock size={14} className="shrink-0 text-zinc-400" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Actualizado</p>
+                    <p className="text-sm font-medium text-zinc-800 truncate">{fmtDate(displayContract.updatedAt)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Mail size={14} className="shrink-0 text-zinc-400" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Propietario</p>
+                    <p className="text-sm font-medium text-zinc-800 truncate">{displayContract.ownerEmail}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Descripción */}
+            {displayContract.description && (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Descripción</p>
+                <p className="text-sm text-zinc-600 leading-relaxed">{displayContract.description}</p>
+              </div>
             )}
 
-            <div className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-100">
-              {detail?.signers?.length ? detail.signers.map((signer) => {
-                const meta = STATUS_LABELS[signer.status] ?? { label: signer.status, color: "text-zinc-500 bg-zinc-50 border-zinc-200" };
-                const canRemove = signer.status !== "SIGNED";
-                return (
-                  <div key={signer.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-zinc-900">{signer.name || signer.email}</p>
-                      <p className="truncate text-xs text-zinc-500">{signer.email}</p>
+            {/* Firmantes */}
+            <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+              <div className="px-4 py-3 border-b border-zinc-100 flex items-center gap-2">
+                <User size={13} className="text-zinc-400" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex-1">Firmantes</p>
+              </div>
+
+              {/* Lista de firmantes */}
+              <div className="divide-y divide-zinc-50">
+                {detail?.signers?.length ? detail.signers.map((signer) => {
+                  const meta = STATUS_LABELS[signer.status] ?? { label: signer.status, color: "text-zinc-500 bg-zinc-50 border-zinc-200" };
+                  const canRemove = signer.status !== "SIGNED";
+                  const isSigned = signer.status === "SIGNED";
+                  return (
+                    <div key={signer.id} className="flex items-center gap-3 px-4 py-3">
+                      {/* Avatar */}
+                      <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold ${isSigned ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>
+                        {isSigned ? <Check size={14} strokeWidth={2.5} /> : (signer.name?.[0] ?? signer.email?.[0] ?? "?").toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-zinc-900 leading-tight">{signer.name || signer.email}</p>
+                        <p className="truncate text-xs text-zinc-400">{signer.email}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${meta.color}`}>
+                          {meta.label}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSigner(signer.id)}
+                          disabled={!canRemove}
+                          title={canRemove ? "Quitar firmante" : "No se puede quitar un firmante que ya firmó"}
+                          className="grid h-7 w-7 place-items-center rounded-lg text-zinc-300 transition hover:bg-red-50 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-20"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${meta.color}`}>
-                        {meta.label}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSigner(signer.id)}
-                        disabled={!canRemove}
-                        title={canRemove ? "Quitar firmante" : "No se puede quitar un firmante que ya firmó"}
-                        className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                  );
+                }) : (
+                  <div className="px-4 py-4 text-xs text-zinc-400 italic text-center">
+                    Todavía no hay firmantes asignados.
                   </div>
-                );
-              }) : (
-                <div className="flex items-center gap-2 px-3 py-3 text-xs text-zinc-400">
-                  <Plus size={13} /> Todavía no hay firmantes asignados.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* SHA-256 Hash */}
-          <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-100 rounded-bl-full -mr-8 -mt-8 opacity-50 transition group-hover:scale-110" />
-            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-1.5 relative z-10">Huella Criptográfica (SHA-256)</p>
-            <p className="font-mono text-[11px] text-zinc-700 break-all leading-relaxed relative z-10 selection:bg-blue-200">
-              {displayContract.sha256Hash}
-            </p>
-            <p className="mt-2 text-[10px] text-zinc-500 relative z-10">
-              Este identificador único garantiza la inmutabilidad y validez legal del documento.
-            </p>
-          </div>
-
-          </div>
-
-          {/* Document Preview */}
-          <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-3 ml-1">Contenido Documental</p>
-            <div className="overflow-hidden rounded-2xl border border-zinc-200 shadow-sm bg-white">
-              <div className="bg-zinc-50 border-b border-zinc-200 p-3 flex justify-between items-center">
-                <span className="text-xs font-mono text-zinc-500">{displayContract.fileName || "documento.pdf"}</span>
-                {(displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl) && (
-                  <a
-                    href={displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl || "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition"
-                  >
-                    Abrir PDF completo
-                  </a>
                 )}
               </div>
-              {displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl ? (
+
+              {/* Agregar firmante */}
+              <div className="border-t border-zinc-100 p-3 space-y-2 bg-zinc-50/60">
+                <input
+                  value={signerName}
+                  onChange={(e) => setSignerName(e.target.value)}
+                  placeholder="Nombre del firmante"
+                  className="h-9 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-zinc-400 transition"
+                />
+                <div className="flex gap-2">
+                  <input
+                    value={signerEmail}
+                    onChange={(e) => setSignerEmail(e.target.value)}
+                    placeholder="email@ejemplo.com"
+                    type="email"
+                    className="h-9 flex-1 min-w-0 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none focus:border-zinc-400 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSigner}
+                    disabled={!signerName.trim() || !signerEmail.trim() || savingSigner}
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-3 text-xs font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <UserPlus size={13} /> Agregar
+                  </button>
+                </div>
+                {signerError && (
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{signerError}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Hash SHA-256 */}
+            {displayContract.sha256Hash && (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Shield size={13} className="text-zinc-400" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Huella SHA-256</p>
+                </div>
+                <p className="font-mono text-[10px] text-zinc-500 break-all leading-relaxed bg-zinc-50 rounded-xl p-2.5 border border-zinc-100 selection:bg-blue-100">
+                  {displayContract.sha256Hash}
+                </p>
+                <p className="text-[10px] text-zinc-400 leading-relaxed">
+                  Garantiza la inmutabilidad y validez legal del documento (Ley 25.506).
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Panel derecho: documento ── */}
+          <div className="flex min-h-0 flex-col overflow-hidden bg-zinc-100/50">
+            {/* Toolbar del doc */}
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-5 py-3">
+              <div className="flex items-center gap-2">
+                <Hash size={12} className="text-zinc-400" />
+                <span className="text-xs font-mono text-zinc-500">{displayContract.fileName || "documento.pdf"}</span>
+              </div>
+              {pdfUrl && (
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 transition"
+                >
+                  Abrir en nueva pestaña
+                </a>
+              )}
+            </div>
+
+            {/* Contenido */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+              {pdfUrl ? (
                 <iframe
-                  src={displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl || ""}
-                  className="w-full border-0"
-                  style={{ height: "60vh" }}
-                  title="Vista previa del PDF"
+                  src={pdfUrl}
+                  className="h-full w-full border-0"
+                  title="Vista previa del contrato"
                 />
               ) : (
-                <div className="p-8 font-serif text-[12px] leading-6 space-y-4 text-zinc-900 bg-gradient-to-b from-white to-zinc-50/30">
-                  <div className="text-center pb-5 border-b border-zinc-200">
-                    <h1 className="text-sm font-bold uppercase tracking-widest font-sans">{displayContract.title}</h1>
-                    <p className="text-[10px] text-zinc-500 mt-1 font-sans">Escencial Consultora S.A.S.</p>
+                <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
+                  {/* Preview skeleton estilizado */}
+                  <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm space-y-4">
+                    <div className="space-y-1 border-b border-zinc-100 pb-4 mb-2">
+                      <div className="h-2.5 bg-zinc-200 rounded-full w-3/4 mx-auto" />
+                      <div className="h-2 bg-zinc-100 rounded-full w-1/2 mx-auto" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-2 bg-zinc-100 rounded-full w-full" />
+                      <div className="h-2 bg-zinc-100 rounded-full w-5/6" />
+                      <div className="h-2 bg-zinc-100 rounded-full w-4/6" />
+                      <div className="h-2 bg-zinc-100 rounded-full w-full" />
+                      <div className="h-2 bg-zinc-100 rounded-full w-3/4" />
+                    </div>
                   </div>
-                  <div className="space-y-2 opacity-80">
-                    <div className="h-3 bg-zinc-200 rounded-full w-full" />
-                    <div className="h-3 bg-zinc-200 rounded-full w-5/6" />
-                    <div className="h-3 bg-zinc-200 rounded-full w-4/6" />
-                  </div>
-                  <p className="text-[10px] text-zinc-400 text-center pt-6 border-t border-zinc-100 font-sans italic">
-                    PDF no disponible. El documento aún no tiene una versión PDF generada.
+                  <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
+                    Este contrato aún no tiene una versión PDF generada. Se creará automáticamente cuando se procese la firma.
                   </p>
                 </div>
               )}
             </div>
           </div>
+
         </div>
       </div>
     </div>
