@@ -362,11 +362,13 @@ function TemplateCard({
 function SendingFlow({
   template,
   orgId,
+  orgName,
   onDone,
   onBack,
 }: {
   template: DbContractTemplate;
   orgId:    string;
+  orgName:  string | null;
   onDone:   (contract: Contract) => void;
   onBack:   () => void;
 }) {
@@ -388,6 +390,40 @@ function SendingFlow({
   const [paymentTemplates, setPaymentTemplates] = useState<PaymentTemplate[]>([]);
   const [loadingPayments, setLoadingPayments]   = useState(true);
   const [selectedPayment, setSelectedPayment]   = useState<PaymentTemplate | null>(null);
+
+  // Org data para sugerencias de variables
+  const [orgData, setOrgData] = useState<import("../../shared/types/organization").Organization | null>(null);
+  useEffect(() => { getMyOrganization().then(setOrgData).catch(() => null); }, []);
+
+  // Mapa: nombre de variable → campo del org para sugerir auto-completado
+  const ORG_VAR_SUGGESTIONS: Record<string, (o: NonNullable<typeof orgData>, auth: OrgAuthority | null) => string | null | undefined> = {
+    representante_consultora: (o, a) => a?.fullName ?? null,
+    representante_empresa:    (o, a) => a?.fullName ?? null,
+    razon_social_consultora:  (o)    => o.name,
+    razon_social_empresa:     (o)    => o.name,
+    nombre_consultora:        (o)    => o.name,
+    nombre_empresa:           (o)    => o.name,
+    cuit_consultora:          (o)    => o.taxId,
+    cuit_empresa:             (o)    => o.taxId,
+    domicilio_consultora:     (o)    => [o.address, o.city].filter(Boolean).join(", ") || null,
+    domicilio_empresa:        (o)    => [o.address, o.city].filter(Boolean).join(", ") || null,
+    ciudad_consultora:        (o)    => o.city,
+    ciudad_empresa:           (o)    => o.city,
+    provincia_consultora:     (o)    => o.province,
+    provincia_empresa:        (o)    => o.province,
+    email_consultora:         (o)    => o.contactEmail,
+    email_empresa:            (o)    => o.contactEmail,
+    telefono_consultora:      (o)    => o.phone,
+    telefono_empresa:         (o)    => o.phone,
+  };
+
+  function getOrgSuggestion(varName: string): string | null {
+    if (!orgData) return null;
+    const fn = ORG_VAR_SUGGESTIONS[varName];
+    if (!fn) return null;
+    const val = fn(orgData, selectedAuth);
+    return val?.trim() || null;
+  }
 
   // Variables
   const allVars   = useMemo(() => extractVariables(template.contentHtml), [template]);
@@ -533,91 +569,121 @@ function SendingFlow({
 
   // ── Step 0: Seleccionar firmantes ──
   if (step === 0) {
-    return (
-      <div className="max-w-3xl space-y-6">
-        <p className="text-sm text-zinc-400">Elegí la autoridad que firma por Escencial SAS y el usuario que recibirá el contrato.</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Autoridad */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={14} className="text-emerald-600 shrink-0" />
-              <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Autoridad firmante (Escencial SAS)</p>
-            </div>
-            <div className={searchBox}>
-              <Search size={14} className="text-zinc-400 shrink-0" />
-              <input className={inputBase} placeholder="Buscar autoridad..." value={authSearch} onChange={(e) => setAuthSearch(e.target.value)} />
-            </div>
-            {loadingAuth ? (
-              <div className="space-y-2">{Array(2).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-100" />)}</div>
-            ) : filteredAuth.length === 0 ? (
-              <p className="py-4 text-center text-xs text-zinc-400">{authorities.length === 0 ? "Sin autoridades PERMANENTES activas" : "Sin resultados"}</p>
-            ) : (
-              <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-52 overflow-y-auto">
-                {filteredAuth.map((a) => (
-                  <button key={a.id} type="button" onClick={() => setSelectedAuth(a)}
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-zinc-50 ${selectedAuth?.id === a.id ? "bg-emerald-50" : ""}`}>
-                    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-800 text-[10px] font-bold text-white">
-                      {a.fullName[0]?.toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-zinc-900 truncate">{a.fullName}</p>
-                      <p className="text-xs text-zinc-500 truncate">{a.cuil || a.email}</p>
-                    </div>
-                    {selectedAuth?.id === a.id && <Check size={13} className="text-emerald-600 shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            )}
-            {selectedAuth && (
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                <Check size={12} className="text-emerald-600 shrink-0" />
-                <p className="text-xs font-semibold text-emerald-800 truncate">{selectedAuth.fullName}</p>
-              </div>
-            )}
+    const SelectorCard = ({
+      title, subtitle, icon: Icon, useBrand, search, onSearch, loading, items, selected, onSelect,
+    }: {
+      title: string; subtitle: string; icon: React.ElementType; useBrand?: boolean;
+      search: string; onSearch: (v: string) => void; loading: boolean;
+      items: { id: string; label: string; sub: string }[];
+      selected: string | null; onSelect: (id: string) => void;
+    }) => (
+      <div className="flex flex-col rounded-2xl border border-zinc-200/70 bg-white overflow-hidden shadow-sm">
+        {/* Header con color de marca */}
+        <div
+          className="px-5 py-4 flex items-center gap-3"
+          style={useBrand
+            ? { background: "var(--brand-primary)", color: "var(--brand-primary-text)" }
+            : { background: "var(--brand-accent, #3f3f46)", color: "#fff" }
+          }
+        >
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/15">
+            <Icon size={16} className="text-white" />
           </div>
-
-          {/* Destinatario */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <User size={13} className="text-zinc-500 shrink-0" />
-              <p className="text-xs font-bold text-zinc-700 uppercase tracking-widest">Destinatario (quien firma)</p>
-            </div>
-            <div className={searchBox}>
-              <Search size={14} className="text-zinc-400 shrink-0" />
-              <input className={inputBase} placeholder="Buscar usuario..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} />
-            </div>
-            {loadingUsers ? (
-              <div className="space-y-2">{Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-100" />)}</div>
-            ) : filteredUsers.length === 0 ? (
-              <p className="py-4 text-center text-xs text-zinc-400">Sin usuarios</p>
-            ) : (
-              <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-52 overflow-y-auto">
-                {filteredUsers.map((u) => (
-                  <button key={u.id} type="button" onClick={() => setSelectedUser(u)}
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-zinc-50 ${selectedUser?.id === u.id ? "bg-zinc-100" : ""}`}>
-                    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-zinc-800 text-[10px] font-bold text-white">
-                      {u.fullName[0]?.toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-zinc-900 truncate">{u.fullName}</p>
-                      <p className="text-xs text-zinc-500 truncate">{u.email}</p>
-                    </div>
-                    {selectedUser?.id === u.id && <Check size={13} className="text-emerald-600 shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            )}
-            {selectedUser && (
-              <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                <Check size={12} className="text-zinc-600 shrink-0" />
-                <p className="text-xs font-semibold text-zinc-700 truncate">{selectedUser.fullName}</p>
-              </div>
-            )}
+          <div>
+            <p className="text-sm font-bold leading-tight">{title}</p>
+            <p className="text-[11px] opacity-60">{subtitle}</p>
           </div>
         </div>
 
-        <div className="flex justify-between">
+        {/* Buscador */}
+        <div className="px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50/80 px-3.5 py-2.5 focus-within:border-zinc-300 focus-within:bg-white transition">
+            <Search size={13} className="text-zinc-400 shrink-0" />
+            <input
+              className="flex-1 bg-transparent text-sm text-zinc-800 placeholder:text-zinc-400 outline-none"
+              placeholder="Buscar..."
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Lista */}
+        <div className="overflow-y-auto max-h-60 px-2 pb-3">
+          {loading ? (
+            <div className="space-y-1.5 p-2">
+              {Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-100" />)}
+            </div>
+          ) : items.length === 0 ? (
+            <p className="py-8 text-center text-xs text-zinc-400">Sin resultados</p>
+          ) : (
+            <div className="space-y-0.5 pt-1">
+              {items.map((item) => {
+                const isSelected = selected === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onSelect(item.id)}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition active:scale-[0.98]"
+                    style={isSelected
+                      ? { background: "var(--brand-primary)", color: "var(--brand-primary-text)" }
+                      : { color: "#3f3f46" }
+                    }
+                    onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "#f4f4f5"; }}
+                    onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = ""; }}
+                  >
+                    <div
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold"
+                      style={isSelected ? { background: "rgba(255,255,255,0.2)", color: "inherit" } : { background: "#e4e4e7", color: "#52525b" }}
+                    >
+                      {item.label[0]?.toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{item.label}</p>
+                      <p className="text-xs truncate opacity-60">{item.sub}</p>
+                    </div>
+                    {isSelected && <Check size={14} className="shrink-0 opacity-80" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="space-y-5">
+        <p className="text-sm text-zinc-400">Seleccioná la autoridad que firma en nombre de <strong className="text-zinc-700">{orgName ?? "la empresa"}</strong> y el destinatario que recibirá el contrato.</p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <SelectorCard
+            title="Autoridad firmante"
+            subtitle={orgName ?? "Firma en nombre de la empresa"}
+            icon={ShieldCheck}
+            useBrand
+            search={authSearch}
+            onSearch={setAuthSearch}
+            loading={loadingAuth}
+            items={filteredAuth.map(a => ({ id: a.id, label: a.fullName, sub: a.cuil || a.email || "" }))}
+            selected={selectedAuth?.id ?? null}
+            onSelect={(id) => setSelectedAuth(filteredAuth.find(a => a.id === id) ?? null)}
+          />
+          <SelectorCard
+            title="Destinatario"
+            subtitle="Quien recibe y firma el contrato"
+            icon={User}
+            search={userSearch}
+            onSearch={setUserSearch}
+            loading={loadingUsers}
+            items={filteredUsers.map(u => ({ id: u.id, label: u.fullName, sub: u.email }))}
+            selected={selectedUser?.id ?? null}
+            onSelect={(id) => setSelectedUser(filteredUsers.find(u => u.id === id) ?? null)}
+          />
+        </div>
+
+        <div className="flex justify-between pt-3 border-t border-zinc-100">
           <Button variant="secondary" onClick={onBack} className="h-10 px-5 text-zinc-700">
             <ArrowLeft size={14} /> Volver
           </Button>
@@ -632,157 +698,188 @@ function SendingFlow({
   // ── Step 1: Variables + datos del usuario ──
   if (step === 1) {
     return (
-      <div className="space-y-6 max-w-3xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Variables a completar */}
-          <div className="space-y-4">
-            <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Variables del contrato</p>
+      <div className="space-y-5">
 
-            {/* Auto-fill (usuario) — mostrar como campos read-only */}
-            {autoVars.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">Datos del firmante (automáticos)</p>
-                {autoVars.map((v) => {
-                  const label = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                  return (
-                    <div key={v}>
-                      <label className="mb-1 block text-xs font-semibold text-zinc-400">{label}</label>
-                      <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-                        <span className="flex-1 text-sm font-medium text-emerald-800 truncate">
-                          {varValues[v] || <span className="text-zinc-400 italic">Sin datos</span>}
-                        </span>
-                        <span className="text-[10px] font-mono text-emerald-400 shrink-0">auto</span>
-                      </div>
-                    </div>
-                  );
-                })}
+        {/* ── Banner firmante ── */}
+        {selectedUser && (
+          <div className="rounded-2xl overflow-hidden border border-zinc-200/60 shadow-sm">
+            <div className="flex items-center gap-4 px-5 py-4" style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/20 text-base font-bold">
+                {selectedUser.fullName[0]?.toUpperCase()}
               </div>
-            )}
-
-            {/* Variables a completar manualmente */}
-            {adminVars.length > 0 && (
-              <div className="space-y-3">
-                {autoVars.length > 0 && <div className="border-t border-zinc-100 pt-1" />}
-                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Completar manualmente</p>
-                {adminVars.map((v) => {
-                  const isLong = v.includes("objeto") || v.includes("descripcion");
-                  const isDate = v.includes("fecha");
-                  const isNum  = v.includes("monto") || v.includes("cuotas") || v.includes("valor");
-                  const label  = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-                  return (
-                    <div key={v}>
-                      <label className="mb-1 block text-xs font-semibold text-zinc-600">{label}</label>
-                      {isLong ? (
-                        <textarea value={varValues[v] ?? ""} rows={2}
-                          placeholder={`Ingresá ${label.toLowerCase()}...`}
-                          onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
-                          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 outline-none focus:border-zinc-500 focus:bg-white transition resize-none" />
-                      ) : (
-                        <input type={isDate ? "date" : isNum ? "number" : "text"}
-                          value={varValues[v] ?? ""}
-                          placeholder={`Ingresá ${label.toLowerCase()}...`}
-                          onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
-                          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 outline-none focus:border-zinc-500 focus:bg-white transition" />
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-base leading-tight truncate">{selectedUser.fullName}</p>
+                <p className="text-sm opacity-70 truncate">{selectedUser.email}</p>
               </div>
-            )}
-
-            {autoVars.length === 0 && adminVars.length === 0 && (
-              <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-400">
-                Esta plantilla no tiene variables — se enviará tal como está.
+              <div className="hidden sm:flex items-center gap-6 text-sm">
+                {[
+                  { label: "DNI",  value: selectedUser.documentNumber },
+                  { label: "CUIL", value: selectedUser.cuilCuit },
+                ].map(({ label, value }) => value ? (
+                  <div key={label} className="text-center">
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">{label}</p>
+                    <p className="font-bold">{value}</p>
+                  </div>
+                ) : null)}
               </div>
-            )}
+            </div>
           </div>
+        )}
 
-          {/* Datos del usuario (referencia) */}
-          <div className="space-y-4">
+        {/* ── Cuerpo: 2 columnas ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-5 items-start">
+
+          {/* ── Izq: Variables automáticas + Plan de pago ── */}
+          <div className="space-y-5">
+
+            {/* Auto vars */}
+            {autoVars.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Variables automáticas</p>
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed -mt-1">
+                  Se completan solos con los datos del firmante. Click para copiar.
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {autoVars.map((v) => {
+                    const label = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                    const value = varValues[v] ?? "";
+                    return (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => value && navigator.clipboard.writeText(value)}
+                        title={value ? `Copiar: ${value}` : "Sin datos"}
+                        className="group flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-left transition hover:border-emerald-300 hover:bg-emerald-100 active:scale-[0.98]"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-500 mb-0.5">{label}</p>
+                          <p className="text-sm font-semibold text-emerald-950 truncate">
+                            {value || <span className="italic font-normal text-emerald-400 text-xs">Sin datos</span>}
+                          </p>
+                        </div>
+                        <Copy size={13} className="shrink-0 text-emerald-300 transition group-hover:text-emerald-600" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Plan de pago */}
             <div className="space-y-3">
-              <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Plan de pago</p>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-zinc-300 shrink-0" />
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Plan de pago</p>
+              </div>
               <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
                 {loadingPayments ? (
-                  <p className="text-xs text-zinc-400">Cargando planes de pago...</p>
+                  <p className="text-xs text-zinc-400">Cargando...</p>
                 ) : paymentTemplates.length === 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-zinc-800">Sin plantillas de pago</p>
-                    <p className="text-xs text-zinc-500">Creá una desde la pestaña Pagos para poder asociarla al contrato.</p>
-                  </div>
+                  <p className="text-xs text-zinc-500">Sin plantillas de pago. Creá una en la pestaña Pagos.</p>
                 ) : (
                   <>
                     <select
                       value={selectedPayment?.id ?? ""}
                       onChange={(e) => setSelectedPayment(paymentTemplates.find((p) => p.id === e.target.value) ?? null)}
-                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-500 transition"
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-800 outline-none focus:border-zinc-400 transition"
                     >
                       <option value="">Sin plan de pago</option>
                       {paymentTemplates.map((payment) => (
-                        <option key={payment.id} value={payment.id}>
-                          {payment.name}
-                        </option>
+                        <option key={payment.id} value={payment.id}>{payment.name}</option>
                       ))}
                     </select>
-                    {selectedPayment ? (
-                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-900 space-y-1.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-emerald-700">Monto total</span>
-                          <strong>${selectedPayment.totalAmount.toLocaleString("es-AR")}</strong>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-emerald-700">Cuotas</span>
-                          <strong>{selectedPayment.installmentCount} x ${(selectedPayment.installmentAmount ?? computeInstallmentAmount(selectedPayment.totalAmount, selectedPayment.installmentCount)).toLocaleString("es-AR")}</strong>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-emerald-700">Frecuencia</span>
-                          <strong>{FREQUENCY_LABELS[selectedPayment.frequency] ?? selectedPayment.frequency}</strong>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-emerald-700">Mora</span>
-                          <strong>{selectedPayment.hasMora ? `${selectedPayment.moraRate}%` : "No aplica"}</strong>
-                        </div>
+                    {selectedPayment && (
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        {[
+                          { label: "Total",      value: `$${selectedPayment.totalAmount.toLocaleString("es-AR")}` },
+                          { label: "Cuotas",     value: `${selectedPayment.installmentCount} x $${(selectedPayment.installmentAmount ?? computeInstallmentAmount(selectedPayment.totalAmount, selectedPayment.installmentCount)).toLocaleString("es-AR")}` },
+                          { label: "Frecuencia", value: FREQUENCY_LABELS[selectedPayment.frequency] ?? selectedPayment.frequency },
+                          { label: "Mora",       value: selectedPayment.hasMora ? `${selectedPayment.moraRate}%` : "No aplica" },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="rounded-xl bg-zinc-50 border border-zinc-100 px-3 py-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 mb-0.5">{label}</p>
+                            <p className="text-sm font-bold text-zinc-900">{value}</p>
+                          </div>
+                        ))}
                       </div>
-                    ) : (
-                      <p className="text-xs text-zinc-400">Opcional. Si lo seleccionás, queda asociado al contrato y completa las variables de pago.</p>
                     )}
                   </>
                 )}
               </div>
             </div>
+          </div>
 
-            <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Datos del usuario</p>
-            {selectedUser && (
-              <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-zinc-800 text-sm font-bold text-white">
-                    {selectedUser.fullName[0]?.toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-zinc-900 text-sm">{selectedUser.fullName}</p>
-                    <p className="text-xs text-zinc-500">{selectedUser.email}</p>
-                  </div>
-                </div>
-                <div className="space-y-2 pt-1">
-                  {[
-                    { label: "Nombre completo", value: selectedUser.fullName },
-                    { label: "Email",           value: selectedUser.email },
-                    { label: "DNI",             value: selectedUser.documentNumber ?? "—" },
-                    { label: "CUIL/CUIT",       value: selectedUser.cuilCuit ?? "—" },
-                    { label: "Domicilio",       value: selectedUser.address ?? "—" },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-zinc-500 shrink-0">{label}</span>
-                      <div className="flex items-center gap-1 min-w-0">
-                        <span className="font-medium text-zinc-800 truncate">{value}</span>
-                        {value !== "—" && <CopyButton value={value} />}
+          {/* ── Der: Variables manuales ── */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Completar manualmente</p>
+            </div>
+
+            {adminVars.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-8 text-center">
+                <p className="text-sm text-zinc-400">Esta plantilla no tiene variables manuales.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {adminVars.map((v) => {
+                    const isLong = v.includes("objeto") || v.includes("descripcion");
+                    const isDate = v.includes("fecha");
+                    const isNum  = v.includes("monto") || v.includes("cuotas") || v.includes("valor");
+                    const label  = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                    const filled = !!(varValues[v] ?? "").trim();
+                    const spanFull = isLong || isDate;
+                    const suggestion = getOrgSuggestion(v);
+                    const showSuggestion = suggestion && !filled;
+                    return (
+                      <div key={v} className={`space-y-1.5 ${spanFull ? "sm:col-span-2" : ""}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`h-1.5 w-1.5 rounded-full shrink-0 transition-colors ${filled ? "bg-emerald-500" : suggestion ? "bg-blue-400" : "bg-amber-400"}`} />
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">{label}</label>
+                        </div>
+                        {isLong ? (
+                          <textarea
+                            value={varValues[v] ?? ""}
+                            rows={3}
+                            placeholder={`Ingresá ${label.toLowerCase()}...`}
+                            onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
+                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-300 outline-none focus:border-zinc-400 focus:bg-white focus:ring-1 focus:ring-zinc-100 transition resize-none"
+                          />
+                        ) : (
+                          <input
+                            type={isDate ? "date" : isNum ? "number" : "text"}
+                            value={varValues[v] ?? ""}
+                            placeholder={`Ingresá ${label.toLowerCase()}...`}
+                            onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
+                            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-300 outline-none focus:border-zinc-400 focus:bg-white focus:ring-1 focus:ring-zinc-100 transition"
+                          />
+                        )}
+                        {showSuggestion && (
+                          <button
+                            type="button"
+                            onClick={() => setVarValues((p) => ({ ...p, [v]: suggestion! }))}
+                            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                          >
+                            <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 font-medium hover:bg-blue-100 transition-colors">
+                              <Check size={10} strokeWidth={2.5} />
+                              Usar: {suggestion}
+                            </span>
+                          </button>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-                <p className="text-[10px] text-zinc-400 pt-1">
-                  Los datos del usuario se mapean automáticamente a las variables del contrato marcadas en verde.
-                  Podés copiar cualquier dato para usarlo en una variable manual.
-                </p>
+              </div>
+            )}
+
+            {autoVars.length === 0 && adminVars.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-8 text-center">
+                <p className="text-sm text-zinc-400">Esta plantilla no tiene variables — se enviará tal como está.</p>
               </div>
             )}
           </div>
@@ -790,7 +887,7 @@ function SendingFlow({
 
         {error && <p className="text-xs text-red-500">{error}</p>}
 
-        <div className="flex justify-between">
+        <div className="flex justify-between pt-4 border-t border-zinc-100">
           <Button variant="secondary" onClick={() => setStep(0)} className="h-10 px-5 text-zinc-700">
             <ArrowLeft size={14} /> Atrás
           </Button>
@@ -1333,6 +1430,7 @@ export function AdminContractsPage() {
         <SendingFlow
           template={sendingTemplate}
           orgId={orgId}
+          orgName={orgName}
           onDone={(contract) => {
             setContracts((prev) => [contract, ...prev]);
             showToast("Contrato enviado exitosamente.");

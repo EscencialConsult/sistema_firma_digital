@@ -127,6 +127,13 @@ export const AUTO_FILL_VARS = new Set([
   "domicilio_usuario",
 ]);
 
+/** Pre-defined system variables — admin must fill these, but they're known */
+export const SYSTEM_VARS = new Set([
+  "fecha_inicio", "fecha_fin", "fecha_entrega",
+  "monto", "monto_inicial", "monto_final", "cuotas",
+  "objeto", "descripcion", "ciudad", "provincia",
+]);
+
 /** Extract all {{variable}} names from HTML content */
 export function extractVariables(html: string): string[] {
   const matches = [...html.matchAll(/\{\{(\w+)\}\}/g)];

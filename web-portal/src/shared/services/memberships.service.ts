@@ -61,7 +61,7 @@ export async function getMembershipForOrg(orgId: string): Promise<OrgMembership 
 export async function getOrgMemberships(orgId: string): Promise<OrgMembership[]> {
   const { data, error } = await supabase
     .from("organization_memberships")
-    .select(`*, user:users(email, full_name)`)
+    .select(`*, user:users!organization_memberships_user_id_fkey(email, full_name)`)
     .eq("organization_id", orgId)
     .order("created_at", { ascending: false });
   if (error) throw error;

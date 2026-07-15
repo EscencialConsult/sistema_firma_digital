@@ -93,19 +93,49 @@ function mapRowToUser(row: Record<string, unknown>): AdminUserSummary {
 const USER_SELECT = "id, email, full_name, role, verification_status, certificate_status, created_at, document_number, cuil_cuit, address";
 
 export async function getAllUsers(organizationId?: string): Promise<AdminUserSummary[]> {
+  if (!organizationId) {
+    const { data, error } = await supabase
+      .from("users")
+      .select(USER_SELECT)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => mapRowToUser(row as Record<string, unknown>));
+  }
+
+  // Traer IDs de usuarios que tienen membresía activa en esta org
+  const { data: memberships } = await supabase
+    .from("organization_memberships")
+    .select("user_id")
+    .eq("organization_id", organizationId)
+    .eq("status", "active");
+
+  const memberIds = (memberships ?? []).map((m) => m.user_id as string);
+
+  // Incluir tanto los usuarios con org primaria como los que entraron por código de invitación
   let query = supabase
     .from("users")
     .select(USER_SELECT)
     .order("created_at", { ascending: false });
 
-  if (organizationId) {
+  if (memberIds.length > 0) {
+    query = query.or(`organization_id.eq.${organizationId},id.in.(${memberIds.join(",")})`);
+  } else {
     query = query.eq("organization_id", organizationId);
   }
 
   const { data, error } = await query;
-
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapRowToUser(row as Record<string, unknown>));
+
+  // Deduplicar por si un usuario tiene ambas condiciones
+  const seen = new Set<string>();
+  return (data ?? [])
+    .filter((row) => {
+      const id = (row as Record<string, unknown>).id as string;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .map((row) => mapRowToUser(row as Record<string, unknown>));
 }
 
 export async function getUserById(id: string): Promise<AdminUserSummary | null> {
