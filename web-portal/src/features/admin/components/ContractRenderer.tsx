@@ -818,59 +818,60 @@ export function ContractDetailModal({
           </div>
 
           {/* ── Panel derecho: documento ── */}
-          <div className="flex min-h-0 flex-col overflow-hidden bg-zinc-100/50">
-            {/* Toolbar del doc */}
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-5 py-3">
-              <div className="flex items-center gap-2">
-                <Hash size={12} className="text-zinc-400" />
-                <span className="text-xs font-mono text-zinc-500">{displayContract.fileName || "documento.pdf"}</span>
+          <div className="flex min-h-0 flex-col overflow-hidden bg-zinc-50">
+            {/* Toolbar */}
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-5 py-2.5 shrink-0">
+              <div className="flex items-center gap-1.5 text-zinc-400">
+                <FileText size={12} />
+                <span className="text-[11px] font-mono">{displayContract.fileName || "documento"}</span>
               </div>
               {pdfUrl && (
                 <a
                   href={pdfUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 transition"
                 >
-                  Abrir en nueva pestaña
+                  Abrir PDF
                 </a>
               )}
             </div>
 
-            {/* Contenido */}
-            <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6">
+            {/* Contenido — scroll propio */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {pdfUrl ? (
                 <iframe
                   src={pdfUrl}
-                  className="h-full w-full border-0 rounded-xl"
+                  className="h-full w-full border-0"
                   style={{ minHeight: "60vh" }}
                   title="Vista previa del contrato"
                 />
               ) : displayContract.templateId || displayContract.templateFields ? (
-                <ContractDocument
-                  templateId={displayContract.templateId ?? "custom"}
-                  fields={displayContract.templateFields ?? {}}
-                  alumnos={detail?.signers?.map((s) => ({
-                    nombre: s.name ?? "",
-                    dni: "",
-                    cuil: "",
-                    email: s.email ?? "",
-                    domicilio: "",
-                  })) ?? []}
-                  logoHeader
-                />
+                /* Override del DocWrapper para que no tenga su propio scroll */
+                <div className="[&_.contract-doc-wrapper]:max-h-none [&_.contract-doc-wrapper]:overflow-visible [&_.contract-doc-wrapper]:shadow-none [&_.contract-doc-wrapper]:border-0 [&_.contract-doc-wrapper]:rounded-none [&_.contract-doc-wrapper]:bg-transparent">
+                  <ContractDocument
+                    templateId={displayContract.templateId ?? "custom"}
+                    fields={displayContract.templateFields ?? {}}
+                    alumnos={detail?.signers?.map((s) => ({
+                      nombre: s.name ?? "",
+                      dni: "",
+                      cuil: "",
+                      email: s.email ?? "",
+                      domicilio: "",
+                    })) ?? []}
+                    logoHeader
+                  />
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full gap-3 py-16 text-center">
-                  <div className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-6 space-y-3">
+                  <div className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-6 space-y-3 mx-auto">
                     <div className="h-2.5 bg-zinc-200 rounded-full w-3/4 mx-auto" />
                     <div className="h-2 bg-zinc-100 rounded-full w-1/2 mx-auto mb-4" />
                     <div className="h-2 bg-zinc-100 rounded-full w-full" />
                     <div className="h-2 bg-zinc-100 rounded-full w-5/6" />
                     <div className="h-2 bg-zinc-100 rounded-full w-4/6" />
                   </div>
-                  <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
-                    No hay contenido disponible para previsualizar.
-                  </p>
+                  <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">Sin contenido disponible.</p>
                 </div>
               )}
             </div>
