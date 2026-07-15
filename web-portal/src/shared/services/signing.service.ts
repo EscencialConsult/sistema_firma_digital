@@ -33,7 +33,7 @@ function mapRowToSigningRequest(
     id:                 sr.id as string,
     documentId:         sr.document_id as string,
     documentVersionId:  (sr.document_version_id as string) ?? (latestV.id as string) ?? null,
-    documentTitle:      (document.title as string) ?? "",
+    documentTitle:      (document.title as string) || (sr.document_title as string) || "",
     signerEmail:        sr.signer_email as string,
     signerName:         sr.signer_name as string,
     status:             sr.status as SigningRequest["status"],

@@ -532,13 +532,14 @@ export async function sendContractFromTemplate(input: {
   if (docError || !doc) throw new Error(docError?.message ?? "Error creando contrato");
 
   const { error: srErr } = await supabase.from("signature_requests").insert({
-    document_id:  doc.id,
-    signer_email: input.user.email,
-    signer_name:  input.user.name,
-    signer_cuil:  input.user.cuil ?? null,
-    status:       "PENDING",
-    expires_at:   expiresAt,
-    signing_order: 0,
+    document_id:    doc.id,
+    document_title: input.title,
+    signer_email:   input.user.email,
+    signer_name:    input.user.name,
+    signer_cuil:    input.user.cuil ?? null,
+    status:         "PENDING",
+    expires_at:     expiresAt,
+    signing_order:  0,
   });
   if (srErr) throw new Error(srErr.message);
 
