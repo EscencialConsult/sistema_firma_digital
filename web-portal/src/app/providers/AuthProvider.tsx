@@ -7,7 +7,33 @@ import {
   fetchProfile,
   fetchMe,
 } from "../../shared/services/auth.service";
+import { getOrganization } from "../../shared/services/organizations.service";
+import { applyTheme } from "../../shared/config/theme";
 import type { AuthUser } from "../../shared/types/user";
+
+/**
+ * Al resolver el usuario, precarga la org para:
+ *  1. Guardar el slug (redirect post-logout al portal correcto)
+ *  2. Aplicar el tema INMEDIATAMENTE (evita el flash de colores en primera sesión)
+ *     — solo si el usuario pertenece a UNA sola org. Si es multi-org,
+ *       ThemeProvider ya se encarga de usar el tema negro base.
+ */
+async function cacheOrgSlug(organizationId: string | undefined, isMultiOrg?: boolean) {
+  if (!organizationId) return;
+  try {
+    const org = await getOrganization(organizationId);
+    if (!org) return;
+    if (org.slug) localStorage.setItem("lastOrgSlug", org.slug);
+    if (!isMultiOrg) {
+      applyTheme({
+        primary:    org.brandPrimary    ?? undefined,
+        secondary:  org.brandSecondary  ?? undefined,
+        accent:     org.brandAccent     ?? undefined,
+        background: org.brandBackground ?? undefined,
+      });
+    }
+  } catch { /* no bloquea el flujo de auth */ }
+}
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -40,7 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!mounted) return;
         if (session?.user) {
           const profile = await fetchProfile(session.user.id, session.user);
-          if (mounted) setUser(profile);
+          if (mounted) {
+            setUser(profile);
+            void cacheOrgSlug(profile?.organizationId, profile?.isMultiOrg);
+          }
         }
       } catch {
         // sesión inválida o sin conectividad — seguir sin usuario
@@ -63,7 +92,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (session?.user) {
             try {
               const profile = await fetchProfile(session.user.id, session.user);
-              if (mounted) setUser(profile);
+              if (mounted) {
+                setUser(profile);
+                void cacheOrgSlug(profile?.organizationId, profile?.isMultiOrg);
+              }
             } catch {
               if (mounted) setUser(null);
             }
@@ -92,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const user = await login(email, password);
           setUser(user);
+          void cacheOrgSlug(user?.organizationId, user?.isMultiOrg);
         } catch (err) {
           const message = err instanceof Error
             ? err.message
@@ -126,7 +159,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       async reloadUser() {
         const u = await fetchMe();
-        if (u) setUser(u);
+        if (u) {
+          setUser(u);
+          void cacheOrgSlug(u.organizationId, u.isMultiOrg);
+        }
       },
 
       // Optimistic local update — call reloadUser() to sync from DB

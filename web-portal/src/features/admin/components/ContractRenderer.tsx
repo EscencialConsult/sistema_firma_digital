@@ -4,6 +4,7 @@
  */
 
 import { Plus, Trash2, UserPlus, X } from "lucide-react";
+import { loadOrgCache } from "../../../shared/config/orgCache";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Contract, ContractDetail } from "../../../shared/types/contract";
@@ -20,7 +21,7 @@ import type { AlumnoData } from "../../../shared/utils/contractTemplate";
 function DocWrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="contract-doc-wrapper overflow-y-auto max-h-[58vh] rounded-2xl bg-white text-zinc-900 shadow-inner border border-zinc-200">
-      <div className="p-8 font-serif text-[13px] leading-7 space-y-4">
+      <div className="relative p-8 font-serif text-[13px] leading-7 space-y-4">
         {children}
       </div>
     </div>
@@ -448,10 +449,14 @@ function ConvenioDoc({ f, alumnos }: { f: Record<string, string>; alumnos: Alumn
 
 // ─── Custom Template Renderer ─────────────────────────────────────────────────
 
-function CustomDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoData }) {
+function CustomDoc({ f, alumno, logoHeader, logoWatermark, logoUrl }: {
+  f: Record<string, string>;
+  alumno: AlumnoData;
+  logoHeader?: boolean;
+  logoWatermark?: boolean;
+  logoUrl?: string | null;
+}) {
   let content = f._templateContent || "Sin contenido.";
-  
-  // Replace tags with fields
   Object.keys(f).forEach(key => {
     if (key !== "_templateContent" && key !== "_legalTitle") {
       const regex = new RegExp(`{{${key}}}`, "g");
@@ -461,19 +466,30 @@ function CustomDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDat
 
   return (
     <DocWrapper>
-      <DocTitle
-        title={f._legalTitle || "Contrato"}
-        subtitle="Escencial Consultora S.A.S."
-      />
-      <div 
-        className="whitespace-pre-wrap font-serif text-[13px] leading-7"
-        dangerouslySetInnerHTML={{ __html: content }} 
-      />
-      <DocSignatures>
-        <DocSig label="Firma Autorizada" name={f.autoridad_nombre || "—"} sub={`CUIL/CUIT: ${f.autoridad_cuil || "—"}`} signatureUrl={f.autoridad_signature_url || undefined} />
-        <DocSigEmpty label={alumno.nombre || "Firmante"} />
-      </DocSignatures>
-      <DocFooter />
+      {/* Encabezado con logo */}
+      {logoHeader && logoUrl && (
+        <div className="flex justify-start pb-4 border-b border-zinc-100 mb-2">
+          <img src={logoUrl} alt="Logo" className="h-10 object-contain" />
+        </div>
+      )}
+      {/* Marca de agua */}
+      {logoWatermark && logoUrl && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
+          <img src={logoUrl} alt="" className="w-2/3 object-contain opacity-[0.07]" />
+        </div>
+      )}
+      <div className="relative z-10">
+        <DocTitle title={f._legalTitle || "Contrato"} subtitle="Escencial Consultora S.A.S." />
+        <div
+          className="whitespace-pre-wrap font-serif text-[13px] leading-7"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+        <DocSignatures>
+          <DocSig label="Firma Autorizada" name={f.autoridad_nombre || "—"} sub={`CUIL/CUIT: ${f.autoridad_cuil || "—"}`} signatureUrl={f.autoridad_signature_url || undefined} />
+          <DocSigEmpty label={alumno.nombre || "Firmante"} />
+        </DocSignatures>
+        <DocFooter />
+      </div>
     </DocWrapper>
   );
 }
@@ -484,16 +500,21 @@ export function ContractDocument({
   templateId,
   fields,
   alumnos,
+  logoHeader,
+  logoWatermark,
 }: {
   templateId: string;
   fields: Record<string, string>;
   alumnos: AlumnoData[];
+  logoHeader?: boolean;
+  logoWatermark?: boolean;
 }) {
   const alumno = alumnos[0] ?? { nombre: "", dni: "", cuil: "", email: "", domicilio: "" };
+  const logoUrl = loadOrgCache()?.logoLightUrl ?? loadOrgCache()?.logoDarkUrl ?? null;
 
   // If we have a custom template content saved in fields, render CustomDoc
   if (fields._templateContent) {
-    return <CustomDoc f={fields} alumno={alumno} />;
+    return <CustomDoc f={fields} alumno={alumno} logoHeader={logoHeader} logoWatermark={logoWatermark} logoUrl={logoUrl} />;
   }
 
   switch (templateId) {

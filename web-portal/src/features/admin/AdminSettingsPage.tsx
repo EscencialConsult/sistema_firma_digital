@@ -2,12 +2,14 @@ import {
   Building2,
   CheckCircle2,
   Copy,
+  Key,
   Loader2,
   MapPin,
   Palette,
   PenLine,
   Phone,
   PlusCircle,
+  RefreshCw,
   Save,
   ShieldCheck,
   Sparkles,
@@ -17,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { getMyOrganization, updateOrganization, uploadOrgLogo } from "../../shared/services/organizations.service";
+import { getMyOrganization, updateOrganization, uploadOrgLogo, regenerateInviteCode } from "../../shared/services/organizations.service";
 import { applyTheme, DEFAULT_THEME, getContrastText } from "../../shared/config/theme";
 import {
   getOrgAuthorities,
@@ -242,11 +244,17 @@ export function AdminSettingsPage() {
   const lightLogoRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState<"dark" | "light" | null>(null);
 
+  // Código de invitación
+  const [inviteCode, setInviteCode]           = useState<string | undefined>(undefined);
+  const [codeCopied, setCodeCopied]           = useState(false);
+  const [regenerating, setRegenerating]       = useState(false);
+
   useEffect(() => {
     getMyOrganization()
       .then((o) => {
         setOrg(o);
         if (o) {
+          setInviteCode(o.inviteCode);
           setContactEmail(o.contactEmail ?? "");
           if (o.brandPrimary)    setColorPrimary(o.brandPrimary);
           if (o.brandSecondary)  setColorSecondary(o.brandSecondary);
@@ -373,6 +381,25 @@ export function AdminSettingsPage() {
     );
   }
 
+  function copyInviteCode() {
+    if (!inviteCode) return;
+    navigator.clipboard.writeText(inviteCode).then(() => {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2500);
+    });
+  }
+
+  async function handleRegenerateCode() {
+    if (!org) return;
+    setRegenerating(true);
+    try {
+      const newCode = await regenerateInviteCode(org.id);
+      setInviteCode(newCode);
+    } catch { /* silencioso */ } finally {
+      setRegenerating(false);
+    }
+  }
+
   if (!org) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -481,7 +508,53 @@ export function AdminSettingsPage() {
           </div>
         )}
 
-        {/* Email de contacto */}
+        {/* ── Código de invitación ── */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Key size={15} className="text-zinc-400" />
+            <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Código de invitación</p>
+          </div>
+
+          <p className="text-xs leading-5 text-zinc-500">
+            Compartí este código con las personas que ya tienen cuenta en la plataforma.
+            Al ingresarlo en su panel, quedan habilitadas para recibir contratos de tu empresa,
+            sin que tengas que invitarlas una por una.
+          </p>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-3.5 text-center">
+              <p className="font-mono text-2xl font-black tracking-[0.3em] text-zinc-900 select-all">
+                {inviteCode ?? "—"}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={copyInviteCode}
+                disabled={!inviteCode}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition disabled:opacity-40"
+              >
+                {codeCopied ? <><CheckCircle2 size={13} className="text-emerald-500" /> Copiado</> : <><Copy size={13} /> Copiar</>}
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenerateCode}
+                disabled={regenerating}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-500 hover:bg-zinc-50 transition disabled:opacity-40"
+              >
+                {regenerating ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                Regenerar
+              </button>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-zinc-400 leading-5">
+            ⚠️ Al regenerar el código, el anterior deja de funcionar.
+            Quienes ya ingresaron su membresía no pierden el acceso.
+          </p>
+        </div>
+
+        {/* Datos de empresa */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
             <div className="flex items-center gap-2">

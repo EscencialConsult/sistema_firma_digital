@@ -1,10 +1,8 @@
 import {
   Building2,
   ClipboardList,
-  FileClock,
   FileText,
   Gauge,
-  History,
   IdCard,
   LayoutDashboard,
   LogOut,
@@ -33,9 +31,8 @@ interface SharedSidebarProps {
 }
 
 const USER_NAV = [
-  { path: "/dashboard",  label: "Portal de firmas", icon: Gauge,      end: true },
+  { path: "/dashboard",  label: "Inicio",           icon: Gauge,      end: true },
   { path: "/signatures", label: "Mis contratos", icon: FileText },
-  { path: "/audit",      label: "Historial",     icon: History },
   { path: "/profile",    label: "Perfil",        icon: UserCircle },
 ];
 
@@ -46,7 +43,6 @@ const ADMIN_NAV = [
   { path: "/admin/users", label: "Usuarios", icon: Users },
   { path: "/admin/kyc", label: "Verificaciones KYC", icon: IdCard },
   { path: "/admin/contracts", label: "Contratos", icon: ClipboardList },
-  { path: "/admin/audit", label: "Auditoría", icon: FileClock },
   { path: "/admin/team", label: "Mi equipo", icon: UsersRound },
   { path: "/admin/settings", label: "Configuración", icon: Settings },
 ];
@@ -71,9 +67,10 @@ export function SharedSidebar({ variant, mobileOpen, onMobileClose, onTermsClick
 
   useEffect(() => {
     if (variant === "super-admin") return;
+    if (user?.isMultiOrg) { setOrg(null); return; }
     if (!user?.organizationId && variant === "user") return;
     getMyOrganization().then(setOrg).catch(() => setOrg(null));
-  }, [user?.organizationId, variant]);
+  }, [user?.organizationId, user?.isMultiOrg, variant]);
 
   const isAdminOrOrgAdmin = user?.role === "ADMIN" || user?.role === "ORG_ADMIN";
   let navItems = USER_NAV;

@@ -16,6 +16,8 @@ export interface Organization {
   brandSecondary?:  string;
   brandAccent?:     string;
   brandBackground?: string;
+  /** Código de invitación reutilizable — el usuario lo ingresa en su perfil */
+  inviteCode?: string;
   /** Datos de la empresa */
   phone?:     string;
   address?:   string;

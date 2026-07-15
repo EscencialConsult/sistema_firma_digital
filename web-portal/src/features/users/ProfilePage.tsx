@@ -1,8 +1,11 @@
 import {
   AlertCircle,
   Award,
+  Building2,
   CheckCircle2,
   Clock,
+  Copy,
+  Check,
   CreditCard,
   MapPin,
   Phone,
@@ -18,6 +21,8 @@ import { Card, CardHeader } from "../../shared/components/ui/Card";
 import { PageHeader } from "../../shared/components/ui/PageHeader";
 import { getMyVerification } from "../../shared/services/kyc.service";
 import { supabase } from "../../shared/lib/supabase";
+import { getMyMemberships, joinOrgByCode, type OrgMembership } from "../../shared/services/memberships.service";
+import { getMyOrganization } from "../../shared/services/organizations.service";
 import type { KycPersonalData, KycVerification } from "../../shared/types/kyc";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -59,9 +64,47 @@ export function ProfilePage() {
   const [profileKycData, setProfileKycData] = useState<KycPersonalData | null>(null);
   const [kycLoading, setKycLoading] = useState(true);
 
+  // Organizaciones
+  const [memberships, setMemberships]     = useState<OrgMembership[]>([]);
+  const [inviteCode, setInviteCode]       = useState("");
+  const [joinLoading, setJoinLoading]     = useState(false);
+  const [joinError, setJoinError]         = useState<string | null>(null);
+  const [joinedOrg, setJoinedOrg]         = useState<string | null>(null);
+
   useEffect(() => {
     if (user) setFullName(user.fullName);
   }, [user]);
+
+  useEffect(() => {
+    async function loadOrgs() {
+      const [mbs, primaryOrg] = await Promise.all([
+        getMyMemberships().catch(() => [] as OrgMembership[]),
+        getMyOrganization().catch(() => null),
+      ]);
+      // Si la org primaria no tiene fila en organization_memberships, la inyectamos como entrada sintética
+      if (primaryOrg && !mbs.some((m) => m.organizationId === primaryOrg.id)) {
+        const synthetic: OrgMembership = {
+          id: `primary-${primaryOrg.id}`,
+          userId: user?.id ?? "",
+          organizationId: primaryOrg.id,
+          status: "active",
+          role: "USER",
+          createdAt: "",
+          organization: {
+            name: primaryOrg.name,
+            slug: primaryOrg.slug ?? "",
+            brandPrimary: primaryOrg.brandPrimary ?? undefined,
+            logoLightUrl: primaryOrg.logoLightUrl ?? undefined,
+            logoDarkUrl: primaryOrg.logoDarkUrl ?? undefined,
+          },
+        };
+        setMemberships([synthetic, ...mbs]);
+      } else {
+        setMemberships(mbs);
+      }
+    }
+    void loadOrgs();
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -117,6 +160,27 @@ export function ProfilePage() {
     );
   }
 
+  async function handleJoinByCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inviteCode.trim()) return;
+    setJoinLoading(true);
+    setJoinError(null);
+    setJoinedOrg(null);
+    try {
+      const org = await joinOrgByCode(inviteCode.trim());
+      setJoinedOrg(org.name);
+      setInviteCode("");
+      // Refrescar lista de membresías
+      const updated = await getMyMemberships();
+      setMemberships(updated);
+      await reloadUser();
+    } catch (err) {
+      setJoinError(err instanceof Error ? err.message : "Código inválido.");
+    } finally {
+      setJoinLoading(false);
+    }
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim() || fullName.trim() === user?.fullName) return;
@@ -133,7 +197,7 @@ export function ProfilePage() {
     }
   }
 
-  let pd = profileKycData ?? kyc?.personalData;
+  let pd = kyc?.personalData ?? profileKycData;
   if (!pd && user.verificationStatus === "VERIFIED") {
     pd = {
       fullName: user.fullName,
@@ -236,6 +300,96 @@ export function ProfilePage() {
                 <UserCircle size={15} /> {saving ? "Guardando..." : "Guardar"}
               </Button>
             </div>
+          </form>
+        </div>
+      </Card>
+
+      {/* ── Mis organizaciones ── */}
+      <Card className="border border-zinc-200/50 bg-white">
+        <CardHeader
+          title="Mis organizaciones"
+          subtitle="Empresas que pueden enviarte contratos para firmar."
+        />
+        <div className="p-5 space-y-5">
+
+          {/* Lista de membresías activas */}
+          {memberships.length > 0 && (
+            <div className="space-y-2">
+              {memberships.map((m) => {
+                const logo = m.organization?.logoLightUrl ?? m.organization?.logoDarkUrl;
+                const accent = m.organization?.brandPrimary ?? "var(--brand-primary)";
+                return (
+                  <div key={m.id} className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 px-4 py-3">
+                    <div
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg overflow-hidden"
+                      style={{ background: logo ? "#f4f4f5" : accent + "22" }}
+                    >
+                      {logo
+                        ? <img src={logo} alt={m.organization?.name} className="h-6 w-6 object-contain" />
+                        : <Building2 size={15} style={{ color: accent }} />
+                      }
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-zinc-900 truncate">
+                        {m.organization?.name ?? m.organizationId}
+                      </p>
+                      <p className="text-[11px] text-zinc-400">
+                        {m.status === "active" ? "Acceso activo" : "Pendiente de aprobación"}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                      m.status === "active"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-amber-50 text-amber-700 border border-amber-200"
+                    }`}>
+                      {m.status === "active" ? "Activa" : "Pendiente"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Unirse con código */}
+          <form onSubmit={handleJoinByCode} className="space-y-3">
+            <div>
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Ingresar código de empresa
+              </label>
+              <p className="mb-3 text-xs text-zinc-500 leading-5">
+                Pedile el código de invitación al administrador de la empresa.
+                Una vez que lo ingresés, esa empresa puede enviarte contratos para firmar.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                  placeholder="Ej: A3F9B2C1"
+                  maxLength={12}
+                  className="flex-1 rounded-xl border border-zinc-200 px-4 py-2.5 font-mono text-sm font-bold tracking-[0.2em] text-zinc-900 placeholder-zinc-300 placeholder:tracking-normal placeholder:font-normal focus:border-zinc-400 focus:outline-none transition uppercase"
+                />
+                <Button type="submit" disabled={joinLoading || !inviteCode.trim()} className="shrink-0">
+                  {joinLoading
+                    ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    : <Building2 size={14} />}
+                  {joinLoading ? "Verificando..." : "Unirme"}
+                </Button>
+              </div>
+            </div>
+
+            {joinedOrg && (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700">
+                <Check size={14} className="shrink-0" />
+                ¡Listo! Ya tenés acceso a <span className="font-bold">{joinedOrg}</span>.
+              </div>
+            )}
+            {joinError && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold text-red-600">
+                <AlertCircle size={14} className="shrink-0" />
+                {joinError}
+              </div>
+            )}
           </form>
         </div>
       </Card>

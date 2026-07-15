@@ -28,6 +28,7 @@ function mapRow(row: Record<string, unknown>): Organization {
     postalCode:      (row.postal_code     as string) ?? undefined,
     taxId:           (row.tax_id          as string) ?? undefined,
     website:         (row.website         as string) ?? undefined,
+    inviteCode:      (row.invite_code     as string) ?? undefined,
   };
 }
 
@@ -166,7 +167,24 @@ export async function uploadOrgLogo(
   if (uploadError) throw new Error(uploadError.message);
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  // Cache-bust: mismo path → browser cachea la URL → muestra imagen vieja
+  return `${data.publicUrl}?t=${Date.now()}`;
+}
+
+/** Busca una org por su código de invitación (case-insensitive) */
+export async function getOrgByInviteCode(code: string): Promise<Organization | null> {
+  const { data, error } = await supabase.rpc("get_org_by_invite_code", { p_code: code.trim().toUpperCase() });
+  if (error) throw new Error(error.message);
+  const rows = data as Record<string, unknown>[] | null;
+  if (!rows || rows.length === 0) return null;
+  return mapRow(rows[0]);
+}
+
+/** Regenera el código de invitación de una org — devuelve el nuevo código */
+export async function regenerateInviteCode(orgId: string): Promise<string> {
+  const { data, error } = await supabase.rpc("regenerate_org_invite_code", { p_org_id: orgId });
+  if (error) throw new Error(error.message);
+  return data as string;
 }
 
 export async function getMyOrganization(): Promise<Organization | null> {

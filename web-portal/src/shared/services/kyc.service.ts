@@ -49,19 +49,35 @@ async function mapRowToVerification(
     })
   );
 
-  const hasPersonalData = row.full_name || row.document_number || row.birth_date || row.phone || row.address;
+  // Intentar extraer datos personales de las columnas directas primero,
+  // y si están vacías usar provider_response (respuesta cruda de Didit)
+  const providerResp = row.provider_response as Record<string, unknown> | null | undefined;
+  const idVer = (providerResp?.id_verifications as Array<Record<string, unknown>> | undefined)?.[0];
+
+  const fullName       = (row.full_name       as string | null) || (idVer?.full_name as string | null) || null;
+  const documentNumber = (row.document_number as string | null) || (idVer?.document_number as string | null) || null;
+  const documentType   = (row.document_type   as string | null) || null;
+  const cuilCuit       = (row.cuil_cuit       as string | null) || null;
+  const birthDate      = (row.birth_date      as string | null) || (idVer?.date_of_birth as string | null) || (idVer?.birth_date as string | null) || null;
+  const phone          = (row.phone           as string | null) || null;
+  const address        = (row.address         as string | null) || (idVer?.address as string | null) || null;
+  const city           = (row.city            as string | null) || null;
+  const province       = (row.province        as string | null) || null;
+  const country        = (row.country         as string | null) || null;
+
+  const hasPersonalData = fullName || documentNumber || birthDate || phone || address;
   const personalData: KycPersonalData | null = hasPersonalData
     ? {
-        fullName:       (row.full_name       as string) ?? "",
-        documentType:   (row.document_type   as string) ?? "",
-        documentNumber: (row.document_number as string) ?? "",
-        cuilCuit:       (row.cuil_cuit       as string) ?? "",
-        birthDate:      (row.birth_date      as string) ?? "",
-        phone:          (row.phone           as string) ?? "",
-        address:        (row.address         as string) ?? "",
-        city:           (row.city            as string) ?? "",
-        province:       (row.province        as string) ?? "",
-        country:        (row.country         as string) ?? "",
+        fullName:       fullName       ?? "",
+        documentType:   documentType   ?? "DNI",
+        documentNumber: documentNumber ?? "",
+        cuilCuit:       cuilCuit       ?? "",
+        birthDate:      birthDate      ?? "",
+        phone:          phone          ?? "",
+        address:        address        ?? "",
+        city:           city           ?? "",
+        province:       province       ?? "",
+        country:        country        ?? "",
       }
     : null;
 
@@ -87,7 +103,7 @@ async function mapRowToVerification(
 export async function getMyVerification(userId: string): Promise<KycVerification | null> {
   const { data, error } = await supabase
     .from("identity_verifications")
-    .select("*, identity_documents(*)")
+    .select("*, identity_documents(*), provider_response")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(1)

@@ -4,6 +4,7 @@ import {
   Files,
   IdCard,
   Users,
+  UsersRound,
   XCircle,
   ArrowRight,
 } from "lucide-react";
@@ -89,6 +90,8 @@ export function AdminDashboardPage() {
       ]
     : [];
 
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+
   return (
     <div className="space-y-8 py-2">
       <div className="border-b border-zinc-100 pb-5">
@@ -135,18 +138,27 @@ export function AdminDashboardPage() {
       {/* Quick actions */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Revisar KYC", sub: "Aprobar o rechazar", path: "/admin/kyc", icon: IdCard },
-          { label: "Ver usuarios", sub: "Gestionar cuentas", path: "/admin/users", icon: Users },
-          { label: "Contratos", sub: "Todos los documentos", path: "/admin/contracts", icon: Files },
-          { label: "Auditoría", sub: "Logs del sistema", path: "/admin/audit", icon: FileSignature },
+          { label: "Usuarios", sub: "Gestionar cuentas", path: "/admin/users", icon: Users },
+          { label: "Verificaciones KYC", sub: "Aprobar o rechazar", path: "/admin/kyc", icon: IdCard },
+          { label: "Contratos", sub: "Plantillas y documentos", path: "/admin/contracts", icon: Files },
+          { label: "Mi equipo", sub: "Colaboradores admin", path: "/admin/team", icon: UsersRound },
         ].map(({ label, sub, path, icon: Icon }) => (
           <Link
             key={path}
             to={path}
+            onMouseEnter={() => setHoveredCard(path)}
+            onMouseLeave={() => setHoveredCard(null)}
             className="group relative flex flex-col justify-between min-h-[140px] rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm hover:shadow-md hover:border-zinc-300/80 hover:-translate-y-0.5 transition-all duration-300"
           >
             <div className="flex justify-between items-start w-full">
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-100 text-zinc-600 group-hover:bg-zinc-950 group-hover:text-white transition-all duration-300 shadow-sm">
+              <div
+                className="grid h-10 w-10 place-items-center rounded-xl transition-all duration-300 shadow-sm"
+                style={
+                  hoveredCard === path
+                    ? { background: "var(--brand-primary)", color: "var(--brand-primary-text)" }
+                    : { background: "#f4f4f5", color: "#52525b" }
+                }
+              >
                 <Icon size={18} />
               </div>
               <ArrowRight size={16} className="text-zinc-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300 mt-1" />

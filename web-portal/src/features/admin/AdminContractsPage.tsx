@@ -44,6 +44,7 @@ import {
   cloneContractTemplate,
   extractVariables,
   AUTO_FILL_VARS,
+  SYSTEM_VARS,
   VAR_LABELS,
   type DbContractTemplate,
 } from "../../shared/services/contractTemplates.service";
@@ -59,6 +60,7 @@ import { downloadBlob, signedPdfDownloadUrl, signedPdfFileName } from "../../sha
 import { buildSignedPdfsEmail } from "../../shared/utils/shareEmail";
 import { ContractDocument, ContractDetailModal } from "./components/ContractRenderer";
 import { RichTextEditor } from "./components/RichTextEditor";
+import { loadOrgCache } from "../../shared/config/orgCache";
 import { AdminConveniosTab } from "./AdminConveniosTab";
 import { AdminPaymentTemplatesTab } from "./AdminPaymentTemplatesTab";
 
@@ -254,63 +256,103 @@ function TemplateCard({
   onDelete: () => void;
   onClone:  () => void;
 }) {
-  const vars      = extractVariables(template.contentHtml);
-  const adminVars = vars.filter((v) => !AUTO_FILL_VARS.has(v));
-  const autoVars  = vars.filter((v) => AUTO_FILL_VARS.has(v));
+  const vars        = extractVariables(template.contentHtml);
+  const autoVars    = vars.filter((v) => AUTO_FILL_VARS.has(v));
+  const systemVars  = vars.filter((v) => SYSTEM_VARS.has(v));
+  const customVars  = vars.filter((v) => !AUTO_FILL_VARS.has(v) && !SYSTEM_VARS.has(v));
+  const [showDesc, setShowDesc] = useState(false);
+  const [showVars, setShowVars] = useState(false);
 
   return (
-    <div className="group rounded-2xl border border-zinc-200 bg-white p-5 flex flex-col gap-3 hover:border-zinc-300 hover:shadow-sm transition">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100">
-            <FileText size={16} className="text-zinc-500" />
+    <div className="group border-b border-zinc-100 last:border-0">
+      {/* Fila principal */}
+      <div className="flex items-center gap-3 px-1 py-3 hover:bg-zinc-50/60 rounded-xl transition">
+        <FileText size={14} className="shrink-0 text-zinc-400" />
+
+        {/* Nombre + meta */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-sm font-semibold text-zinc-900 truncate">{template.name}</p>
+            {template.label && (
+              <span className="shrink-0 rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">
+                {template.label}
+              </span>
+            )}
           </div>
-          <div>
-            <p className="font-bold text-zinc-900 text-sm">{template.name}</p>
-            <p className="text-xs text-zinc-500 mt-0.5">{new Date(template.createdAt).toLocaleDateString("es-AR")}</p>
-          </div>
+          <p className="text-[11px] text-zinc-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span>{new Date(template.createdAt).toLocaleDateString("es-AR")}</span>
+            {vars.length > 0 && (
+              <>
+                <span className="text-zinc-300">·</span>
+                <button type="button" onClick={() => setShowVars((v) => !v)}
+                  className="hover:text-zinc-600 transition hover:underline underline-offset-2">
+                  {(systemVars.length + customVars.length) > 0 && <>{systemVars.length + customVars.length} variable{(systemVars.length + customVars.length) !== 1 ? "s" : ""}</>}
+                  {(systemVars.length + customVars.length) > 0 && autoVars.length > 0 && <span className="mx-0.5 text-zinc-300">·</span>}
+                  {autoVars.length > 0 && <span className="text-emerald-500">{autoVars.length} auto</span>}
+                </button>
+              </>
+            )}
+            {template.description && (
+              <>
+                <span className="text-zinc-300">·</span>
+                <button type="button" onClick={() => setShowDesc((v) => !v)}
+                  className="hover:text-zinc-600 transition hover:underline underline-offset-2">
+                  {showDesc ? "ocultar" : "descripción"}
+                </button>
+              </>
+            )}
+          </p>
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-          <button type="button" onClick={onEdit}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition"
-            title="Editar">
+
+        {/* Acciones */}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+          <button type="button" onClick={onEdit} title="Editar"
+            className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
             <Pencil size={12} />
           </button>
-          <button type="button" onClick={onClone}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition"
-            title="Clonar plantilla">
+          <button type="button" onClick={onClone} title="Clonar"
+            className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
             <Copy size={12} />
           </button>
-          <button type="button" onClick={onDelete}
-            className="grid h-7 w-7 place-items-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition"
-            title="Eliminar">
+          <button type="button" onClick={onDelete} title="Eliminar"
+            className="grid h-7 w-7 place-items-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition">
             <Trash2 size={12} />
           </button>
         </div>
+
+        {/* Enviar */}
+        <button type="button" onClick={onSend}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 h-8 text-[11px] font-semibold transition"
+          style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+          <Send size={11} /> Enviar
+        </button>
       </div>
 
-      {template.description && (
-        <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2">{template.description}</p>
-      )}
-
-      {vars.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {adminVars.map((v) => (
-            <span key={v} className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
+      {/* Variables expandibles */}
+      {showVars && vars.length > 0 && (
+        <div className="px-6 pb-3 flex flex-wrap gap-1">
+          {autoVars.map((v) => (
+            <span key={v} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-mono font-medium text-emerald-700">
               {"{{"}{v}{"}}"}
             </span>
           ))}
-          {autoVars.map((v) => (
-            <span key={v} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
+          {systemVars.map((v) => (
+            <span key={v} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-mono font-medium text-sky-700">
+              {"{{"}{v}{"}}"}
+            </span>
+          ))}
+          {customVars.map((v) => (
+            <span key={v} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-mono font-medium text-amber-700">
               {"{{"}{v}{"}}"}
             </span>
           ))}
         </div>
       )}
 
-      <Button onClick={onSend} className="mt-auto h-9 w-full text-xs" style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
-        <Send size={12} /> Enviar contrato
-      </Button>
+      {/* Descripción expandible */}
+      {showDesc && template.description && (
+        <p className="px-6 pb-3 text-xs text-zinc-500 leading-relaxed">{template.description}</p>
+      )}
     </div>
   );
 }
@@ -596,51 +638,61 @@ function SendingFlow({
           <div className="space-y-4">
             <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Variables del contrato</p>
 
-            {/* Auto-fill (usuario) */}
+            {/* Auto-fill (usuario) — mostrar como campos read-only */}
             {autoVars.length > 0 && (
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">Auto-completadas del usuario</p>
-                {autoVars.map((v) => (
-                  <div key={v} className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-mono text-emerald-700">{"{{"}{v}{"}}"}</span>
-                    <span className="text-[11px] text-emerald-800 font-semibold truncate max-w-[140px]">
-                      {varValues[v] || "—"}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">Datos del firmante (automáticos)</p>
+                {autoVars.map((v) => {
+                  const label = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                  return (
+                    <div key={v}>
+                      <label className="mb-1 block text-xs font-semibold text-zinc-400">{label}</label>
+                      <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+                        <span className="flex-1 text-sm font-medium text-emerald-800 truncate">
+                          {varValues[v] || <span className="text-zinc-400 italic">Sin datos</span>}
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-400 shrink-0">auto</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
-            {/* Admin vars */}
-            {adminVars.length > 0 ? (
+            {/* Variables a completar manualmente */}
+            {adminVars.length > 0 && (
               <div className="space-y-3">
+                {autoVars.length > 0 && <div className="border-t border-zinc-100 pt-1" />}
                 <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Completar manualmente</p>
                 {adminVars.map((v) => {
                   const isLong = v.includes("objeto") || v.includes("descripcion");
                   const isDate = v.includes("fecha");
-                  const isNum  = v.includes("monto") || v.includes("cuotas");
+                  const isNum  = v.includes("monto") || v.includes("cuotas") || v.includes("valor");
+                  const label  = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
                   return (
                     <div key={v}>
-                      <label className="mb-1 block text-xs font-semibold text-zinc-400">
-                        {VAR_LABELS[v] ?? v.replace(/_/g, " ")}
-                      </label>
+                      <label className="mb-1 block text-xs font-semibold text-zinc-600">{label}</label>
                       {isLong ? (
-                        <textarea value={varValues[v] ?? ""} rows={2} placeholder={`{{${v}}}`}
+                        <textarea value={varValues[v] ?? ""} rows={2}
+                          placeholder={`Ingresá ${label.toLowerCase()}...`}
                           onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
-                          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition resize-none" />
+                          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 outline-none focus:border-zinc-500 focus:bg-white transition resize-none" />
                       ) : (
                         <input type={isDate ? "date" : isNum ? "number" : "text"}
-                          value={varValues[v] ?? ""} placeholder={`{{${v}}}`}
+                          value={varValues[v] ?? ""}
+                          placeholder={`Ingresá ${label.toLowerCase()}...`}
                           onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
-                          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+                          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 outline-none focus:border-zinc-500 focus:bg-white transition" />
                       )}
                     </div>
                   );
                 })}
               </div>
-            ) : (
+            )}
+
+            {autoVars.length === 0 && adminVars.length === 0 && (
               <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-xs text-zinc-400">
-                No hay variables manuales — todo se auto-completa.
+                Esta plantilla no tiene variables — se enviará tal como está.
               </div>
             )}
           </div>
@@ -764,7 +816,7 @@ function SendingFlow({
           <Pencil size={11} /> Editar
         </Button>
       </div>
-      <ContractDocument templateId="custom" fields={previewFields} alumnos={[]} />
+      <ContractDocument templateId="custom" fields={previewFields} alumnos={[]} logoHeader={template.logoHeader} logoWatermark={template.logoWatermark} />
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex justify-between">
         <Button variant="secondary" onClick={() => setStep(1)} className="h-10 px-5 text-zinc-700">
@@ -812,7 +864,13 @@ export function AdminContractsPage() {
   const [editingTemplate, setEditingTemplate] = useState<DbContractTemplate | null>(null);
   const [tplName, setTplName] = useState("");
   const [tplDesc, setTplDesc] = useState("");
+  const [tplLabel, setTplLabel] = useState("");
+  const [tplLogoHeader, setTplLogoHeader] = useState(false);
+  const [tplLogoWatermark, setTplLogoWatermark] = useState(false);
   const [tplHtml, setTplHtml] = useState("");
+  const [labelFilter, setLabelFilter] = useState("");
+  const [labelSearch, setLabelSearch] = useState("");
+  const [showLabelSuggestions, setShowLabelSuggestions] = useState(false);
   const [tplSignaturePosition, setTplSignaturePosition] = useState<SignaturePosition>(DEFAULT_SIGNATURE_POSITION);
   const [savingTpl, setSavingTpl] = useState(false);
 
@@ -946,14 +1004,14 @@ export function AdminContractsPage() {
 
   function openNewTemplate() {
     setEditingTemplate(null);
-    setTplName(""); setTplDesc(""); setTplHtml("");
+    setTplName(""); setTplDesc(""); setTplLabel(""); setTplLogoHeader(false); setTplLogoWatermark(false); setTplHtml("");
     setTplSignaturePosition(DEFAULT_SIGNATURE_POSITION);
     setView("editor");
   }
 
   function openEditTemplate(tpl: DbContractTemplate) {
     setEditingTemplate(tpl);
-    setTplName(tpl.name); setTplDesc(tpl.description); setTplHtml(tpl.contentHtml);
+    setTplName(tpl.name); setTplDesc(tpl.description); setTplLabel(tpl.label ?? ""); setTplLogoHeader(tpl.logoHeader ?? false); setTplLogoWatermark(tpl.logoWatermark ?? false); setTplHtml(tpl.contentHtml);
     setTplSignaturePosition(tpl.signaturePosition);
     setView("editor");
   }
@@ -965,22 +1023,20 @@ export function AdminContractsPage() {
     try {
       if (editingTemplate) {
         await updateContractTemplate(editingTemplate.id, {
-          name: tplName,
-          description: tplDesc,
-          contentHtml: tplHtml,
-          signaturePosition: tplSignaturePosition,
+          name: tplName, description: tplDesc, label: tplLabel,
+          logoHeader: tplLogoHeader, logoWatermark: tplLogoWatermark,
+          contentHtml: tplHtml, signaturePosition: tplSignaturePosition,
         });
         setDbTemplates((prev) => prev.map((t) => t.id === editingTemplate.id
-          ? { ...t, name: tplName, description: tplDesc, contentHtml: tplHtml, signaturePosition: tplSignaturePosition }
+          ? { ...t, name: tplName, description: tplDesc, label: tplLabel, logoHeader: tplLogoHeader, logoWatermark: tplLogoWatermark, contentHtml: tplHtml, signaturePosition: tplSignaturePosition }
           : t));
         showToast("Plantilla actualizada.");
       } else if (orgId) {
         const created = await createContractTemplate({
           orgId,
-          name: tplName,
-          description: tplDesc,
-          contentHtml: tplHtml,
-          signaturePosition: tplSignaturePosition,
+          name: tplName, description: tplDesc, label: tplLabel,
+          logoHeader: tplLogoHeader, logoWatermark: tplLogoWatermark,
+          contentHtml: tplHtml, signaturePosition: tplSignaturePosition,
         });
         setDbTemplates((prev) => [created, ...prev]);
         showToast("Plantilla creada.");
@@ -1062,23 +1118,92 @@ export function AdminContractsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="col-span-2">
             <label className="mb-1 block text-xs font-semibold text-zinc-400">Nombre de la plantilla *</label>
             <input value={tplName} onChange={(e) => setTplName(e.target.value)}
               placeholder="Ej: Contrato de prestación de servicios"
               className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-zinc-400">Descripción (opcional)</label>
-            <input value={tplDesc} onChange={(e) => setTplDesc(e.target.value)}
-              placeholder="Descripción breve"
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+          <div className="relative">
+            <label className="mb-1 block text-xs font-semibold text-zinc-400">Etiqueta (opcional)</label>
+            <div className="flex items-center rounded-xl border border-zinc-200 bg-zinc-50 px-4 focus-within:border-zinc-500 transition">
+              <input
+                value={tplLabel}
+                onChange={(e) => { setTplLabel(e.target.value); setShowLabelSuggestions(true); }}
+                onBlur={() => setTimeout(() => setShowLabelSuggestions(false), 150)}
+                placeholder="ej: rrhh, inmuebles, pagos"
+                className="flex-1 bg-transparent py-2.5 text-sm text-zinc-800 placeholder:text-zinc-400 outline-none"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); setShowLabelSuggestions((v) => !v); }}
+                className="text-zinc-400 hover:text-zinc-600 transition pl-2"
+                title="Ver etiquetas existentes"
+              >
+                <Search size={13} />
+              </button>
+            </div>
+            {showLabelSuggestions && (() => {
+              const allLabels = [...new Set(dbTemplates.map((t) => t.label).filter(Boolean))];
+              const suggestions = tplLabel
+                ? allLabels.filter((l) => l.toLowerCase().includes(tplLabel.toLowerCase()) && l !== tplLabel)
+                : allLabels;
+              if (suggestions.length === 0) return null;
+              return (
+                <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); setTplLabel(s); setShowLabelSuggestions(false); }}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition"
+                    >
+                      <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{s}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-400">Descripción (opcional)</label>
+          <input value={tplDesc} onChange={(e) => setTplDesc(e.target.value)}
+            placeholder="Descripción breve del contrato"
+            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
+        </div>
+
+        {/* Logo options */}
+        <div className="flex items-center gap-4 rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-400 shrink-0">Logo</p>
+          <div className="flex items-center gap-6">
+            {([
+              { state: tplLogoHeader,    setter: setTplLogoHeader,    label: "Encabezado",   desc: "Logo en la parte superior del documento" },
+              { state: tplLogoWatermark, setter: setTplLogoWatermark, label: "Marca de agua", desc: "Logo centrado grande con transparencia de fondo" },
+            ] as const).map(({ state, setter, label, desc }) => (
+              <label key={label} className="flex items-center gap-2.5 cursor-pointer group" title={desc}>
+                <button
+                  type="button"
+                  onClick={() => setter(!state)}
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${state ? "bg-emerald-500" : "bg-zinc-200"}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${state ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+                <span className="text-xs font-medium text-zinc-600 group-hover:text-zinc-900 transition">{label}</span>
+              </label>
+            ))}
           </div>
         </div>
 
-        <RichTextEditor value={tplHtml} onChange={setTplHtml}
-          placeholder="Redactá el contrato. Usá las variables del panel derecho para insertar datos dinámicos..." />
+        <RichTextEditor
+          value={tplHtml}
+          onChange={setTplHtml}
+          logoHeader={tplLogoHeader}
+          logoWatermark={tplLogoWatermark}
+          logoUrl={loadOrgCache()?.logoLightUrl ?? loadOrgCache()?.logoDarkUrl ?? null}
+        />
 
         <SignaturePositionEditor value={tplSignaturePosition} onChange={setTplSignaturePosition} />
 
@@ -1115,37 +1240,74 @@ export function AdminContractsPage() {
           </Button>
         </div>
 
-        {loadingTemplates ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array(3).fill(null).map((_, i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-zinc-100" />)}
-          </div>
-        ) : dbTemplates.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-            <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
-              <LayoutTemplate size={28} className="text-zinc-400" />
-            </div>
-            <div>
-              <p className="font-semibold text-zinc-700">Sin plantillas</p>
-              <p className="text-sm text-zinc-400 mt-1">Creá tu primera plantilla para poder enviar contratos.</p>
-            </div>
-            <Button onClick={openNewTemplate} className="h-10 px-5">
-              <Plus size={14} /> Crear primera plantilla
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {dbTemplates.map((tpl) => (
-              <TemplateCard
-                key={tpl.id}
-                template={tpl}
-                onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
-                onEdit={() => openEditTemplate(tpl)}
-                onDelete={() => handleDeleteTemplate(tpl.id)}
-                onClone={() => handleCloneTemplate(tpl.id)}
-              />
-            ))}
-          </div>
-        )}
+        {(() => {
+          const allLabels = [...new Set(dbTemplates.map((t) => t.label).filter(Boolean))];
+          const visibleLabels = labelSearch
+            ? allLabels.filter((l) => l.toLowerCase().includes(labelSearch.toLowerCase()))
+            : allLabels;
+          const filtered = labelFilter
+            ? dbTemplates.filter((t) => t.label === labelFilter)
+            : dbTemplates;
+          return (
+            <>
+              {allLabels.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={labelSearch}
+                    onChange={(e) => setLabelSearch(e.target.value)}
+                    placeholder="Buscar etiqueta..."
+                    className="h-7 w-36 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-[11px] text-zinc-700 placeholder:text-zinc-400 outline-none focus:border-zinc-400 transition"
+                  />
+                  {labelFilter && (
+                    <button type="button" onClick={() => setLabelFilter("")}
+                      className="h-7 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-[11px] text-zinc-500 hover:bg-zinc-100 transition">
+                      × Limpiar
+                    </button>
+                  )}
+                  {visibleLabels.map((l) => (
+                    <button key={l} type="button" onClick={() => setLabelFilter(l === labelFilter ? "" : l)}
+                      className={`h-7 rounded-full border px-3 text-[11px] font-semibold uppercase tracking-wide transition ${
+                        l === labelFilter
+                          ? "border-zinc-800 bg-zinc-800 text-white"
+                          : "border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+                      }`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {loadingTemplates ? (
+                <div className="rounded-2xl border border-zinc-100 bg-white divide-y divide-zinc-100 px-2">
+                  {Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse my-1 rounded-xl bg-zinc-100" />)}
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+                  <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
+                    <LayoutTemplate size={28} className="text-zinc-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-zinc-700">{labelFilter ? `Sin plantillas con etiqueta "${labelFilter}"` : "Sin plantillas"}</p>
+                    <p className="text-sm text-zinc-400 mt-1">{labelFilter ? "Probá con otra etiqueta." : "Creá tu primera plantilla para poder enviar contratos."}</p>
+                  </div>
+                  {!labelFilter && <Button onClick={openNewTemplate} className="h-10 px-5"><Plus size={14} /> Crear primera plantilla</Button>}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-zinc-100 bg-white px-2">
+                  {filtered.map((tpl) => (
+                    <TemplateCard
+                      key={tpl.id}
+                      template={tpl}
+                      onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
+                      onEdit={() => openEditTemplate(tpl)}
+                      onDelete={() => handleDeleteTemplate(tpl.id)}
+                      onClone={() => handleCloneTemplate(tpl.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         <Toast message={toast.message} type={toast.type} visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
       </div>
@@ -1341,8 +1503,8 @@ export function AdminContractsPage() {
               </Button>
             </div>
             {loadingTemplates ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array(3).fill(null).map((_, i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-zinc-100" />)}
+              <div className="rounded-2xl border border-zinc-100 bg-white divide-y divide-zinc-100 px-2">
+                {Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse my-1 rounded-xl bg-zinc-100" />)}
               </div>
             ) : dbTemplates.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
@@ -1358,7 +1520,7 @@ export function AdminContractsPage() {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-zinc-100 bg-white px-2">
                 {dbTemplates.map((tpl) => (
                   <TemplateCard
                     key={tpl.id}

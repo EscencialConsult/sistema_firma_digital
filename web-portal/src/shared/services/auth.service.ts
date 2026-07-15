@@ -39,13 +39,18 @@ function fallbackProfile(userId: string, authUser?: SupabaseAuthUser | null): Au
 
 /** Fetch the public.users profile row and map to AuthUser */
 export async function fetchProfile(userId: string, authUser?: SupabaseAuthUser | null): Promise<AuthUser | null> {
-  const [profile, kycStatus] = await Promise.all([
+  const [profile, kycStatus, memberships] = await Promise.all([
     supabase
       .from("users")
       .select("id, email, full_name, role, verification_status, certificate_status, organization_id, terms_accepted_at, document_number, cuil_cuit, birth_date, phone, address")
       .eq("id", userId)
       .maybeSingle(),
     supabase.rpc("get_my_kyc_status"),
+    supabase
+      .from("organization_memberships")
+      .select("organization_id")
+      .eq("user_id", userId)
+      .eq("status", "active"),
   ]);
 
   const { data, error } = profile;
@@ -57,6 +62,15 @@ export async function fetchProfile(userId: string, authUser?: SupabaseAuthUser |
     ? (kycRow.status as string)
     : data.verification_status;
 
+  const memberOrgIds = (memberships.data ?? []).map(
+    (r: Record<string, unknown>) => r.organization_id as string
+  );
+  // Incluir la org primaria si no está en la tabla de membresías
+  const primaryOrgId = data.organization_id as string | undefined;
+  if (primaryOrgId && !memberOrgIds.includes(primaryOrgId)) {
+    memberOrgIds.unshift(primaryOrgId);
+  }
+
   return {
     id:                 data.id,
     email:              data.email,
@@ -64,8 +78,10 @@ export async function fetchProfile(userId: string, authUser?: SupabaseAuthUser |
     role:               data.role               as UserRole,
     verificationStatus: realStatus as VerificationStatus,
     certificateStatus:  data.certificate_status  as CertificateStatus,
-    organizationId:     data.organization_id ?? undefined,
+    organizationId:     primaryOrgId,
     termsAcceptedAt:    data.terms_accepted_at ?? undefined,
+    memberOrgIds,
+    isMultiOrg:         memberOrgIds.length > 1,
   };
 }
 

@@ -10,6 +10,9 @@ export function AuthGuard() {
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    const slug = localStorage.getItem("lastOrgSlug");
+    return <Navigate to={slug ? `/${slug}` : "/login"} replace />;
+  }
   return <Outlet />;
 }

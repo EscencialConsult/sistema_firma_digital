@@ -23,6 +23,10 @@ export interface AuthUser {
   documentNumber?: string;
   cuilCuit?: string;
   birthDate?: string;
+  /** IDs de todas las orgs donde tiene membresía activa (incluyendo la primaria) */
+  memberOrgIds?: string[];
+  /** true si pertenece a más de una organización */
+  isMultiOrg?: boolean;
 }
 
 export interface UserProfile extends AuthUser {

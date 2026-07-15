@@ -345,9 +345,13 @@ serve(async (req) => {
         submitted_at: new Date().toISOString(),
       };
 
-      // No pisar datos que el usuario ya cargó en Step 0 si Didit no los devuelve
-      if (idVer?.full_name != null) updateFields.full_name = idVer.full_name;
+      // Solo pisar si Didit devuelve el dato (no sobreescribir lo que el usuario cargó en Step 0)
+      if (idVer?.full_name != null)       updateFields.full_name       = idVer.full_name;
       if (idVer?.document_number != null) updateFields.document_number = idVer.document_number;
+      if (idVer?.date_of_birth != null)   updateFields.birth_date      = idVer.date_of_birth;
+      if (idVer?.birth_date != null)      updateFields.birth_date      = idVer.birth_date;
+      if (idVer?.address != null)         updateFields.address         = idVer.address;
+      if (idVer?.document_type != null)   updateFields.document_type   = idVer.document_type;
 
       await supabase
         .from("identity_verifications")

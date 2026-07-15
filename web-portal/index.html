@@ -13,7 +13,21 @@
     <!-- Aplica colores de marca cacheados ANTES de que React cargue → sin flash -->
     <script>
       try {
+        // 1. Caché general (sesión activa de un usuario logueado)
         var t = JSON.parse(localStorage.getItem('brand_theme') || 'null');
+
+        // 2. Si no hay caché general, intentar caché por slug de la URL actual
+        //    Ej: /fundacion → brand_theme_fundacion
+        if (!t || !t.primary) {
+          var _slug = (window.location.pathname.match(/^\/([^/]+)/) || [])[1];
+          var _skip = ['login','register','kyc','admin','dashboard','contracts',
+                       'signatures','documents','profile','audit','super-admin',
+                       'sign','d','authority','identity','certificates','signing'];
+          if (_slug && _skip.indexOf(_slug) === -1) {
+            t = JSON.parse(localStorage.getItem('brand_theme_' + _slug) || 'null');
+          }
+        }
+
         if (t && t.primary) {
           var r = document.documentElement;
           r.style.setProperty('--brand-primary',        t.primary);

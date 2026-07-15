@@ -36,6 +36,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Multi-org: el usuario pertenece a más de una empresa.
+    // No se puede mostrar el branding de ninguna en particular → tema negro base.
+    if (user?.isMultiOrg) {
+      clearOrgCache();
+      resetTheme();
+      return;
+    }
+
     if (!user?.organizationId) {
       clearOrgCache();
       resetTheme();
@@ -60,7 +68,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         });
       })
       .catch(() => resetTheme());
-  }, [loading, user?.organizationId, user?.role]);
+  }, [loading, user?.isMultiOrg, user?.organizationId, user?.role]);
 
   return <>{children}</>;
 }

@@ -92,6 +92,11 @@ const JoinOrgPage = lazy(() =>
   import("../../features/join/JoinOrgPage").then((m) => ({ default: m.JoinOrgPage }))
 );
 
+// ─── Invitación multi-org (sin login requerido) ───────────────────────────────
+const InviteAcceptPage = lazy(() =>
+  import("../../features/invite/InviteAcceptPage").then((m) => ({ default: m.InviteAcceptPage }))
+);
+
 // ─── Super Admin ──────────────────────────────────────────────────────────────
 const SuperAdminDashboardPage = lazy(() =>
   import("../../features/super-admin/SuperAdminDashboardPage").then((m) => ({
@@ -194,8 +199,8 @@ export function AppRouter() {
         {/* Aceptar invitación de autoridad (sin cuenta) */}
         <Route path="/authority/accept/:token" element={<AuthorityAcceptPage />} />
 
-        {/* Unirse a una organización (sin cuenta) */}
-        <Route path="/join/:slug"  element={<JoinOrgPage />} />
+        {/* Aceptar invitación multi-org (sin cuenta requerida) */}
+        <Route path="/invite/:token" element={<InviteAcceptPage />} />
 
         {/* ── Requieren login ── */}
         <Route element={<AuthGuard />}>
@@ -257,6 +262,9 @@ export function AppRouter() {
 
           </Route>
         </Route>
+
+        {/* Portal por organización — /:slug debe ir ANTES del catch-all */}
+        <Route path="/:slug" element={<JoinOrgPage />} />
 
         {/* Catch-all */}
         <Route path="/"  element={<DefaultRedirect />} />

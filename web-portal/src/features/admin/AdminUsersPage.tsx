@@ -365,8 +365,12 @@ export function AdminUsersPage() {
   // ── Filtered users ──
   const filtered = useMemo(() => {
     let list = users;
-    if (filter === "admin")     list = list.filter((u) => u.role.toUpperCase().includes("ADMIN"));
-    else if (filter !== "all") {
+    // "Todos" y filtros de estado solo muestran usuarios normales (no admins del equipo)
+    if (filter === "admin") list = list.filter((u) => u.role.toUpperCase().includes("ADMIN"));
+    else {
+      list = list.filter((u) => !u.role.toUpperCase().includes("ADMIN"));
+    }
+    if (filter !== "all" && filter !== "admin") {
       const statusMap: Record<Exclude<Filter, "all" | "admin">, string> = {
         verified: "VERIFIED", in_review: "IN_REVIEW", pending: "PENDING", rejected: "REJECTED",
       };
