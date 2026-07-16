@@ -44,6 +44,7 @@ import {
   cloneContractTemplate,
   extractVariables,
   AUTO_FILL_VARS,
+  ORG_VARS,
   SYSTEM_VARS,
   VAR_LABELS,
   type DbContractTemplate,
@@ -258,8 +259,9 @@ function TemplateCard({
 }) {
   const vars        = extractVariables(template.contentHtml);
   const autoVars    = vars.filter((v) => AUTO_FILL_VARS.has(v));
+  const orgVars     = vars.filter((v) => ORG_VARS.has(v) && !AUTO_FILL_VARS.has(v));
   const systemVars  = vars.filter((v) => SYSTEM_VARS.has(v));
-  const customVars  = vars.filter((v) => !AUTO_FILL_VARS.has(v) && !SYSTEM_VARS.has(v));
+  const customVars  = vars.filter((v) => !AUTO_FILL_VARS.has(v) && !ORG_VARS.has(v) && !SYSTEM_VARS.has(v));
   const [showDesc, setShowDesc] = useState(false);
   const [showVars, setShowVars] = useState(false);
 
@@ -287,7 +289,9 @@ function TemplateCard({
                 <button type="button" onClick={() => setShowVars((v) => !v)}
                   className="hover:text-zinc-600 transition hover:underline underline-offset-2">
                   {(systemVars.length + customVars.length) > 0 && <>{systemVars.length + customVars.length} variable{(systemVars.length + customVars.length) !== 1 ? "s" : ""}</>}
-                  {(systemVars.length + customVars.length) > 0 && autoVars.length > 0 && <span className="mx-0.5 text-zinc-300">·</span>}
+                  {(systemVars.length + customVars.length) > 0 && (orgVars.length > 0 || autoVars.length > 0) && <span className="mx-0.5 text-zinc-300">·</span>}
+                  {orgVars.length > 0 && <span className="text-blue-500">{orgVars.length} empresa</span>}
+                  {orgVars.length > 0 && autoVars.length > 0 && <span className="mx-0.5 text-zinc-300">·</span>}
                   {autoVars.length > 0 && <span className="text-emerald-500">{autoVars.length} auto</span>}
                 </button>
               </>
@@ -330,22 +334,42 @@ function TemplateCard({
 
       {/* Variables expandibles */}
       {showVars && vars.length > 0 && (
-        <div className="px-6 pb-3 flex flex-wrap gap-1">
-          {autoVars.map((v) => (
-            <span key={v} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-mono font-medium text-emerald-700">
-              {"{{"}{v}{"}}"}
-            </span>
-          ))}
-          {systemVars.map((v) => (
-            <span key={v} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-mono font-medium text-sky-700">
-              {"{{"}{v}{"}}"}
-            </span>
-          ))}
-          {customVars.map((v) => (
-            <span key={v} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-mono font-medium text-amber-700">
-              {"{{"}{v}{"}}"}
-            </span>
-          ))}
+        <div className="px-6 pb-3 space-y-1.5">
+          {orgVars.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] text-zinc-400 mr-1 self-center">Empresa:</span>
+              {orgVars.map((v) => (
+                <span key={v} title={VAR_LABELS[v]} className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-mono font-medium text-blue-700">
+                  {"{{"}{v}{"}}"}
+                </span>
+              ))}
+            </div>
+          )}
+          {autoVars.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] text-zinc-400 mr-1 self-center">Firmante:</span>
+              {autoVars.map((v) => (
+                <span key={v} title={VAR_LABELS[v]} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-mono font-medium text-emerald-700">
+                  {"{{"}{v}{"}}"}
+                </span>
+              ))}
+            </div>
+          )}
+          {(systemVars.length > 0 || customVars.length > 0) && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] text-zinc-400 mr-1 self-center">A completar:</span>
+              {systemVars.map((v) => (
+                <span key={v} title={VAR_LABELS[v]} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-mono font-medium text-sky-700">
+                  {"{{"}{v}{"}}"}
+                </span>
+              ))}
+              {customVars.map((v) => (
+                <span key={v} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-mono font-medium text-amber-700">
+                  {"{{"}{v}{"}}"}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -427,8 +451,9 @@ function SendingFlow({
 
   // Variables
   const allVars   = useMemo(() => extractVariables(template.contentHtml), [template]);
-  const adminVars = allVars.filter((v) => !AUTO_FILL_VARS.has(v));
+  const adminVars = allVars.filter((v) => !AUTO_FILL_VARS.has(v) && !ORG_VARS.has(v));
   const autoVars  = allVars.filter((v) =>  AUTO_FILL_VARS.has(v));
+  const orgAutoVars = allVars.filter((v) => ORG_VARS.has(v));
 
   const [varValues, setVarValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
@@ -1034,6 +1059,8 @@ export function AdminContractsPage() {
     getContractTemplates(orgId).then(setDbTemplates).finally(() => setLoadingTemplates(false));
   }, [orgId]);
 
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
   const filtered = useMemo(() => {
     let list = contracts;
     if (filter === "pending") list = list.filter((c) => ["SENT","VIEWED","CONFORMITY_ACCEPTED"].includes(c.status));
@@ -1041,10 +1068,34 @@ export function AdminContractsPage() {
     else if (filter === "rejected") list = list.filter((c) => ["REJECTED","EXPIRED"].includes(c.status));
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter((c) => c.title.toLowerCase().includes(q) || c.ownerEmail.toLowerCase().includes(q));
+      const signerOf = (c: Contract) =>
+        (c.templateFields?.nombre_firmante ?? c.templateFields?.nombre_usuario ?? "").toLowerCase();
+      list = list.filter((c) =>
+        c.title.toLowerCase().includes(q) ||
+        c.ownerEmail.toLowerCase().includes(q) ||
+        signerOf(c).includes(q)
+      );
     }
     return list;
   }, [contracts, filter, search]);
+
+  const contractGroups = useMemo(() => {
+    const map = new Map<string, Contract[]>();
+    for (const c of filtered) {
+      const key = c.templateId ?? `pdf:${c.id}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(c);
+    }
+    return Array.from(map.entries()).map(([key, cs]) => ({
+      key,
+      title: cs[0].title,
+      isTemplate: !!cs[0].templateId,
+      contracts: cs,
+      signedCount:   cs.filter((c) => ["SIGNED","COMPLETED"].includes(c.status)).length,
+      pendingCount:  cs.filter((c) => ["SENT","VIEWED","CONFORMITY_ACCEPTED"].includes(c.status)).length,
+      rejectedCount: cs.filter((c) => ["REJECTED","EXPIRED"].includes(c.status)).length,
+    }));
+  }, [filtered]);
 
   const selectedSignedContracts = contracts.filter((c) =>
     selectedContractIds.includes(c.id) && hasShareableSignedPdf(c)
@@ -1728,11 +1779,13 @@ export function AdminContractsPage() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+            <div className="space-y-3">
               {loading ? (
-                <div className="space-y-3 p-5">{Array(4).fill(null).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-zinc-50" />)}</div>
-              ) : filtered.length === 0 ? (
-                <div className="py-16 text-center">
+                <div className="rounded-2xl border border-zinc-200 bg-white space-y-3 p-5">
+                  {Array(4).fill(null).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-zinc-50" />)}
+                </div>
+              ) : contractGroups.length === 0 ? (
+                <div className="rounded-2xl border border-zinc-200 bg-white py-16 text-center">
                   <Files size={32} className="text-zinc-700 mx-auto mb-2" />
                   <p className="text-sm text-zinc-500">Sin contratos en este estado</p>
                   <button type="button" onClick={() => setView("templates")}
@@ -1741,69 +1794,117 @@ export function AdminContractsPage() {
                   </button>
                 </div>
               ) : (
-                <div className="divide-y divide-zinc-100">
-                  {filtered.map((c) => {
-                    const { label, className } = statusMeta(c.status);
-                    const hasSignedPdf = c.status === "SIGNED" || c.status === "COMPLETED" || c.completedSigners > 0;
-                    const isPreparingPdf = preparingPdfId === c.id;
-                    return (
-                      <div key={c.id}
-                        className="flex flex-col gap-2 px-5 py-4 hover:bg-zinc-50 transition sm:flex-row sm:items-center sm:justify-between group">
+                contractGroups.map((group) => {
+                  const isExpanded = expandedGroups.has(group.key);
+                  const toggleGroup = () => setExpandedGroups((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(group.key)) next.delete(group.key); else next.add(group.key);
+                    return next;
+                  });
+                  return (
+                    <div key={group.key} className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+                      {/* Fila del grupo */}
+                      <button
+                        type="button"
+                        onClick={toggleGroup}
+                        className="flex w-full items-center justify-between px-5 py-4 hover:bg-zinc-50 transition text-left gap-3"
+                      >
                         <div className="flex items-center gap-3 min-w-0">
-                          {hasSignedPdf && (
-                            <input
-                              type="checkbox"
-                              checked={selectedContractIds.includes(c.id)}
-                              onChange={() => toggleSelectedContract(c.id)}
-                              className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
-                              aria-label={`Seleccionar ${c.title}`}
-                            />
-                          )}
-                          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-50">
-                            <Files size={14} className="text-zinc-500" />
+                          <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${group.isTemplate ? "bg-blue-50" : "bg-zinc-50"}`}>
+                            {group.isTemplate
+                              ? <LayoutTemplate size={14} className="text-blue-500" />
+                              : <Files size={14} className="text-zinc-500" />}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-zinc-900 truncate">{c.title}</p>
-                            <p className="text-xs text-zinc-500 mt-0.5">
-                              {c.ownerEmail} · {new Date(c.updatedAt).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" })}
-                            </p>
+                            <p className="font-semibold text-zinc-900 truncate">{group.title}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span className="text-[11px] text-zinc-400">{group.contracts.length} {group.contracts.length === 1 ? "envío" : "envíos"}</span>
+                              {group.signedCount > 0 && (
+                                <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                  {group.signedCount} firmado{group.signedCount > 1 ? "s" : ""}
+                                </span>
+                              )}
+                              {group.pendingCount > 0 && (
+                                <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                  {group.pendingCount} pendiente{group.pendingCount > 1 ? "s" : ""}
+                                </span>
+                              )}
+                              {group.rejectedCount > 0 && (
+                                <span className="rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-600">
+                                  {group.rejectedCount} rechazado{group.rejectedCount > 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {c.status !== "DRAFT" && (
-                            <span className="text-xs text-zinc-600 hidden sm:inline">{c.completedSigners}/{c.totalSigners} firmas</span>
-                          )}
-                          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${className}`}>{label}</span>
-                          {c.status === "COMPLETED" && (
-                            <button type="button" onClick={(e) => { e.stopPropagation(); setSendThirdParty(c); }}
-                              className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-100 transition">
-                              <Send size={11} /> Enviar al tercero
-                            </button>
-                          )}
-                          {hasSignedPdf && (
-                            <button type="button"
-                              className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-100 transition"
-                              disabled={isPreparingPdf}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void openSignedPdf(c);
-                              }}>
-                              <Download size={11} /> {isPreparingPdf ? "Preparando..." : "PDF firmado"}
-                            </button>
-                          )}
-                          <button type="button" onClick={() => setViewContract(c)}
-                            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
-                            <Eye size={11} /> Ver
-                          </button>
-                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteContract(c); }}
-                            className="flex items-center gap-1.5 rounded-lg border border-red-200 px-2.5 py-1 text-xs text-red-400 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition opacity-0 group-hover:opacity-100">
-                            <Trash2 size={11} />
-                          </button>
+                        <ChevronRight size={16} className={`shrink-0 text-zinc-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                      </button>
+
+                      {/* Envíos individuales */}
+                      {isExpanded && (
+                        <div className="divide-y divide-zinc-100 border-t border-zinc-100">
+                          {group.contracts.map((c) => {
+                            const { label, className } = statusMeta(c.status);
+                            const hasSignedPdf = c.status === "SIGNED" || c.status === "COMPLETED" || c.completedSigners > 0;
+                            const isPreparingPdf = preparingPdfId === c.id;
+                            const signerName = c.templateFields?.nombre_firmante || c.templateFields?.nombre_usuario || c.templateFields?.nombre || null;
+                            const signerEmail = c.templateFields?.email_firmante || c.templateFields?.email_usuario || c.ownerEmail;
+                            const dateStr = new Date(c.updatedAt).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
+                            return (
+                              <div key={c.id}
+                                className="flex flex-col gap-2 py-3 pl-16 pr-5 hover:bg-zinc-50 transition sm:flex-row sm:items-center sm:justify-between group">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  {hasSignedPdf && (
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedContractIds.includes(c.id)}
+                                      onChange={() => toggleSelectedContract(c.id)}
+                                      className="h-4 w-4 shrink-0 rounded border-zinc-300"
+                                      aria-label={`Seleccionar ${c.title}`}
+                                    />
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-zinc-800 truncate">
+                                      {signerName ?? signerEmail}
+                                    </p>
+                                    <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                                      {signerName ? signerEmail : null}{signerName ? " · " : null}{dateStr}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${className}`}>{label}</span>
+                                  {c.status === "COMPLETED" && (
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setSendThirdParty(c); }}
+                                      className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-100 transition">
+                                      <Send size={11} /> Enviar al tercero
+                                    </button>
+                                  )}
+                                  {hasSignedPdf && (
+                                    <button type="button"
+                                      className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-100 transition"
+                                      disabled={isPreparingPdf}
+                                      onClick={(e) => { e.stopPropagation(); void openSignedPdf(c); }}>
+                                      <Download size={11} /> {isPreparingPdf ? "Preparando..." : "PDF firmado"}
+                                    </button>
+                                  )}
+                                  <button type="button" onClick={() => setViewContract(c)}
+                                    className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
+                                    <Eye size={11} /> Ver
+                                  </button>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteContract(c); }}
+                                    className="flex items-center gap-1.5 rounded-lg border border-red-200 px-2.5 py-1 text-xs text-red-400 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition opacity-0 group-hover:opacity-100">
+                                    <Trash2 size={11} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </>

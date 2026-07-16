@@ -36,11 +36,37 @@ const FontSizeExtension = TextStyle.extend({
 // ─── Variable metadata ────────────────────────────────────────────────────────
 
 const VAR_META: Record<string, { label: string; category: string }> = {
+  // firmante (auto)
   nombre_usuario:    { label: "Nombre",        category: "usuario"  },
   email_usuario:     { label: "Email",         category: "usuario"  },
   dni_usuario:       { label: "DNI",           category: "usuario"  },
   cuil_usuario:      { label: "CUIL",          category: "usuario"  },
   domicilio_usuario: { label: "Domicilio",     category: "usuario"  },
+  // empresa (auto)
+  nombre_empresa:          { label: "Empresa",           category: "empresa" },
+  nombre_consultora:       { label: "Consultora",        category: "empresa" },
+  razon_social:            { label: "Razón social",      category: "empresa" },
+  razon_social_empresa:    { label: "Razón social emp.", category: "empresa" },
+  razon_social_consultora: { label: "Razón social cons.",category: "empresa" },
+  cuit_empresa:            { label: "CUIT empresa",      category: "empresa" },
+  cuit_consultora:         { label: "CUIT consultora",   category: "empresa" },
+  domicilio_empresa:       { label: "Domicilio emp.",    category: "empresa" },
+  domicilio_consultora:    { label: "Domicilio cons.",   category: "empresa" },
+  ciudad_empresa:          { label: "Ciudad emp.",       category: "empresa" },
+  ciudad_consultora:       { label: "Ciudad cons.",      category: "empresa" },
+  provincia_empresa:       { label: "Provincia emp.",    category: "empresa" },
+  provincia_consultora:    { label: "Provincia cons.",   category: "empresa" },
+  email_empresa:           { label: "Email empresa",     category: "empresa" },
+  email_consultora:        { label: "Email consultora",  category: "empresa" },
+  telefono_empresa:        { label: "Tel. empresa",      category: "empresa" },
+  telefono_consultora:     { label: "Tel. consultora",   category: "empresa" },
+  representante_legal:     { label: "Representante",     category: "empresa" },
+  representante_empresa:   { label: "Rep. empresa",      category: "empresa" },
+  representante_consultora:{ label: "Rep. consultora",   category: "empresa" },
+  autoridad_nombre:        { label: "Autoridad",         category: "empresa" },
+  autoridad_cuil:          { label: "CUIL autoridad",    category: "empresa" },
+  autoridad_email:         { label: "Email autoridad",   category: "empresa" },
+  // sistema (admin completa)
   fecha_inicio:      { label: "Inicio",        category: "sistema"  },
   fecha_fin:         { label: "Fin",           category: "sistema"  },
   fecha_entrega:     { label: "Entrega",       category: "sistema"  },
@@ -56,13 +82,14 @@ const VAR_META: Record<string, { label: string; category: string }> = {
 
 // ─── Variable chip (visual) ───────────────────────────────────────────────────
 
-// verde = usuario auto, celeste = sistema predeterminado, naranja = personalizada
+// verde = firmante auto, azul = empresa auto, celeste = sistema, naranja = personalizada
 const CHIP_COLORS: Record<string, string> = {
-  usuario: "#10B981",  // green
-  sistema: "#0EA5E9",  // sky / celeste
+  usuario: "#10B981",  // green  — firmante
+  empresa: "#3B82F6",  // blue   — datos de la empresa (auto)
+  sistema: "#0EA5E9",  // sky    — admin completa
   fechas:  "#0EA5E9",  // legacy alias → sistema
   montos:  "#0EA5E9",  // legacy alias → sistema
-  propia:  "#F59E0B",  // orange / personalizada
+  propia:  "#F59E0B",  // orange — personalizada
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,20 +229,59 @@ function upgradeHTML(html: string): string {
 // ─── Variable catalog ─────────────────────────────────────────────────────────
 
 const AUTO_VAR_DESCRIPTIONS: Record<string, string> = {
+  // firmante
   nombre_usuario:    "Nombre completo del firmante, tomado del usuario seleccionado.",
   email_usuario:     "Email del firmante, tomado del perfil del usuario.",
   dni_usuario:       "DNI verificado durante el proceso KYC.",
   cuil_usuario:      "CUIL/CUIT verificado durante el proceso KYC.",
   domicilio_usuario: "Domicilio verificado durante el proceso KYC.",
+  // empresa
+  nombre_empresa:          "Nombre comercial de tu empresa (desde Configuración).",
+  nombre_consultora:       "Nombre de la consultora (desde Configuración).",
+  razon_social:            "Razón social completa de la organización.",
+  razon_social_empresa:    "Razón social de la empresa.",
+  razon_social_consultora: "Razón social de la consultora.",
+  cuit_empresa:            "CUIT de la empresa (desde Configuración).",
+  cuit_consultora:         "CUIT de la consultora (desde Configuración).",
+  domicilio_empresa:       "Domicilio legal de la empresa.",
+  domicilio_consultora:    "Domicilio legal de la consultora.",
+  ciudad_empresa:          "Ciudad de la empresa.",
+  ciudad_consultora:       "Ciudad de la consultora.",
+  provincia_empresa:       "Provincia de la empresa.",
+  provincia_consultora:    "Provincia de la consultora.",
+  email_empresa:           "Email de contacto de la empresa.",
+  email_consultora:        "Email de contacto de la consultora.",
+  telefono_empresa:        "Teléfono de la empresa.",
+  telefono_consultora:     "Teléfono de la consultora.",
+  representante_legal:     "Representante legal de la organización.",
+  representante_empresa:   "Representante legal de la empresa.",
+  representante_consultora:"Representante legal de la consultora.",
+  autoridad_nombre:        "Nombre de la autoridad firmante.",
+  autoridad_cuil:          "CUIL de la autoridad firmante.",
+  autoridad_email:         "Email de la autoridad firmante.",
 };
 
 const SUGGESTED_VARS: { group: string; vars: { key: string; label: string; auto?: boolean }[] }[] = [
-  { group: "Usuario (auto)", vars: [
+  { group: "Firmante (auto)", vars: [
     { key: "nombre_usuario",    label: "Nombre",    auto: true },
     { key: "email_usuario",     label: "Email",     auto: true },
     { key: "dni_usuario",       label: "DNI",       auto: true },
     { key: "cuil_usuario",      label: "CUIL",      auto: true },
     { key: "domicilio_usuario", label: "Domicilio", auto: true },
+  ]},
+  { group: "Empresa (auto)", vars: [
+    { key: "nombre_empresa",          label: "Nombre empresa",    auto: true },
+    { key: "razon_social",            label: "Razón social",      auto: true },
+    { key: "cuit_empresa",            label: "CUIT empresa",      auto: true },
+    { key: "domicilio_empresa",       label: "Domicilio",         auto: true },
+    { key: "ciudad_empresa",          label: "Ciudad",            auto: true },
+    { key: "provincia_empresa",       label: "Provincia",         auto: true },
+    { key: "email_empresa",           label: "Email",             auto: true },
+    { key: "telefono_empresa",        label: "Teléfono",          auto: true },
+    { key: "representante_legal",     label: "Representante",     auto: true },
+    { key: "autoridad_nombre",        label: "Autoridad",         auto: true },
+    { key: "autoridad_cuil",          label: "CUIL autoridad",    auto: true },
+    { key: "autoridad_email",         label: "Email autoridad",   auto: true },
   ]},
   { group: "Fechas", vars: [
     { key: "fecha_inicio",  label: "Inicio" },
@@ -244,6 +310,20 @@ const SYSTEM_PROMPT = `DATOS DEL FIRMANTE (se completan automáticamente desde e
 • DNI: {{dni_usuario}}
 • CUIL/CUIT: {{cuil_usuario}}
 • Domicilio: {{domicilio_usuario}}
+
+DATOS DE LA EMPRESA/ORGANIZACIÓN (se completan automáticamente desde la configuración):
+• Nombre de la empresa: {{nombre_empresa}}
+• Razón social: {{razon_social}}
+• CUIT: {{cuit_empresa}}
+• Domicilio: {{domicilio_empresa}}
+• Ciudad: {{ciudad_empresa}}
+• Provincia: {{provincia_empresa}}
+• Email de contacto: {{email_empresa}}
+• Teléfono: {{telefono_empresa}}
+• Representante legal: {{representante_legal}}
+• Autoridad firmante: {{autoridad_nombre}}
+• CUIL autoridad: {{autoridad_cuil}}
+• Email autoridad: {{autoridad_email}}
 
 FECHAS:
 • Fecha de inicio: {{fecha_inicio}}

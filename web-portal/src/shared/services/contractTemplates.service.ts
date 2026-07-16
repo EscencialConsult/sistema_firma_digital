@@ -127,6 +127,20 @@ export const AUTO_FILL_VARS = new Set([
   "domicilio_usuario",
 ]);
 
+/** Variables de la organización — se autocompletan desde configuración de la empresa */
+export const ORG_VARS = new Set([
+  "nombre_empresa", "nombre_consultora",
+  "razon_social", "razon_social_empresa", "razon_social_consultora",
+  "cuit_empresa", "cuit_consultora",
+  "domicilio_empresa", "domicilio_consultora",
+  "ciudad_empresa", "ciudad_consultora",
+  "provincia_empresa", "provincia_consultora",
+  "email_empresa", "email_consultora",
+  "telefono_empresa", "telefono_consultora",
+  "representante_legal", "representante_empresa", "representante_consultora",
+  "autoridad_nombre", "autoridad_cuil", "autoridad_email",
+]);
+
 /** Pre-defined system variables — admin must fill these, but they're known */
 export const SYSTEM_VARS = new Set([
   "fecha_inicio", "fecha_fin", "fecha_entrega",
@@ -147,11 +161,26 @@ export function interpolateHtml(html: string, vars: Record<string, string>): str
 
 /** Human-readable label for known variable names */
 export const VAR_LABELS: Record<string, string> = {
-  nombre_usuario:    "Nombre del usuario",
-  email_usuario:     "Email del usuario",
-  dni_usuario:       "DNI del usuario",
-  cuil_usuario:      "CUIL/CUIT del usuario",
-  domicilio_usuario: "Domicilio del usuario",
+  // Datos del firmante (auto-fill)
+  nombre_usuario:    "Nombre del firmante",
+  email_usuario:     "Email del firmante",
+  dni_usuario:       "DNI del firmante",
+  cuil_usuario:      "CUIL/CUIT del firmante",
+  domicilio_usuario: "Domicilio del firmante",
+  // Datos de la organización (org auto-fill)
+  nombre_empresa:    "Nombre de la empresa",
+  razon_social:      "Razón social",
+  cuit_empresa:      "CUIT de la empresa",
+  domicilio_empresa: "Domicilio de la empresa",
+  ciudad_empresa:    "Ciudad de la empresa",
+  provincia_empresa: "Provincia de la empresa",
+  email_empresa:     "Email de contacto",
+  telefono_empresa:  "Teléfono de la empresa",
+  representante_legal: "Representante legal",
+  autoridad_nombre:  "Nombre de la autoridad",
+  autoridad_cuil:    "CUIL de la autoridad",
+  autoridad_email:   "Email de la autoridad",
+  // Variables a completar por el admin
   fecha_inicio:      "Fecha de inicio",
   fecha_fin:         "Fecha de finalización",
   fecha_entrega:     "Fecha de entrega",
