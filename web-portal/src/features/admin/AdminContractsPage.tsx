@@ -1063,7 +1063,7 @@ function DeleteConfirmModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type PageView = "list" | "templates" | "editor" | "sending";
+type PageView = "list" | "editor" | "sending";
 
 export function AdminContractsPage() {
   const [activeTab, setActiveTab] = useState<"templates" | "contracts" | "upload" | "convenios" | "payments">("contracts");
@@ -1311,7 +1311,8 @@ export function AdminContractsPage() {
         setDbTemplates((prev) => [created, ...prev]);
         showToast("Plantilla creada.");
       }
-      setView("templates");
+      setView("list");
+      setActiveTab("templates");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Error guardando plantilla");
     } finally {
@@ -1384,12 +1385,12 @@ export function AdminContractsPage() {
     return (
       <div className="min-h-screen space-y-6">
         <div className="flex items-center gap-4">
-          <button type="button" onClick={() => setView("templates")}
+          <button type="button" onClick={() => { setView("list"); setActiveTab("templates"); }}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition">
             <ArrowLeft size={15} />
           </button>
           <div>
-            <p className="text-xs text-zinc-600">Admin · Plantillas</p>
+            <p className="text-xs text-zinc-600">Admin · Modelos</p>
             <h2 className="font-bold text-zinc-900">{editingTemplate ? "Editar plantilla" : "Nueva plantilla"}</h2>
           </div>
         </div>
@@ -1485,7 +1486,7 @@ export function AdminContractsPage() {
         <SignaturePositionEditor value={tplSignaturePosition} onChange={setTplSignaturePosition} />
 
         <div className="flex justify-between">
-          <Button variant="secondary" onClick={() => setView("templates")} className="h-10 px-5 text-zinc-700">
+          <Button variant="secondary" onClick={() => { setView("list"); setActiveTab("templates"); }} className="h-10 px-5 text-zinc-700">
             <ArrowLeft size={14} /> Cancelar
           </Button>
           <Button onClick={handleSaveTemplate} disabled={!isValid || savingTpl} className="h-10 px-6">
@@ -1498,111 +1499,18 @@ export function AdminContractsPage() {
   );
 }
 
-// ─── Templates view ────────────────────────────────────────────────────────
-
-  if (view === "templates") {
-    return (
-      <div className="min-h-screen space-y-6">
-        <div className="flex items-center gap-4">
-          <button type="button" onClick={() => setView("list")}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition">
-            <ArrowLeft size={15} />
-          </button>
-          <div>
-            <p className="text-xs text-zinc-600">Admin · Contratos</p>
-            <h2 className="font-bold text-zinc-900">Plantillas de contratos</h2>
-          </div>
-          <Button onClick={openNewTemplate} className="ml-auto h-10 px-4 shrink-0">
-            <Plus size={14} /> Nueva plantilla
-          </Button>
-        </div>
-
-        {(() => {
-          const allLabels = [...new Set(dbTemplates.map((t) => t.label).filter(Boolean))];
-          const visibleLabels = labelSearch
-            ? allLabels.filter((l) => l.toLowerCase().includes(labelSearch.toLowerCase()))
-            : allLabels;
-          const filtered = labelFilter
-            ? dbTemplates.filter((t) => t.label === labelFilter)
-            : dbTemplates;
-          return (
-            <>
-              {allLabels.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    value={labelSearch}
-                    onChange={(e) => setLabelSearch(e.target.value)}
-                    placeholder="Buscar etiqueta..."
-                    className="h-7 w-36 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-[11px] text-zinc-700 placeholder:text-zinc-400 outline-none focus:border-zinc-400 transition"
-                  />
-                  {labelFilter && (
-                    <button type="button" onClick={() => setLabelFilter("")}
-                      className="h-7 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-[11px] text-zinc-500 hover:bg-zinc-100 transition">
-                      × Limpiar
-                    </button>
-                  )}
-                  {visibleLabels.map((l) => (
-                    <button key={l} type="button" onClick={() => setLabelFilter(l === labelFilter ? "" : l)}
-                      className={`h-7 rounded-full border px-3 text-[11px] font-semibold uppercase tracking-wide transition ${
-                        l === labelFilter
-                          ? "border-zinc-800 bg-zinc-800 text-white"
-                          : "border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
-                      }`}>
-                      {l}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {loadingTemplates ? (
-                <div className="rounded-2xl border border-zinc-100 bg-white divide-y divide-zinc-100 px-2">
-                  {Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse my-1 rounded-xl bg-zinc-100" />)}
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-                  <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
-                    <LayoutTemplate size={28} className="text-zinc-400" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-zinc-700">{labelFilter ? `Sin plantillas con etiqueta "${labelFilter}"` : "Sin plantillas"}</p>
-                    <p className="text-sm text-zinc-400 mt-1">{labelFilter ? "Probá con otra etiqueta." : "Creá tu primera plantilla para poder enviar contratos."}</p>
-                  </div>
-                  {!labelFilter && <Button onClick={openNewTemplate} className="h-10 px-5"><Plus size={14} /> Crear primera plantilla</Button>}
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-zinc-100 bg-white px-2">
-                  {filtered.map((tpl) => (
-                    <TemplateCard
-                      key={tpl.id}
-                      template={tpl}
-                      onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
-                      onEdit={() => openEditTemplate(tpl)}
-                      onDelete={() => handleDeleteTemplate(tpl.id)}
-                      onClone={() => handleCloneTemplate(tpl.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          );
-        })()}
-
-        <Toast message={toast.message} type={toast.type} visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
-      </div>
-    );
-  }
-
   // ─── Sending view ──────────────────────────────────────────────────────────
 
   if (view === "sending" && sendingTemplate && orgId) {
     return (
       <div className="min-h-screen space-y-6">
         <div className="flex items-center gap-4">
-          <button type="button" onClick={() => setView("templates")}
+          <button type="button" onClick={() => { setView("list"); setActiveTab("templates"); }}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition">
             <ArrowLeft size={15} />
           </button>
           <div>
-            <p className="text-xs text-zinc-600">Admin · Plantillas · Enviar</p>
+            <p className="text-xs text-zinc-600">Admin · Modelos · Enviar</p>
             <h2 className="font-bold text-zinc-900">{sendingTemplate.name}</h2>
           </div>
         </div>
@@ -1780,47 +1688,84 @@ export function AdminContractsPage() {
 
         {activeTab === "upload" && <AdminUploadPdfTab />}
 
-        {activeTab === "templates" && (
-          <>
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-zinc-500">{dbTemplates.length} plantillas creadas</p>
-              <Button onClick={openNewTemplate} className="h-10 px-4 shrink-0">
-                <Plus size={14} /> Nueva plantilla
-              </Button>
-            </div>
-            {loadingTemplates ? (
-              <div className="rounded-2xl border border-zinc-100 bg-white divide-y divide-zinc-100 px-2">
-                {Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse my-1 rounded-xl bg-zinc-100" />)}
-              </div>
-            ) : dbTemplates.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
-                  <LayoutTemplate size={28} className="text-zinc-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-zinc-700">Sin plantillas</p>
-                  <p className="text-sm text-zinc-400 mt-1">Creá tu primera plantilla para enviar contratos.</p>
-                </div>
-                <Button onClick={openNewTemplate} className="h-10 px-5">
-                  <Plus size={14} /> Crear primera plantilla
+        {activeTab === "templates" && (() => {
+          const allLabels = [...new Set(dbTemplates.map((t) => t.label).filter(Boolean))];
+          const visibleLabels = labelSearch
+            ? allLabels.filter((l) => l.toLowerCase().includes(labelSearch.toLowerCase()))
+            : allLabels;
+          const tplFiltered = labelFilter
+            ? dbTemplates.filter((t) => t.label === labelFilter)
+            : dbTemplates;
+          return (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-zinc-500">{dbTemplates.length} plantilla{dbTemplates.length !== 1 ? "s" : ""}</p>
+                <Button onClick={openNewTemplate} className="h-9 px-4 shrink-0 text-xs">
+                  <Plus size={13} /> Nueva plantilla
                 </Button>
               </div>
-            ) : (
-              <div className="rounded-2xl border border-zinc-100 bg-white px-2">
-                {dbTemplates.map((tpl) => (
-                  <TemplateCard
-                    key={tpl.id}
-                    template={tpl}
-                    onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
-                    onEdit={() => openEditTemplate(tpl)}
-                    onDelete={() => handleDeleteTemplate(tpl.id)}
-                    onClone={() => handleCloneTemplate(tpl.id)}
+
+              {/* Filtros de etiquetas */}
+              {allLabels.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={labelSearch}
+                    onChange={(e) => setLabelSearch(e.target.value)}
+                    placeholder="Buscar etiqueta..."
+                    className="h-7 w-36 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-[11px] text-zinc-700 placeholder:text-zinc-400 outline-none focus:border-zinc-400 transition"
                   />
-                ))}
-              </div>
-            )}
-          </>
-        )}
+                  {labelFilter && (
+                    <button type="button" onClick={() => setLabelFilter("")}
+                      className="h-7 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-[11px] text-zinc-500 hover:bg-zinc-100 transition">
+                      × Limpiar
+                    </button>
+                  )}
+                  {visibleLabels.map((l) => (
+                    <button key={l} type="button" onClick={() => setLabelFilter(l === labelFilter ? "" : l)}
+                      className={`h-7 rounded-full border px-3 text-[11px] font-semibold uppercase tracking-wide transition ${
+                        l === labelFilter
+                          ? "border-zinc-800 bg-zinc-800 text-white"
+                          : "border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
+                      }`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Lista de plantillas */}
+              {loadingTemplates ? (
+                <div className="rounded-2xl border border-zinc-100 bg-white divide-y divide-zinc-100 px-2">
+                  {Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse my-1 rounded-xl bg-zinc-100" />)}
+                </div>
+              ) : tplFiltered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+                  <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
+                    <LayoutTemplate size={28} className="text-zinc-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-zinc-700">{labelFilter ? `Sin plantillas con etiqueta "${labelFilter}"` : "Sin plantillas"}</p>
+                    <p className="text-sm text-zinc-400 mt-1">{labelFilter ? "Probá con otra etiqueta." : "Creá tu primera plantilla para enviar contratos."}</p>
+                  </div>
+                  {!labelFilter && <Button onClick={openNewTemplate} className="h-10 px-5"><Plus size={14} /> Crear primera plantilla</Button>}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-zinc-100 bg-white px-2">
+                  {tplFiltered.map((tpl) => (
+                    <TemplateCard
+                      key={tpl.id}
+                      template={tpl}
+                      onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
+                      onEdit={() => openEditTemplate(tpl)}
+                      onDelete={() => handleDeleteTemplate(tpl.id)}
+                      onClone={() => handleCloneTemplate(tpl.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {activeTab === "contracts" && (
           <>
@@ -1847,8 +1792,8 @@ export function AdminContractsPage() {
                   </button>
                 )}
                 {dbTemplates.length > 0 && (
-                  <button type="button" onClick={() => setView("templates")}
-                    title="Ir a plantillas"
+                  <button type="button" onClick={() => setActiveTab("templates")}
+                    title="Ir a modelos"
                     className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-700 transition">
                     <LayoutTemplate size={14} />
                   </button>
@@ -1885,9 +1830,9 @@ export function AdminContractsPage() {
                 <div className="rounded-2xl border border-zinc-200 bg-white py-16 text-center">
                   <Files size={32} className="text-zinc-700 mx-auto mb-2" />
                   <p className="text-sm text-zinc-500">Sin contratos en este estado</p>
-                  <button type="button" onClick={() => setView("templates")}
+                  <button type="button" onClick={() => setActiveTab("templates")}
                     className="mt-3 text-xs text-zinc-500 underline hover:text-zinc-700">
-                    Ir a Plantillas para enviar
+                    Ir a Modelos para enviar
                   </button>
                 </div>
               ) : (
