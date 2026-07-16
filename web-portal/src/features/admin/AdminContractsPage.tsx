@@ -266,7 +266,7 @@ function TemplateCard({
   const [showVars, setShowVars] = useState(false);
 
   return (
-    <div className="group border-b border-zinc-100 last:border-0">
+    <div className="border-b border-zinc-100 last:border-0">
       {/* Fila principal */}
       <div className="flex items-center gap-3 px-1 py-3 hover:bg-zinc-50/60 rounded-xl transition">
         <FileText size={14} className="shrink-0 text-zinc-400" />
@@ -310,28 +310,26 @@ function TemplateCard({
           </p>
         </div>
 
-        {/* Acciones */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
-          <button type="button" onClick={onEdit} title="Editar"
-            className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
+        {/* Acciones — siempre visibles */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button type="button" onClick={onEdit} title="Editar plantilla"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 transition">
             <Pencil size={12} />
           </button>
-          <button type="button" onClick={onClone} title="Clonar"
-            className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
+          <button type="button" onClick={onClone} title="Clonar plantilla"
+            className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 transition">
             <Copy size={12} />
           </button>
-          <button type="button" onClick={onDelete} title="Eliminar"
-            className="grid h-7 w-7 place-items-center rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition">
+          <button type="button" onClick={onDelete} title="Eliminar plantilla"
+            className="grid h-7 w-7 place-items-center rounded-lg text-zinc-300 hover:bg-red-50 hover:text-red-500 hover:border hover:border-red-200 transition">
             <Trash2 size={12} />
           </button>
+          <button type="button" onClick={onSend}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 h-8 text-[11px] font-semibold transition ml-1"
+            style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+            <Send size={11} /> Enviar
+          </button>
         </div>
-
-        {/* Enviar */}
-        <button type="button" onClick={onSend}
-          className="shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 h-8 text-[11px] font-semibold transition"
-          style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
-          <Send size={11} /> Enviar
-        </button>
       </div>
 
       {/* Variables expandibles */}
