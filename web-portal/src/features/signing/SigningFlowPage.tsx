@@ -22,12 +22,14 @@ import { Stepper } from "../../shared/components/ui/Stepper";
 import {
   acceptConformity,
   executeSignature,
+  generateConsolidatedPdfBlob,
   generatePerSignerSignedPdf,
   getMySignatureDataForRequest,
   getSigningRequest,
   tryGenerateConsolidatedPdf,
   verifyFaceLocal,
 } from "../../shared/services/signing.service";
+import { downloadBlob, signedPdfFileName } from "../../shared/utils/downloadFileName";
 import type { SignatureResult, SigningRequest } from "../../shared/types/signing";
 
 type StepIndex = 0 | 1 | 2 | 3;
@@ -763,6 +765,43 @@ function DownloadContractButton({ request }: { request: SigningRequest }) {
   );
 }
 
+function DownloadAuditButton({ request }: { request: SigningRequest }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const blob = await generateConsolidatedPdfBlob(request.documentId);
+      if (blob) {
+        downloadBlob(
+          blob,
+          signedPdfFileName({
+            title: request.documentTitle,
+            fileName: request.fileName,
+            sequence: request.versionNumber,
+          }),
+        );
+      }
+    } catch (err) {
+      console.error("Error generando auditoría:", err);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={downloading}
+      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 transition disabled:opacity-50"
+    >
+      {downloading ? <RefreshCw size={12} className="animate-spin" /> : <Shield size={12} />}
+      {downloading ? "Generando..." : "Registro de auditoría"}
+    </button>
+  );
+}
+
 function SignedContractAudit({
   request,
   signatureData,
@@ -800,6 +839,7 @@ function SignedContractAudit({
             </div>
             <div className="flex items-center gap-2">
               <DownloadContractButton request={request} />
+              <DownloadAuditButton request={request} />
               <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
                 FIRMADO
               </span>
