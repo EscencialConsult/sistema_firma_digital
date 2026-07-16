@@ -22,7 +22,6 @@ import { Stepper } from "../../shared/components/ui/Stepper";
 import {
   acceptConformity,
   executeSignature,
-  generateConsolidatedPdfBlob,
   generatePerSignerSignedPdf,
   getMySignatureDataForRequest,
   getSigningRequest,
@@ -165,6 +164,7 @@ interface AuditPdfParams {
   signerCuil: string;
   signerDni: string;
   signatureData: string | null;
+  signingSelfiUrl: string | null;
   ipAddress: string | null;
   faceSimilarity: number | null;
   signedAt: string | null;
@@ -245,6 +245,26 @@ async function downloadContractWithAuditPdf(args: AuditPdfParams): Promise<void>
     args.signatureData,
   ));
   auditEl.appendChild(partiesGrid);
+
+  // Foto selfie de verificación
+  if (args.signingSelfiUrl) {
+    const selfieSection = document.createElement("div");
+    selfieSection.style.cssText = "border:1px solid #e4e4e7;border-radius:12px;padding:16px;margin-bottom:20px;display:flex;align-items:center;gap:16px;";
+    const selfieImg = document.createElement("img");
+    selfieImg.src = args.signingSelfiUrl;
+    selfieImg.crossOrigin = "anonymous";
+    selfieImg.style.cssText = "width:88px;height:88px;border-radius:10px;object-fit:cover;border:1px solid #e4e4e7;flex-shrink:0;";
+    const selfieMeta = document.createElement("div");
+    selfieMeta.innerHTML = `
+      <p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:0 0 6px">Foto de verificación facial</p>
+      <p style="font-size:11px;color:#3f3f46;margin:0 0 4px">Capturada al momento de la firma electrónica.</p>
+      <p style="font-size:11px;color:#059669;font-weight:600;margin:0">✓ Identidad confirmada por reconocimiento facial${args.faceSimilarity !== null ? ` · ${args.faceSimilarity}% de similitud` : ""}</p>`;
+    selfieSection.appendChild(selfieImg);
+    selfieSection.appendChild(selfieMeta);
+    auditEl.appendChild(selfieSection);
+    // Precargar
+    await new Promise<void>((res) => { selfieImg.onload = () => res(); selfieImg.onerror = () => res(); setTimeout(res, 2000); });
+  }
 
   // Proceso verificado
   const processSec = document.createElement("div");
@@ -455,7 +475,7 @@ function FaceVerificationStep({
   didFail,
 }: {
   requestId: string;
-  onVerified: (similarity: number) => void;
+  onVerified: (similarity: number, selfieUrl?: string | null) => void;
   didFail?: boolean;
 }) {
   const [cameraActive, setCameraActive] = useState(false);
@@ -535,7 +555,7 @@ function FaceVerificationStep({
       const base64 = capturedPhoto.split(",")[1];
       const res = await verifyFaceLocal(requestId, base64);
       if (res.verified) {
-        onVerified(res.similarity ?? 100);
+        onVerified(res.similarity ?? 100, res.selfieUrl);
       } else {
         setError(`Verificación fallida (${res.similarity}% de similitud). Asegurate de estar bien iluminado y de frente a la cámara.`);
         retake();
@@ -876,10 +896,11 @@ function DownloadContractButton({ request }: { request: SigningRequest }) {
 }
 
 function DownloadAuditButton({
-  request, signatureData, ipAddress, faceSimilarity, signedAt, documentHash,
+  request, signatureData, signingSelfiUrl, ipAddress, faceSimilarity, signedAt, documentHash,
 }: {
   request: SigningRequest;
   signatureData: string | null;
+  signingSelfiUrl: string | null;
   ipAddress: string | null;
   faceSimilarity: number | null;
   signedAt: string | null;
@@ -905,6 +926,7 @@ function DownloadAuditButton({
         signerCuil:    fields.cuil_firmante ?? "",
         signerDni:     fields.dni_firmante  ?? "",
         signatureData,
+        signingSelfiUrl,
         ipAddress,
         faceSimilarity,
         signedAt,
@@ -937,6 +959,7 @@ function SignedContractAudit({
   faceSimilarity,
   signedAt,
   documentHash,
+  signingSelfiUrl,
 }: {
   request: SigningRequest;
   signatureData: string | null;
@@ -944,6 +967,7 @@ function SignedContractAudit({
   faceSimilarity: number | null;
   signedAt: string | null;
   documentHash?: string | null;
+  signingSelfiUrl?: string | null;
 }) {
   const [auditOpen, setAuditOpen] = useState(false);
   const fields      = request.templateFields ?? {};
@@ -958,26 +982,29 @@ function SignedContractAudit({
       {/* Contrato con ambas firmas */}
       {request.templateId && (
         <div className="overflow-hidden rounded-2xl border border-zinc-200">
-          <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-3">
-            <div className="flex items-center gap-2">
-              <FileSignature size={15} className="text-zinc-400" />
-              <p className="max-w-xs truncate text-sm font-semibold text-zinc-900">
-                {request.documentTitle}
-              </p>
+          <div className="border-b border-zinc-200 bg-white px-5 py-3 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <FileSignature size={15} className="shrink-0 text-zinc-400" />
+                <p className="truncate text-sm font-semibold text-zinc-900">
+                  {request.documentTitle}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                FIRMADO
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <DownloadContractButton request={request} />
               <DownloadAuditButton
                 request={request}
                 signatureData={signatureData}
+                signingSelfiUrl={signingSelfiUrl ?? null}
                 ipAddress={ipAddress}
                 faceSimilarity={faceSimilarity}
                 signedAt={signedAt ?? null}
                 documentHash={documentHash ?? null}
               />
-              <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                FIRMADO
-              </span>
             </div>
           </div>
           <div className="bg-zinc-50 p-3">
@@ -1062,6 +1089,29 @@ function SignedContractAudit({
               ]}
             />
 
+            {/* Foto de verificación facial */}
+            {signingSelfiUrl && (
+              <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4">
+                <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                  Foto de verificación facial al momento de firma
+                </p>
+                <div className="flex items-start gap-4">
+                  <img
+                    src={signingSelfiUrl}
+                    alt="Selfie de firma"
+                    className="h-24 w-24 rounded-xl object-cover border border-zinc-200 shrink-0"
+                  />
+                  <div className="space-y-1 text-xs text-zinc-500">
+                    <p>Capturada durante el proceso de verificación de identidad al firmar.</p>
+                    <p className="text-emerald-600 font-medium">✓ Identidad confirmada por reconocimiento facial</p>
+                    {faceSimilarity !== null && (
+                      <p>Similitud con foto KYC: <span className="font-semibold text-zinc-700">{faceSimilarity}%</span></p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="border-t border-zinc-100" />
 
             {/* Proceso de firma */}
@@ -1117,11 +1167,13 @@ function SuccessStep({
   request,
   signatureData,
   faceSimilarity,
+  signingSelfiUrl,
 }: {
   result: SignatureResult;
   request: SigningRequest;
   signatureData: string;
   faceSimilarity: number | null;
+  signingSelfiUrl: string | null;
 }) {
   return (
     <div className="space-y-5">
@@ -1148,6 +1200,7 @@ function SuccessStep({
         faceSimilarity={faceSimilarity}
         signedAt={result.signedAt}
         documentHash={result.documentHash}
+        signingSelfiUrl={signingSelfiUrl}
       />
 
       <Link to="/dashboard">
@@ -1173,6 +1226,7 @@ export function SigningFlowPage() {
   const [error, setError]               = useState<string | null>(null);
   const [faceDidFail, setFaceDidFail]   = useState(false);
   const [faceSimilarity, setFaceSimilarity] = useState<number | null>(null);
+  const [faceSelfieUrl, setFaceSelfieUrl]   = useState<string | null>(null);
   const [signatureData, setSignatureData]   = useState<string | null>(null);
   // For the "already signed" view — load stored signature from DB
   const [storedSigData, setStoredSigData] = useState<{
@@ -1181,6 +1235,7 @@ export function SigningFlowPage() {
     faceSimilarityScore: number | null;
     signedAt: string | null;
     documentHash: string | null;
+    signingSelfiUrl: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -1228,8 +1283,9 @@ export function SigningFlowPage() {
   }
 
   // Step 1 → 2: facial verificado → pad de firma
-  function handleFaceVerified(similarity: number) {
+  function handleFaceVerified(similarity: number, selfieUrl?: string | null) {
     setFaceSimilarity(similarity);
+    setFaceSelfieUrl(selfieUrl ?? null);
     setStep(2);
   }
 
@@ -1243,6 +1299,7 @@ export function SigningFlowPage() {
         signedAt:            new Date().toISOString(),
         signatureData:       signatureDataUrl,
         faceSimilarityScore: faceSimilarity,
+        signingSelfiUrl:     faceSelfieUrl,
       });
       setSignatureData(signatureDataUrl);
       // Generar PDF con firma visual inmediata (no bloquea el flujo)
@@ -1320,6 +1377,7 @@ export function SigningFlowPage() {
             faceSimilarity={stored?.faceSimilarityScore ?? null}
             signedAt={stored?.signedAt ?? null}
             documentHash={stored?.documentHash ?? null}
+            signingSelfiUrl={stored?.signingSelfiUrl ?? null}
           />
           <Link to="/dashboard">
             <Button className="h-11 w-full" variant="secondary">
@@ -1452,6 +1510,7 @@ export function SigningFlowPage() {
               request={request}
               signatureData={signatureData ?? ""}
               faceSimilarity={faceSimilarity}
+              signingSelfiUrl={faceSelfieUrl}
             />
           )}
         </div>

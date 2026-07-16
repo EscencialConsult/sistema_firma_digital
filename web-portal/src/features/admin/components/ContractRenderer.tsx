@@ -132,7 +132,7 @@ function Hi({ children }: { children: React.ReactNode }) {
 
 // ─── Template renderers ───────────────────────────────────────────────────────
 
-function FormacionDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoData }) {
+function FormacionDoc({ f, alumno, orgName }: { f: Record<string, string>; alumno: AlumnoData; orgName?: string }) {
   const total  = parseInt(f.monto_total    ?? "0") || 0;
   const cuota  = parseInt(f.monto_cuota    ?? "0") || 0;
   const cuotas = parseInt(f.cantidad_cuotas ?? "0") || 0;
@@ -142,7 +142,7 @@ function FormacionDoc({ f, alumno }: { f: Record<string, string>; alumno: Alumno
     <DocWrapper>
       <DocTitle
         title="Contrato de Prestación de Servicios de Formación y Convenio de Pago Diferido"
-        subtitle="Escencial Consultora S.A.S."
+        subtitle={orgName}
       />
       <DocIntro text={`En la ciudad de ${juris}, República Argentina, a la fecha de la firma electrónica registrada.`} />
       <DocParties label="Partes intervinientes" items={[
@@ -175,19 +175,19 @@ function FormacionDoc({ f, alumno }: { f: Record<string, string>; alumno: Alumno
       </DocClause>
       <DocSignatures>
         <DocSig
-          label="Representante Legal — Escencial Consultora S.A.S."
+          label="Firma Representante Legal"
           name={f.autoridad_nombre || "—"}
-          sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+          sub={f.autoridad_cuil ? `CUIL/CUIT: ${f.autoridad_cuil}` : ""}
           signatureUrl={f.autoridad_signature_url}
         />
-        <DocSigEmpty label="El/La Alumno/a" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
+        <DocSigEmpty label="Firma Destinatario" name={alumno.nombre || undefined} sub={alumno.cuil ? `CUIL/CUIT: ${alumno.cuil}` : alumno.dni ? `DNI: ${alumno.dni}` : undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
-      <DocFooter />
+      <DocFooter orgName={orgName} />
     </DocWrapper>
   );
 }
 
-function InmuebleDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoData }) {
+function InmuebleDoc({ f, alumno, orgName }: { f: Record<string, string>; alumno: AlumnoData; orgName?: string }) {
   const precio   = parseInt(f.precio_mensual ?? "0") || 0;
   const meses    = parseInt(f.duracion_meses ?? "24") || 24;
   const deposito = parseInt(f.deposito_meses ?? "1") || 1;
@@ -199,7 +199,7 @@ function InmuebleDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
     <DocWrapper>
       <DocTitle
         title={esComercial ? "Contrato de Locación de Inmueble Comercial" : "Contrato de Locación de Inmueble"}
-        subtitle="Escencial Consultora S.A.S."
+        subtitle={orgName}
       />
       <DocIntro text={`En la ciudad de ${juris}, República Argentina, a la fecha de la firma electrónica registrada.`} />
       <DocParties label="Partes intervinientes" items={[
@@ -235,14 +235,14 @@ function InmuebleDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
       </DocClause>
       <DocSignatures>
         <DocSig label="Propietario/a" name={f.locador_nombre || "—"} sub={`DNI: ${f.locador_dni || "—"}`} />
-        <DocSigEmpty label="Locatario/a" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
+        <DocSigEmpty label="Firma Locatario/a" name={alumno.nombre || undefined} sub={alumno.cuil ? `CUIL/CUIT: ${alumno.cuil}` : alumno.dni ? `DNI: ${alumno.dni}` : undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
-      <DocFooter />
+      <DocFooter orgName={orgName} />
     </DocWrapper>
   );
 }
 
-function ReservaDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoData }) {
+function ReservaDoc({ f, alumno, orgName }: { f: Record<string, string>; alumno: AlumnoData; orgName?: string }) {
   const total = parseInt(f.precio_total ?? "0") || 0;
   const sena  = parseInt(f.monto_sena  ?? "0") || 0;
   const saldo = total - sena;
@@ -252,7 +252,7 @@ function ReservaDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
     <DocWrapper>
       <DocTitle
         title="Contrato de Seña y Reserva de Compraventa de Bien Mueble"
-        subtitle="Escencial Consultora S.A.S."
+        subtitle={orgName}
       />
       <DocIntro text={`En la ciudad de ${juris}, República Argentina, con fecha ${formatDateLong(f.fecha_sena ?? "")}.`} />
       <DocParties label="Partes intervinientes" items={[
@@ -289,14 +289,14 @@ function ReservaDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
       </DocClause>
       <DocSignatures>
         <DocSig label="Vendedor/a" name={f.vendedor_nombre || "—"} sub={`DNI: ${f.vendedor_dni || "—"}`} />
-        <DocSigEmpty label="Comprador/a" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
+        <DocSigEmpty label="Firma Comprador/a" name={alumno.nombre || undefined} sub={alumno.cuil ? `CUIL/CUIT: ${alumno.cuil}` : alumno.dni ? `DNI: ${alumno.dni}` : undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
-      <DocFooter />
+      <DocFooter orgName={orgName} />
     </DocWrapper>
   );
 }
 
-function SoftwareDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoData }) {
+function SoftwareDoc({ f, alumno, orgName }: { f: Record<string, string>; alumno: AlumnoData; orgName?: string }) {
   const precio = parseInt(f.precio_total ?? "0") || 0;
   const juris  = f.jurisdiccion || "Ciudad Autónoma de Buenos Aires";
 
@@ -304,7 +304,7 @@ function SoftwareDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
     <DocWrapper>
       <DocTitle
         title="Contrato de Locación de Obra para Desarrollo de Software y Plataforma Digital"
-        subtitle="Escencial Consultora S.A.S."
+        subtitle={orgName}
       />
       <DocIntro text={`En la ciudad de ${juris}, República Argentina, con fecha de inicio ${formatDateLong(f.fecha_inicio ?? "")}.`} />
       <DocParties label="Partes intervinientes" items={[
@@ -347,19 +347,19 @@ function SoftwareDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoD
       </DocClause>
       <DocSignatures>
         <DocSig
-          label="Contratista — Escencial Consultora S.A.S."
+          label="Firma Representante Legal"
           name={f.autoridad_nombre || "—"}
-          sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+          sub={f.autoridad_cuil ? `CUIL/CUIT: ${f.autoridad_cuil}` : ""}
           signatureUrl={f.autoridad_signature_url || undefined}
         />
-        <DocSigEmpty label="Comitente" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
+        <DocSigEmpty label="Firma Comitente" name={alumno.nombre || undefined} sub={alumno.cuil ? `CUIL/CUIT: ${alumno.cuil}` : alumno.dni ? `DNI: ${alumno.dni}` : undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
-      <DocFooter />
+      <DocFooter orgName={orgName} />
     </DocWrapper>
   );
 }
 
-function SoporteDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoData }) {
+function SoporteDoc({ f, alumno, orgName }: { f: Record<string, string>; alumno: AlumnoData; orgName?: string }) {
   const precio      = parseInt(f.precio_total   ?? "0") || 0;
   const penalidad   = parseInt(f.penalidad_incumplimiento ?? "10") || 10;
   const juris       = f.jurisdiccion || "Ciudad Autónoma de Buenos Aires";
@@ -368,7 +368,7 @@ function SoporteDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
     <DocWrapper>
       <DocTitle
         title="Contrato de Locación de Servicios de Soporte Técnico, Mantenimiento y Garantía"
-        subtitle="Escencial Consultora S.A.S."
+        subtitle={orgName}
       />
       <DocIntro text={`En la ciudad de ${juris}, República Argentina, con fecha de inicio ${formatDateLong(f.fecha_inicio ?? "")}.`} />
       <DocParties label="Partes intervinientes" items={[
@@ -407,19 +407,19 @@ function SoporteDoc({ f, alumno }: { f: Record<string, string>; alumno: AlumnoDa
       </DocClause>
       <DocSignatures>
         <DocSig
-          label="Prestadora — Escencial Consultora S.A.S."
+          label="Firma Representante Legal"
           name={f.autoridad_nombre || "—"}
-          sub={f.autoridad_cuil ? `CUIL: ${f.autoridad_cuil}` : ""}
+          sub={f.autoridad_cuil ? `CUIL/CUIT: ${f.autoridad_cuil}` : ""}
           signatureUrl={f.autoridad_signature_url || undefined}
         />
-        <DocSigEmpty label="Comitente" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
+        <DocSigEmpty label="Firma Comitente" name={alumno.nombre || undefined} sub={alumno.cuil ? `CUIL/CUIT: ${alumno.cuil}` : alumno.dni ? `DNI: ${alumno.dni}` : undefined} signatureUrl={alumno.signatureUrl} />
       </DocSignatures>
-      <DocFooter />
+      <DocFooter orgName={orgName} />
     </DocWrapper>
   );
 }
 
-function ConvenioDoc({ f, alumnos }: { f: Record<string, string>; alumnos: AlumnoData[] }) {
+function ConvenioDoc({ f, alumnos, orgName }: { f: Record<string, string>; alumnos: AlumnoData[]; orgName?: string }) {
   const juris = f.jurisdiccion || "Ciudad Autónoma de Buenos Aires";
   const p1 = alumnos[0] || { nombre: "", dni: "", cuil: "", email: "", domicilio: "" };
   const p2 = alumnos[1] || { nombre: "", dni: "", cuil: "", email: "", domicilio: "" };
@@ -428,7 +428,7 @@ function ConvenioDoc({ f, alumnos }: { f: Record<string, string>; alumnos: Alumn
     <DocWrapper>
       <DocTitle
         title="Convenio Privado Bilateral"
-        subtitle="Generado a través de Escencial Consultora"
+        subtitle={orgName}
       />
       <DocIntro text={`En la ciudad de ${juris}, República Argentina, a la fecha de la firma electrónica registrada.`} />
       
@@ -450,7 +450,7 @@ function ConvenioDoc({ f, alumnos }: { f: Record<string, string>; alumnos: Alumn
       </DocClause>
 
       <DocClause n="CUARTA" title="VALIDEZ DE LA FIRMA ELECTRÓNICA">
-        El presente convenio es firmado electrónicamente con plena validez legal conforme a la Ley N° 25.506. La plataforma de Escencial Consultora actúa únicamente como prestadora del servicio de firma, no asumiendo responsabilidad alguna por las obligaciones contraídas entre las partes.
+        El presente convenio es firmado electrónicamente con plena validez legal conforme a la Ley N° 25.506. La plataforma actúa únicamente como prestadora del servicio de firma electrónica, no asumiendo responsabilidad alguna por las obligaciones contraídas entre las partes.
       </DocClause>
 
       <DocClause n="QUINTA" title="JURISDICCIÓN">
@@ -461,7 +461,7 @@ function ConvenioDoc({ f, alumnos }: { f: Record<string, string>; alumnos: Alumn
         <DocSig label="Parte A" name={p1.nombre || "—"} sub={`DNI: ${p1.dni || "—"}`} />
         <DocSig label="Parte B" name={p2.nombre || "—"} sub={`DNI: ${p2.dni || "—"}`} />
       </DocSignatures>
-      <DocFooter />
+      <DocFooter orgName={orgName} />
     </DocWrapper>
   );
 }
@@ -562,12 +562,12 @@ export function ContractDocument({
   }
 
   switch (templateId) {
-    case "formacion": return <FormacionDoc f={fields} alumno={alumno} />;
-    case "inmueble":  return <InmuebleDoc  f={fields} alumno={alumno} />;
-    case "reserva":   return <ReservaDoc   f={fields} alumno={alumno} />;
-    case "software":  return <SoftwareDoc  f={fields} alumno={alumno} />;
-    case "soporte":   return <SoporteDoc   f={fields} alumno={alumno} />;
-    case "convenio_terceros": return <ConvenioDoc f={fields} alumnos={alumnos} />;
+    case "formacion": return <FormacionDoc f={fields} alumno={alumno} orgName={orgName} />;
+    case "inmueble":  return <InmuebleDoc  f={fields} alumno={alumno} orgName={orgName} />;
+    case "reserva":   return <ReservaDoc   f={fields} alumno={alumno} orgName={orgName} />;
+    case "software":  return <SoftwareDoc  f={fields} alumno={alumno} orgName={orgName} />;
+    case "soporte":   return <SoporteDoc   f={fields} alumno={alumno} orgName={orgName} />;
+    case "convenio_terceros": return <ConvenioDoc f={fields} alumnos={alumnos} orgName={orgName} />;
     default: return <div className="p-8 text-zinc-400 text-sm text-center">Template no reconocido.</div>;
   }
 }
@@ -1182,6 +1182,26 @@ export function ContractDetailModal({
                             )}
                           </div>
 
+                          {/* Foto de verificación facial al firmar */}
+                          {rec.signingSelfiUrl && (
+                            <div>
+                              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Foto de verificación facial</p>
+                              <div className="flex items-start gap-3 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                                <img
+                                  src={rec.signingSelfiUrl}
+                                  alt="Selfie de firma"
+                                  className="h-20 w-20 rounded-lg object-cover border border-zinc-200 shrink-0"
+                                />
+                                <div className="space-y-1 text-xs text-zinc-500">
+                                  <p className="text-emerald-600 font-semibold">✓ Capturada al momento de la firma</p>
+                                  {rec.faceSimilarityScore !== null && (
+                                    <p>Similitud KYC: <span className="font-semibold text-zinc-700">{rec.faceSimilarityScore.toFixed(1)}%</span></p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Firma manuscrita */}
                           {rec.signatureData && (
                             <div>
@@ -1196,7 +1216,7 @@ export function ContractDetailModal({
                           <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-1.5">
                             <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Proceso de firma</p>
                             {[
-                              { label: "Identidad verificada por KYC (DIDIT)", ok: !!rec.kycDocumentNumber },
+                              { label: "Identidad verificada por KYC (DIDIT)", ok: !!rec.kycDocumentNumber || rec.faceSimilarityScore !== null },
                               { label: "Términos y condiciones aceptados", ok: !!rec.conformityAcceptedAt },
                               { label: "Verificación facial completada", ok: rec.faceSimilarityScore !== null },
                               { label: "Firma manuscrita registrada", ok: !!rec.signatureData },

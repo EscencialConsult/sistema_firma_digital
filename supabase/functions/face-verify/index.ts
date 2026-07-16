@@ -136,6 +136,35 @@ async function signedRekognitionRequest(
   });
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function uploadSigningSelfie(
+  supabase: ReturnType<typeof createClient>,
+  requestId: string,
+  selfieBase64: string,
+): Promise<string | null> {
+  try {
+    const bytes = base64ToUint8Array(selfieBase64);
+    const path  = `signing-selfies/${requestId}.jpg`;
+    const { error } = await supabase.storage
+      .from("kyc-documents")
+      .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+    if (error) { console.warn("[face-verify] selfie upload error:", error.message); return null; }
+    const { data } = supabase.storage.from("kyc-documents").getPublicUrl(path);
+    return data.publicUrl ?? null;
+  } catch (e) {
+    console.warn("[face-verify] selfie upload exception:", e);
+    return null;
+  }
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 serve(async (req) => {
@@ -156,17 +185,18 @@ serve(async (req) => {
       );
     }
 
+    // Buscar foto KYC del firmante via Supabase
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
     // Si no hay credenciales AWS, devolver mock aprobado (modo desarrollo)
     if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
       console.warn("[face-verify] Sin credenciales AWS — modo mock activado");
+      const selfieUrl = await uploadSigningSelfie(supabase, requestId, selfieBase64);
       return new Response(
-        JSON.stringify({ ok: true, similarity: 96.4, verified: true, mock: true }),
+        JSON.stringify({ ok: true, similarity: 96.4, verified: true, mock: true, selfieUrl }),
         { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
-
-    // Buscar foto KYC del firmante via Supabase
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
     const { data: sr } = await supabase
       .from("signature_requests")
@@ -200,8 +230,9 @@ serve(async (req) => {
 
     if (!verif) {
       // Sin verificación KYC → aprobar de todas formas (usuario sin KYC)
+      const selfieUrl = await uploadSigningSelfie(supabase, requestId, selfieBase64);
       return new Response(
-        JSON.stringify({ ok: true, similarity: 0, verified: true, noKyc: true }),
+        JSON.stringify({ ok: true, similarity: 0, verified: true, noKyc: true, selfieUrl }),
         { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
@@ -216,8 +247,9 @@ serve(async (req) => {
 
     if (!doc?.storage_path) {
       // Sin foto selfie KYC → aprobar de todas formas
+      const selfieUrl = await uploadSigningSelfie(supabase, requestId, selfieBase64);
       return new Response(
-        JSON.stringify({ ok: true, similarity: 0, verified: true, noSelfie: true }),
+        JSON.stringify({ ok: true, similarity: 0, verified: true, noSelfie: true, selfieUrl }),
         { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
@@ -264,8 +296,13 @@ serve(async (req) => {
     const similarity = rekData.FaceMatches?.[0]?.Similarity ?? 0;
     const verified   = similarity >= SIMILARITY_THRESHOLD;
 
+    // Guardar selfie solo si la verificación fue exitosa
+    const selfieUrl = verified
+      ? await uploadSigningSelfie(supabase, requestId, selfieBase64)
+      : null;
+
     return new Response(
-      JSON.stringify({ ok: true, similarity: parseFloat(similarity.toFixed(1)), verified }),
+      JSON.stringify({ ok: true, similarity: parseFloat(similarity.toFixed(1)), verified, selfieUrl }),
       { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
 

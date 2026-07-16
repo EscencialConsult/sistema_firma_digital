@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
-import { FileText, X, Gauge, History, UserCircle, ShieldCheck } from "lucide-react";
+import { FileText, X, Gauge, UserCircle, ShieldCheck } from "lucide-react";
 import { useAuth } from "../providers/AuthProvider";
 import { SharedSidebar } from "../../shared/components/ui/SharedSidebar";
 import { SharedHeader } from "../../shared/components/ui/SharedHeader";
@@ -8,10 +8,9 @@ import { OnboardingTour } from "../../shared/components/onboarding/OnboardingTou
 import { TERMS_TEXT } from "../../shared/legal/terms";
 
 const MOBILE_NAV = [
-  { path: "/dashboard",  label: "Firmas",      icon: Gauge,      end: true },
-  { path: "/signatures", label: "Contratos",   icon: FileText },
-  { path: "/audit",      label: "Historial",   icon: History },
-  { path: "/profile",    label: "Mi Perfil",   icon: UserCircle },
+  { path: "/dashboard",  label: "Inicio",         icon: Gauge,      end: true },
+  { path: "/signatures", label: "Mis contratos",  icon: FileText },
+  { path: "/profile",    label: "Perfil",          icon: UserCircle },
 ];
 
 const ADMIN_MOBILE_EXTRA = { path: "/admin", label: "Admin", icon: ShieldCheck, end: false };

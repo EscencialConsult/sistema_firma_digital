@@ -152,6 +152,7 @@ export async function executeSignature(
       signature_data:           (metadata.signatureData as string) ?? null,
       face_similarity_score:    (metadata.faceSimilarityScore as number) ?? null,
       face_verification_method: "LOCAL_WEBCAM",
+      signing_selfie_url:       (metadata.signingSelfiUrl as string) ?? null,
       metadata:                 { signatureType: "CANVAS", faceVerified: true },
     })
     .select()
@@ -211,7 +212,7 @@ export async function initiateFaceVerificationDIDIT(requestId: string): Promise<
 export async function verifyFaceLocal(
   requestId: string,
   selfieBase64: string
-): Promise<{ ok: boolean; similarity: number; verified: boolean; mock?: boolean; noKyc?: boolean; noSelfie?: boolean }> {
+): Promise<{ ok: boolean; similarity: number; verified: boolean; selfieUrl?: string | null; mock?: boolean; noKyc?: boolean; noSelfie?: boolean }> {
   const { data: { session } } = await supabase.auth.getSession();
   const { data, error } = await supabase.functions.invoke("face-verify", {
     body: { requestId, selfieBase64 },
@@ -479,10 +480,10 @@ export async function generatePerSignerSignedPdf(documentId: string): Promise<st
 }
 
 /** Fetch the stored signature image for a completed request (used in the "already signed" view) */
-export async function getMySignatureDataForRequest(requestId: string): Promise<{ signatureData: string | null; ipAddress: string | null; faceSimilarityScore: number | null; signedAt: string | null; documentHash: string | null }> {
+export async function getMySignatureDataForRequest(requestId: string): Promise<{ signatureData: string | null; ipAddress: string | null; faceSimilarityScore: number | null; signedAt: string | null; documentHash: string | null; signingSelfiUrl: string | null }> {
   const { data } = await supabase
     .from("signatures")
-    .select("signature_data, ip_address, face_similarity_score, signed_at, document_hash")
+    .select("signature_data, ip_address, face_similarity_score, signed_at, document_hash, signing_selfie_url")
     .eq("signature_request_id", requestId)
     .maybeSingle();
   return {
@@ -491,6 +492,7 @@ export async function getMySignatureDataForRequest(requestId: string): Promise<{
     faceSimilarityScore:(data?.face_similarity_score as number) ?? null,
     signedAt:           (data?.signed_at as string) ?? null,
     documentHash:       (data?.document_hash as string) ?? null,
+    signingSelfiUrl:    (data?.signing_selfie_url as string) ?? null,
   };
 }
 

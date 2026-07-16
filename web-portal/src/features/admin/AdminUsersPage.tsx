@@ -359,8 +359,9 @@ export function AdminUsersPage() {
   const [csvImported, setCsvImported] = useState(false);
 
   useEffect(() => {
-    getAllUsers(user?.organizationId).then((u) => { setUsers(u); setLoading(false); });
-  }, []);
+    if (!user?.organizationId) { setLoading(false); return; }
+    getAllUsers(user.organizationId).then((u) => { setUsers(u); setLoading(false); });
+  }, [user?.organizationId]);
 
   // ── Filtered users ──
   const filtered = useMemo(() => {

@@ -673,6 +673,138 @@ export async function updateContractFields(
   if (error) throw new Error(error.message);
 }
 
+// ─── Audit ────────────────────────────────────────────────────────────────────
+
+export interface SignatureAuditRecord {
+  signatureRequestId: string;
+  signerEmail:        string;
+  signerName:         string;
+  signerCuil:         string | null;
+  signerDni:          string | null;
+  sentAt:             string | null;
+  signedAt:           string | null;
+  status:             string;
+  // Firma electrónica
+  ipAddress:              string | null;
+  faceSimilarityScore:    number | null;
+  faceVerificationMethod: string | null;
+  signatureData:          string | null;
+  conformityAcceptedAt:   string | null;
+  conformityIp:           string | null;
+  // KYC verificado por DIDIT
+  kycFullName:       string | null;
+  kycDocumentType:   string | null;
+  kycDocumentNumber: string | null;
+  kycBirthDate:      string | null;
+  kycAddress:        string | null;
+  kycFaceMatchScore: number | null;
+  kycLivenessScore:  number | null;
+  kycSelfieUrl:      string | null;
+  signingSelfiUrl:   string | null;
+}
+
+export async function getContractSignatureAudit(documentId: string): Promise<SignatureAuditRecord[]> {
+  // 1. Fetch signature_requests con firma y conformidad
+  const { data, error } = await supabase
+    .from("signature_requests")
+    .select(`
+      id, signer_id, signer_email, signer_name, signer_cuil, signer_dni, sent_at, signed_at, status,
+      signatures(ip_address, face_similarity_score, face_verification_method, signature_data, signing_selfie_url, signed_at),
+      conformity_acceptances(accepted_at, ip_address)
+    `)
+    .eq("document_id", documentId)
+    .order("signing_order", { ascending: true });
+
+  if (error) return [];
+
+  // 2. Colectar los user IDs para buscar KYC en paralelo
+  const signerIds = (data ?? [])
+    .map((sr) => sr.signer_id as string | null)
+    .filter((id): id is string => !!id);
+
+  // 3. Fetch identity_verifications por user_id (VERIFIED o IN_REVIEW, más reciente por usuario)
+  const kycMap = new Map<string, Record<string, unknown>>();
+  const selfieUrlMap = new Map<string, string>();
+
+  if (signerIds.length > 0) {
+    const { data: ivData } = await supabase
+      .from("identity_verifications")
+      .select(`
+        id, user_id, full_name, document_type, document_number, birth_date, address, provider_response,
+        identity_documents(type, storage_path)
+      `)
+      .in("user_id", signerIds)
+      .in("status", ["VERIFIED", "IN_REVIEW"])
+      .order("submitted_at", { ascending: false });
+
+    // Tomar la verificación más reciente por user_id
+    for (const iv of (ivData ?? [])) {
+      const uid = iv.user_id as string;
+      if (!kycMap.has(uid)) {
+        kycMap.set(uid, iv as Record<string, unknown>);
+
+        // Generar URL pública del selfie
+        const idDocs = (iv.identity_documents as Array<Record<string, unknown>>) ?? [];
+        const selfieDoc = idDocs.find((d) => d.type === "SELFIE");
+        if (selfieDoc?.storage_path) {
+          const { data: urlData } = supabase.storage
+            .from("kyc-documents")
+            .getPublicUrl(selfieDoc.storage_path as string);
+          if (urlData.publicUrl) selfieUrlMap.set(uid, urlData.publicUrl);
+        }
+      }
+    }
+  }
+
+  // 4. Mapear todo junto
+  return (data ?? []).map((sr) => {
+    const sigs = (sr.signatures as Array<Record<string, unknown>>) ?? [];
+    const sig  = sigs[0] ?? {};
+    const cas  = (sr.conformity_acceptances as Array<Record<string, unknown>>) ?? [];
+    const ca   = cas[0] ?? {};
+
+    const uid = sr.signer_id as string | null;
+    const iv  = uid ? kycMap.get(uid) ?? null : null;
+
+    // Extraer scores de DIDIT desde provider_response JSONB
+    let kycFaceMatchScore: number | null = null;
+    let kycLivenessScore:  number | null = null;
+    if (iv?.provider_response) {
+      const pr             = iv.provider_response as Record<string, unknown>;
+      const faceMatches    = pr.face_matches    as Array<Record<string, unknown>> | undefined;
+      const livenessChecks = pr.liveness_checks as Array<Record<string, unknown>> | undefined;
+      kycFaceMatchScore = (faceMatches?.[0]?.score    as number) ?? null;
+      kycLivenessScore  = (livenessChecks?.[0]?.score as number) ?? null;
+    }
+
+    return {
+      signatureRequestId:     sr.id as string,
+      signerEmail:            sr.signer_email as string,
+      signerName:             sr.signer_name  as string,
+      signerCuil:             (sr.signer_cuil as string) ?? null,
+      signerDni:              (sr.signer_dni  as string) ?? null,
+      sentAt:                 (sr.sent_at     as string) ?? null,
+      signedAt:               (sr.signed_at   as string) ?? null,
+      status:                 sr.status       as string,
+      ipAddress:              (sig.ip_address             as string) ?? null,
+      faceSimilarityScore:    (sig.face_similarity_score  as number) ?? null,
+      faceVerificationMethod: (sig.face_verification_method as string) ?? null,
+      signatureData:          (sig.signature_data          as string) ?? null,
+      conformityAcceptedAt:   (ca.accepted_at  as string) ?? null,
+      conformityIp:           (ca.ip_address   as string) ?? null,
+      kycFullName:       (iv?.full_name       as string) ?? null,
+      kycDocumentType:   (iv?.document_type   as string) ?? null,
+      kycDocumentNumber: (iv?.document_number as string) ?? null,
+      kycBirthDate:      (iv?.birth_date      as string) ?? null,
+      kycAddress:        (iv?.address         as string) ?? null,
+      kycFaceMatchScore,
+      kycLivenessScore,
+      kycSelfieUrl:    uid ? (selfieUrlMap.get(uid) ?? null) : null,
+      signingSelfiUrl: (sig.signing_selfie_url as string) ?? null,
+    };
+  });
+}
+
 /** Delete a contract and all its related data (signature_requests, document_versions, files in storage) */
 export async function deleteContract(documentId: string): Promise<void> {
   // 1. Get document versions to remove storage files

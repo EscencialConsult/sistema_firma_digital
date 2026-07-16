@@ -558,6 +558,8 @@ interface RichTextEditorProps {
   logoHeader?:    boolean;
   logoWatermark?: boolean;
   logoUrl?:       string | null;
+  className?:     string;
+  documentTitle?: string;
 }
 
 export function RichTextEditor({
@@ -567,6 +569,8 @@ export function RichTextEditor({
   logoHeader,
   logoWatermark,
   logoUrl,
+  className = "",
+  documentTitle,
 }: RichTextEditorProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [showPrompt, setShowPrompt]   = useState(false);
@@ -607,7 +611,7 @@ export function RichTextEditor({
   }
 
   return (
-    <div className="flex gap-0 rounded-2xl overflow-hidden border border-zinc-200 shadow-sm" style={{ height: "82vh" }}>
+    <div className={`flex gap-0 rounded-2xl overflow-hidden border border-zinc-200 shadow-sm ${className}`} style={{ height: "82vh" }}>
 
       {/* ── Editor column ──────────────────────────────────────────────── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
@@ -647,6 +651,29 @@ export function RichTextEditor({
                 {hasHeader && (
                   <div style={{ paddingBottom: 16, borderBottom: "1.5px solid #d1d5db", marginBottom: 20 }}>
                     <img src={logoUrl!} alt="Logo" style={{ height: 68, objectFit: "contain", display: "block" }} />
+                  </div>
+                )}
+
+                {/* Título del documento — no editable, viene del campo "Nombre de la plantilla" */}
+                {documentTitle && (
+                  <div
+                    contentEditable={false}
+                    style={{
+                      textAlign: "center",
+                      paddingBottom: 20,
+                      marginBottom: 20,
+                      borderBottom: "1px solid #e5e7eb",
+                      userSelect: "none",
+                      fontSize: 13,
+                      fontFamily: "system-ui, sans-serif",
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "#111827",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {documentTitle}
                   </div>
                 )}
 

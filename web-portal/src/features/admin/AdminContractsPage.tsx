@@ -510,10 +510,12 @@ function SendingFlow({
     setError("");
     try {
       const templateFields: Record<string, string> = {
-        _templateContent: template.contentHtml,
-        _legalTitle:      template.name,
-        _dbTemplateId:    template.id,
+        _templateContent:  template.contentHtml,
+        _legalTitle:       template.name,
+        _dbTemplateId:     template.id,
         _paymentTemplateId: selectedPayment?.id ?? "",
+        _logoHeader:       template.logoHeader    ? "1" : "0",
+        _logoWatermark:    template.logoWatermark ? "1" : "0",
         ...varValues,
       };
       const contract = await sendContractFromTemplate({
@@ -1340,6 +1342,7 @@ export function AdminContractsPage() {
           logoHeader={tplLogoHeader}
           logoWatermark={tplLogoWatermark}
           logoUrl={loadOrgCache()?.logoLightUrl ?? loadOrgCache()?.logoDarkUrl ?? null}
+          documentTitle={tplName || undefined}
         />
 
         <SignaturePositionEditor value={tplSignaturePosition} onChange={setTplSignaturePosition} />

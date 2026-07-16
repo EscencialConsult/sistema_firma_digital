@@ -12,7 +12,7 @@ import {
 import type { AppRoute } from "../../shared/types/navigation";
 
 export const routes: AppRoute[] = [
-  { id: "dashboard", label: "Dashboard", icon: Gauge, path: "/dashboard" },
+  { id: "dashboard", label: "Inicio", icon: Gauge, path: "/dashboard" },
   { id: "signatures", label: "Mis contratos", icon: FileSignature, path: "/signatures" },
   { id: "identity", label: "Identidad", icon: IdCard, path: "/identity" },
   { id: "certificates", label: "Certificados", icon: KeyRound, path: "/certificates" },
