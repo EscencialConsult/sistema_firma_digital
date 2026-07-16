@@ -11,6 +11,7 @@ export interface DbContractTemplate {
   logoWatermark:  boolean;
   contentHtml:    string;
   signaturePosition: SignaturePosition;
+  versionMinor:   number;
   createdAt:      string;
   updatedAt:      string;
 }
@@ -26,6 +27,7 @@ function mapRow(r: Record<string, unknown>): DbContractTemplate {
     logoWatermark:  (r.logo_watermark as boolean) ?? false,
     contentHtml:    r.content_html as string,
     signaturePosition: (r.signature_position as SignaturePosition) ?? DEFAULT_SIGNATURE_POSITION,
+    versionMinor:   (r.version_minor as number) ?? 0,
     createdAt:      r.created_at as string,
     updatedAt:      r.updated_at as string,
   };
@@ -71,16 +73,17 @@ export async function createContractTemplate(input: {
 
 export async function updateContractTemplate(
   id: string,
-  input: { name?: string; description?: string; label?: string; logoHeader?: boolean; logoWatermark?: boolean; contentHtml?: string; signaturePosition?: SignaturePosition }
+  input: { name?: string; description?: string; label?: string; logoHeader?: boolean; logoWatermark?: boolean; contentHtml?: string; signaturePosition?: SignaturePosition; versionMinor?: number }
 ): Promise<void> {
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (input.name         !== undefined) patch.name          = input.name;
-  if (input.description  !== undefined) patch.description   = input.description;
-  if (input.label        !== undefined) patch.label         = input.label;
-  if (input.logoHeader   !== undefined) patch.logo_header   = input.logoHeader;
-  if (input.logoWatermark !== undefined) patch.logo_watermark = input.logoWatermark;
-  if (input.contentHtml  !== undefined) patch.content_html  = input.contentHtml;
+  if (input.name          !== undefined) patch.name             = input.name;
+  if (input.description   !== undefined) patch.description      = input.description;
+  if (input.label         !== undefined) patch.label            = input.label;
+  if (input.logoHeader    !== undefined) patch.logo_header      = input.logoHeader;
+  if (input.logoWatermark !== undefined) patch.logo_watermark   = input.logoWatermark;
+  if (input.contentHtml   !== undefined) patch.content_html     = input.contentHtml;
   if (input.signaturePosition !== undefined) patch.signature_position = input.signaturePosition;
+  if (input.versionMinor  !== undefined) patch.version_minor    = input.versionMinor;
   const { error } = await supabase.from("contract_templates").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
 }

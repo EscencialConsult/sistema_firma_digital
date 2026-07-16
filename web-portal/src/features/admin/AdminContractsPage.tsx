@@ -283,6 +283,8 @@ function TemplateCard({
           </div>
           <p className="text-[11px] text-zinc-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span>{new Date(template.createdAt).toLocaleDateString("es-AR")}</span>
+            <span className="text-zinc-300">·</span>
+            <span className="font-semibold text-zinc-500">v1.{template.versionMinor ?? 0}</span>
             {vars.length > 0 && (
               <>
                 <span className="text-zinc-300">·</span>
@@ -994,6 +996,73 @@ function SendingFlow({
   );
 }
 
+// ─── Delete Confirm Modal ─────────────────────────────────────────────────────
+
+function DeleteConfirmModal({
+  contract,
+  onClose,
+  onConfirm,
+  deleting,
+}: {
+  contract: Contract;
+  onClose:  () => void;
+  onConfirm: () => void;
+  deleting: boolean;
+}) {
+  const [input, setInput] = useState("");
+  const confirmed = input.trim().toLowerCase() === "eliminar";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-6 space-y-5">
+        <div className="space-y-1">
+          <h3 className="font-bold text-zinc-900 text-base">Eliminar contrato</h3>
+          <p className="text-xs text-zinc-500 truncate">"{contract.title}"</p>
+        </div>
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+          <p className="text-xs text-red-600 leading-relaxed">
+            Esta acción no se puede deshacer. El contrato y todos sus registros de auditoría serán eliminados de forma permanente.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-zinc-500">
+            Escribí <span className="font-bold text-zinc-900">eliminar</span> para confirmar
+          </label>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="eliminar"
+            autoFocus
+            className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-400 outline-none focus:border-red-300 focus:ring-1 focus:ring-red-100 transition"
+          />
+        </div>
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 h-10 rounded-xl border border-zinc-200 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 transition"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={!confirmed || deleting}
+            onClick={onConfirm}
+            className={`flex-1 h-10 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold transition ${
+              confirmed && !deleting
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "bg-zinc-100 text-zinc-400 cursor-not-allowed"
+            }`}
+          >
+            <Check size={14} />
+            {deleting ? "Eliminando..." : "Eliminar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 type PageView = "list" | "templates" | "editor" | "sending";
@@ -1012,6 +1081,7 @@ export function AdminContractsPage() {
   const [preparingPdfId, setPreparingPdfId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Contract | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [sharePreparing, setSharePreparing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -1087,16 +1157,25 @@ export function AdminContractsPage() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(c);
     }
-    return Array.from(map.entries()).map(([key, cs]) => ({
-      key,
-      title: cs[0].title,
-      isTemplate: !!cs[0].templateId,
-      contracts: cs,
-      signedCount:   cs.filter((c) => ["SIGNED","COMPLETED"].includes(c.status)).length,
-      pendingCount:  cs.filter((c) => ["SENT","VIEWED","CONFORMITY_ACCEPTED"].includes(c.status)).length,
-      rejectedCount: cs.filter((c) => ["REJECTED","EXPIRED"].includes(c.status)).length,
-    }));
-  }, [filtered]);
+    return Array.from(map.entries()).map(([key, cs]) => {
+      const tpl = cs[0].templateId ? dbTemplates.find((t) => t.id === cs[0].templateId) : null;
+      const vars     = tpl ? extractVariables(tpl.contentHtml) : [];
+      const orgVars  = vars.filter((v) => ORG_VARS.has(v));
+      const autoVars = vars.filter((v) => AUTO_FILL_VARS.has(v));
+      const adminVarsCount = vars.filter((v) => !ORG_VARS.has(v) && !AUTO_FILL_VARS.has(v)).length;
+      return {
+        key,
+        title: cs[0].title,
+        isTemplate: !!cs[0].templateId,
+        contracts: cs,
+        template: tpl ?? null,
+        vars, orgVars, autoVars, adminVarsCount,
+        signedCount:   cs.filter((c) => ["SIGNED","COMPLETED"].includes(c.status)).length,
+        pendingCount:  cs.filter((c) => ["SENT","VIEWED","CONFORMITY_ACCEPTED"].includes(c.status)).length,
+        rejectedCount: cs.filter((c) => ["REJECTED","EXPIRED"].includes(c.status)).length,
+      };
+    });
+  }, [filtered, dbTemplates]);
 
   const selectedSignedContracts = contracts.filter((c) =>
     selectedContractIds.includes(c.id) && hasShareableSignedPdf(c)
@@ -1213,13 +1292,15 @@ export function AdminContractsPage() {
     setSavingTpl(true);
     try {
       if (editingTemplate) {
+        const nextMinor = (editingTemplate.versionMinor ?? 0) + 1;
         await updateContractTemplate(editingTemplate.id, {
           name: tplName, description: tplDesc, label: tplLabel,
           logoHeader: tplLogoHeader, logoWatermark: tplLogoWatermark,
           contentHtml: tplHtml, signaturePosition: tplSignaturePosition,
+          versionMinor: nextMinor,
         });
         setDbTemplates((prev) => prev.map((t) => t.id === editingTemplate.id
-          ? { ...t, name: tplName, description: tplDesc, label: tplLabel, logoHeader: tplLogoHeader, logoWatermark: tplLogoWatermark, contentHtml: tplHtml, signaturePosition: tplSignaturePosition }
+          ? { ...t, name: tplName, description: tplDesc, label: tplLabel, logoHeader: tplLogoHeader, logoWatermark: tplLogoWatermark, contentHtml: tplHtml, signaturePosition: tplSignaturePosition, versionMinor: nextMinor }
           : t));
         showToast("Plantilla actualizada.");
       } else if (orgId) {
@@ -1281,14 +1362,20 @@ export function AdminContractsPage() {
     }
   }
 
-  async function handleDeleteContract(contract: Contract) {
-    if (!window.confirm(`¿Eliminar el contrato "${contract.title}"? Esta acción no se puede deshacer.`)) return;
+  const [deletingContract, setDeletingContract] = useState(false);
+
+  async function confirmDeleteContract() {
+    if (!deleteTarget) return;
+    setDeletingContract(true);
     try {
-      await deleteContract(contract.id);
-      setContracts((prev) => prev.filter((c) => c.id !== contract.id));
+      await deleteContract(deleteTarget.id);
+      setContracts((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+      setDeleteTarget(null);
       showToast("Contrato eliminado.");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Error al eliminar contrato", "error");
+    } finally {
+      setDeletingContract(false);
     }
   }
 
@@ -1552,6 +1639,14 @@ export function AdminContractsPage() {
           }}
         />
       )}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          contract={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDeleteContract}
+          deleting={deletingContract}
+        />
+      )}
       {sendThirdParty && (
         <SendThirdPartyModal contract={sendThirdParty} onClose={() => setSendThirdParty(null)}
           onSent={(id) => setContracts((prev) => prev.map((x) => x.id === id ? { ...x, status: "SENT", totalSigners: x.totalSigners + 1 } : x))} />
@@ -1813,32 +1908,61 @@ export function AdminContractsPage() {
                         onClick={toggleGroup}
                         className="flex w-full items-center justify-between px-5 py-4 hover:bg-zinc-50 transition text-left gap-3"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${group.isTemplate ? "bg-blue-50" : "bg-zinc-50"}`}>
                             {group.isTemplate
                               ? <LayoutTemplate size={14} className="text-blue-500" />
                               : <Files size={14} className="text-zinc-500" />}
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-zinc-900 truncate">{group.title}</p>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              <span className="text-[11px] text-zinc-400">{group.contracts.length} {group.contracts.length === 1 ? "envío" : "envíos"}</span>
-                              {group.signedCount > 0 && (
-                                <span className="rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                  {group.signedCount} firmado{group.signedCount > 1 ? "s" : ""}
-                                </span>
-                              )}
-                              {group.pendingCount > 0 && (
-                                <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                  {group.pendingCount} pendiente{group.pendingCount > 1 ? "s" : ""}
-                                </span>
-                              )}
-                              {group.rejectedCount > 0 && (
-                                <span className="rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-600">
-                                  {group.rejectedCount} rechazado{group.rejectedCount > 1 ? "s" : ""}
+                          <div className="min-w-0 flex-1">
+                            {/* Título + etiqueta */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <p className="font-semibold text-zinc-900 truncate text-sm">{group.title}</p>
+                              {group.template?.label && (
+                                <span className="shrink-0 rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">
+                                  {group.template.label}
                                 </span>
                               )}
                             </div>
+                            {/* Metadata line — igual que TemplateCard */}
+                            <p className="text-[11px] text-zinc-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                              {group.template && (
+                                <>
+                                  <span>{new Date(group.template.createdAt).toLocaleDateString("es-AR")}</span>
+                                  <span className="text-zinc-300">·</span>
+                                  <span className="font-semibold text-zinc-500">v1.{group.template.versionMinor ?? 0}</span>
+                                </>
+                              )}
+                              {group.vars.length > 0 && (
+                                <>
+                                  <span className="text-zinc-300">·</span>
+                                  <span>{group.vars.length} variable{group.vars.length !== 1 ? "s" : ""}</span>
+                                  {group.orgVars.length > 0 && (
+                                    <><span className="text-zinc-300">·</span><span className="text-blue-500">{group.orgVars.length} empresa</span></>
+                                  )}
+                                  {group.autoVars.length > 0 && (
+                                    <><span className="text-zinc-300">·</span><span className="text-emerald-500">{group.autoVars.length} auto</span></>
+                                  )}
+                                </>
+                              )}
+                              <span className="text-zinc-300">·</span>
+                              <span>{group.contracts.length} {group.contracts.length === 1 ? "envío" : "envíos"}</span>
+                              {group.signedCount > 0 && (
+                                <><span className="text-zinc-300">·</span>
+                                <span className="text-emerald-600 font-semibold">{group.signedCount} firmado{group.signedCount > 1 ? "s" : ""}</span></>
+                              )}
+                              {group.pendingCount > 0 && (
+                                <><span className="text-zinc-300">·</span>
+                                <span className="text-amber-600 font-semibold">{group.pendingCount} pendiente{group.pendingCount > 1 ? "s" : ""}</span></>
+                              )}
+                              {group.rejectedCount > 0 && (
+                                <><span className="text-zinc-300">·</span>
+                                <span className="text-red-500 font-semibold">{group.rejectedCount} rechazado{group.rejectedCount > 1 ? "s" : ""}</span></>
+                              )}
+                              {group.template?.description && (
+                                <><span className="text-zinc-300">·</span><span>descripción</span></>
+                              )}
+                            </p>
                           </div>
                         </div>
                         <ChevronRight size={16} className={`shrink-0 text-zinc-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
@@ -1884,34 +2008,38 @@ export function AdminContractsPage() {
                                   {label}
                                 </span>
 
-                                {/* Acciones — íconos compactos, aparecen al hover */}
-                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                                {/* Acciones — siempre visibles */}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Ver auditoría — siempre visible, destacado */}
                                   <button type="button" onClick={() => setViewContract(c)}
                                     title="Ver auditoría"
-                                    className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
-                                    <Eye size={13} />
+                                    className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 transition">
+                                    <Eye size={12} /> Ver
                                   </button>
+                                  {/* Descargar PDF firmado */}
                                   {hasSignedPdf && (
                                     <button type="button"
                                       title={isPreparingPdf ? "Preparando PDF..." : "Descargar PDF firmado"}
                                       disabled={isPreparingPdf}
                                       onClick={(e) => { e.stopPropagation(); void openSignedPdf(c); }}
-                                      className="grid h-7 w-7 place-items-center rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 transition disabled:opacity-40">
+                                      className="grid h-7 w-7 place-items-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition disabled:opacity-40">
                                       <Download size={13} />
                                     </button>
                                   )}
+                                  {/* Enviar al tercero */}
                                   {c.status === "COMPLETED" && (
                                     <button type="button"
                                       title="Enviar al tercero"
                                       onClick={(e) => { e.stopPropagation(); setSendThirdParty(c); }}
-                                      className="grid h-7 w-7 place-items-center rounded-lg text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition">
+                                      className="grid h-7 w-7 place-items-center rounded-lg border border-blue-200 bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
                                       <Send size={13} />
                                     </button>
                                   )}
+                                  {/* Eliminar */}
                                   <button type="button"
-                                    title="Eliminar"
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteContract(c); }}
-                                    className="grid h-7 w-7 place-items-center rounded-lg text-zinc-300 hover:bg-red-50 hover:text-red-500 transition">
+                                    title="Eliminar contrato"
+                                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(c); }}
+                                    className="grid h-7 w-7 place-items-center rounded-lg text-zinc-300 hover:bg-red-50 hover:text-red-500 hover:border hover:border-red-200 transition">
                                     <Trash2 size={13} />
                                   </button>
                                 </div>
