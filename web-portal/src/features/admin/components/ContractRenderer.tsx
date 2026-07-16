@@ -3,7 +3,7 @@
  * Also includes ContractDetailView for viewing existing contracts.
  */
 
-import { Calendar, Check, Clock, FileText, Hash, Mail, Plus, Shield, Trash2, User, UserPlus, X } from "lucide-react";
+import { Calendar, Check, CheckCircle2, ChevronDown, Clock, FileText, Hash, Mail, Plus, Shield, ShieldCheck, Trash2, User, UserPlus, X } from "lucide-react";
 import { loadOrgCache } from "../../../shared/config/orgCache";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -11,7 +11,9 @@ import type { Contract, ContractDetail } from "../../../shared/types/contract";
 import {
   addContractSigner,
   getContractById,
+  getContractSignatureAudit,
   removeContractSigner,
+  type SignatureAuditRecord,
 } from "../../../shared/services/contracts.service";
 import { numberToWords, formatDateLong, addMonths } from "../../../shared/utils/contractTemplate";
 import type { AlumnoData } from "../../../shared/utils/contractTemplate";
@@ -20,8 +22,8 @@ import type { AlumnoData } from "../../../shared/utils/contractTemplate";
 
 function DocWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <div className="contract-doc-wrapper overflow-y-auto max-h-[58vh] rounded-2xl bg-white text-zinc-900 shadow-inner border border-zinc-200">
-      <div className="relative p-8 font-serif text-[13px] leading-7 space-y-4">
+    <div className="contract-doc-wrapper overflow-y-auto max-h-[75vh] rounded-2xl bg-white text-zinc-900 shadow-inner border border-zinc-200">
+      <div className="relative p-8 font-serif text-[14px] leading-[1.75] space-y-4">
         {children}
       </div>
     </div>
@@ -83,7 +85,7 @@ function DocSig({ label, name, sub, signatureUrl }: { label: string; name: strin
   );
 }
 
-function DocSigEmpty({ label, name, signatureUrl }: { label: string; name?: string; signatureUrl?: string | null }) {
+function DocSigEmpty({ label, name, sub, signatureUrl }: { label: string; name?: string; sub?: string; signatureUrl?: string | null }) {
   return (
     <div className="flex flex-col items-center text-center">
       <div className="flex items-end justify-center w-full" style={{ height: 80 }}>
@@ -100,9 +102,8 @@ function DocSigEmpty({ label, name, signatureUrl }: { label: string; name?: stri
       </div>
       <div className="border-t-2 border-zinc-300 pt-2.5 w-full">
         {name && <p className="font-bold text-xs uppercase font-sans tracking-wide text-zinc-700">{name}</p>}
-        <p className={`text-[11px] italic mt-0.5 ${signatureUrl ? "text-emerald-600" : "text-zinc-400"}`}>
-          {signatureUrl ? "Firmado electrónicamente" : label}
-        </p>
+        {sub && <p className="text-[11px] text-zinc-500 mt-0.5">{sub}</p>}
+        <p className="text-[11px] text-zinc-400 italic mt-0.5">{label}</p>
       </div>
     </div>
   );
@@ -110,22 +111,23 @@ function DocSigEmpty({ label, name, signatureUrl }: { label: string; name?: stri
 
 function DocSignatures({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border-t border-zinc-200 pt-8 mt-6 grid grid-cols-2 gap-10">
+    <div data-sig-block="true" className="border-t border-zinc-200 pt-8 mt-6 grid grid-cols-2 gap-10">
       {children}
     </div>
   );
 }
 
-function DocFooter() {
+function DocFooter({ orgName }: { orgName?: string }) {
+  const name = orgName || loadOrgCache()?.name || "Sistema Firma Electrónica";
   return (
     <p className="text-center text-[10px] text-zinc-400 border-t border-zinc-100 pt-3 mt-2 font-sans">
-      Generado por Sistema Firma Electrónica · Escencial Consultora S.A.S. · Ley N° 25.506 de Firma Digital
+      Generado por Sistema Firma Electrónica · {name} · Ley N° 25.506 de Firma Digital
     </p>
   );
 }
 
 function Hi({ children }: { children: React.ReactNode }) {
-  return <strong className="text-blue-700">{children}</strong>;
+  return <strong style={{ color: "var(--brand-primary)" }}>{children}</strong>;
 }
 
 // ─── Template renderers ───────────────────────────────────────────────────────
@@ -466,18 +468,19 @@ function ConvenioDoc({ f, alumnos }: { f: Record<string, string>; alumnos: Alumn
 
 // ─── Custom Template Renderer ─────────────────────────────────────────────────
 
-function CustomDoc({ f, alumno, logoHeader, logoWatermark, logoUrl }: {
+function CustomDoc({ f, alumno, logoHeader, logoWatermark, logoUrl, orgName }: {
   f: Record<string, string>;
   alumno: AlumnoData;
   logoHeader?: boolean;
   logoWatermark?: boolean;
   logoUrl?: string | null;
+  orgName?: string;
 }) {
   let content = f._templateContent || "Sin contenido.";
   Object.keys(f).forEach(key => {
     if (key !== "_templateContent" && key !== "_legalTitle") {
       const regex = new RegExp(`{{${key}}}`, "g");
-      content = content.replace(regex, f[key] ? `<strong class="text-blue-700">${f[key]}</strong>` : `{{${key}}}`);
+      content = content.replace(regex, f[key] ? `<strong style="color:var(--brand-primary)">${f[key]}</strong>` : `{{${key}}}`);
     }
   });
 
@@ -496,16 +499,26 @@ function CustomDoc({ f, alumno, logoHeader, logoWatermark, logoUrl }: {
         </div>
       )}
       <div className="relative z-10">
-        <DocTitle title={f._legalTitle || "Contrato"} subtitle="Escencial Consultora S.A.S." />
+        <DocTitle title={f._legalTitle || "Contrato"} />
         <div
           className="whitespace-pre-wrap font-serif text-[13px] leading-7"
           dangerouslySetInnerHTML={{ __html: content }}
         />
         <DocSignatures>
-          <DocSig label="Firma Autorizada" name={f.autoridad_nombre || "—"} sub={`CUIL/CUIT: ${f.autoridad_cuil || "—"}`} signatureUrl={f.autoridad_signature_url || undefined} />
-          <DocSigEmpty label="Firmante" name={alumno.nombre || undefined} signatureUrl={alumno.signatureUrl} />
+          <DocSig
+            label="Firma Representante Legal"
+            name={f.autoridad_nombre || "—"}
+            sub={f.autoridad_cuil ? `CUIL/CUIT: ${f.autoridad_cuil}` : ""}
+            signatureUrl={f.autoridad_signature_url || undefined}
+          />
+          <DocSigEmpty
+            label="Firma Destinatario"
+            name={alumno.nombre || undefined}
+            sub={alumno.cuil ? `CUIL/CUIT: ${alumno.cuil}` : alumno.dni ? `DNI: ${alumno.dni}` : undefined}
+            signatureUrl={alumno.signatureUrl}
+          />
         </DocSignatures>
-        <DocFooter />
+        <DocFooter orgName={orgName} />
       </div>
     </DocWrapper>
   );
@@ -519,19 +532,33 @@ export function ContractDocument({
   alumnos,
   logoHeader,
   logoWatermark,
+  logoUrl: logoUrlProp,
+  orgName: orgNameProp,
 }: {
   templateId: string;
   fields: Record<string, string>;
   alumnos: AlumnoData[];
   logoHeader?: boolean;
   logoWatermark?: boolean;
+  /** URL explícita del logo (prioridad sobre orgCache) */
+  logoUrl?: string | null;
+  /** Nombre de la org (prioridad sobre orgCache) */
+  orgName?: string | null;
 }) {
   const alumno = alumnos[0] ?? { nombre: "", dni: "", cuil: "", email: "", domicilio: "" };
-  const logoUrl = loadOrgCache()?.logoLightUrl ?? loadOrgCache()?.logoDarkUrl ?? null;
+  const cache = loadOrgCache();
+  // Prioridad: prop explícita → orgCache. Permite que el signing flow pase request.organizationLogo/Name.
+  const logoUrl = logoUrlProp ?? cache?.logoLightUrl ?? cache?.logoDarkUrl ?? null;
+  const orgName = orgNameProp ?? cache?.name ?? undefined;
 
   // If we have a custom template content saved in fields, render CustomDoc
+  // logoHeader/logoWatermark: props explícitas tienen prioridad, sino leemos de fields.
+  // Si el flag no está en fields (contrato enviado antes del fix), defaulteamos a true —
+  // solo se desactiva si está explícitamente guardado como "0".
   if (fields._templateContent) {
-    return <CustomDoc f={fields} alumno={alumno} logoHeader={logoHeader} logoWatermark={logoWatermark} logoUrl={logoUrl} />;
+    const effectiveLogoHeader    = logoHeader    ?? fields._logoHeader    !== "0";
+    const effectiveLogoWatermark = logoWatermark ?? fields._logoWatermark !== "0";
+    return <CustomDoc f={fields} alumno={alumno} logoHeader={effectiveLogoHeader} logoWatermark={effectiveLogoWatermark} logoUrl={logoUrl} orgName={orgName} />;
   }
 
   switch (templateId) {
@@ -573,6 +600,10 @@ export function ContractDetailModal({
   const [savingSigner, setSavingSigner] = useState(false);
   const [signerError, setSignerError] = useState("");
   const [addingSignerOpen, setAddingSignerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"contract" | "audit">("contract");
+  const [auditRecords, setAuditRecords] = useState<SignatureAuditRecord[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditLoaded, setAuditLoaded] = useState(false);
   const displayContract = detail ?? contract;
   const st = STATUS_LABELS[displayContract.status] ?? { label: displayContract.status, color: "text-zinc-400 bg-zinc-50 border-zinc-200" };
 
@@ -619,6 +650,25 @@ export function ContractDetailModal({
     } catch (err) {
       setSignerError(err instanceof Error ? err.message : "Error quitando firmante");
     }
+  }
+
+  async function handleSwitchToAudit() {
+    setActiveTab("audit");
+    if (!auditLoaded) {
+      setAuditLoading(true);
+      try {
+        const records = await getContractSignatureAudit(contract.id);
+        setAuditRecords(records);
+        setAuditLoaded(true);
+      } finally {
+        setAuditLoading(false);
+      }
+    }
+  }
+
+  function fmtAuditDate(iso: string | null) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   }
 
   const signersDone = displayContract.completedSigners;
@@ -817,82 +867,370 @@ export function ContractDetailModal({
               </div>
             </div>
 
-            {/* Hash SHA-256 */}
-            {displayContract.sha256Hash && (
-              <div className="rounded-2xl border border-zinc-200 bg-white p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Shield size={13} className="text-zinc-400" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Huella SHA-256</p>
-                </div>
-                <p className="font-mono text-[10px] text-zinc-500 break-all leading-relaxed bg-zinc-50 rounded-xl p-2.5 border border-zinc-100 selection:bg-blue-100">
-                  {displayContract.sha256Hash}
-                </p>
-                <p className="text-[10px] text-zinc-400 leading-relaxed">
-                  Garantiza la inmutabilidad y validez legal del documento (Ley 25.506).
-                </p>
-              </div>
-            )}
           </div>
 
-          {/* ── Panel derecho: documento ── */}
+          {/* ── Panel derecho: tabs ── */}
           <div className="flex min-h-0 flex-col overflow-hidden bg-zinc-50">
-            {/* Toolbar */}
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-5 py-2.5 shrink-0">
-              <div className="flex items-center gap-1.5 text-zinc-400">
-                <FileText size={12} />
-                <span className="text-[11px] font-mono">{displayContract.fileName || "documento"}</span>
+
+            {/* Toolbar con tabs */}
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-5 shrink-0">
+              {/* Tabs */}
+              <div className="flex items-stretch gap-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("contract")}
+                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold border-b-2 transition ${activeTab === "contract" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-700"}`}
+                >
+                  <FileText size={12} /> Contrato
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSwitchToAudit}
+                  className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold border-b-2 transition ${activeTab === "audit" ? "border-emerald-600 text-emerald-700" : "border-transparent text-zinc-400 hover:text-zinc-700"}`}
+                >
+                  <ShieldCheck size={12} /> Auditoría judicial
+                </button>
               </div>
-              {pdfUrl && (
+              {/* Botón PDF solo en tab contrato */}
+              {activeTab === "contract" && pdfUrl && (
                 <a
                   href={pdfUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 transition"
                 >
                   Abrir PDF
                 </a>
               )}
             </div>
 
-            {/* Contenido — scroll propio */}
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {pdfUrl ? (
-                <iframe
-                  src={pdfUrl}
-                  className="h-full w-full border-0"
-                  style={{ minHeight: "60vh" }}
-                  title="Vista previa del contrato"
-                />
-              ) : displayContract.templateId || displayContract.templateFields ? (
-                /* Override del DocWrapper para que no tenga su propio scroll */
-                <div className="[&_.contract-doc-wrapper]:max-h-none [&_.contract-doc-wrapper]:overflow-visible [&_.contract-doc-wrapper]:shadow-none [&_.contract-doc-wrapper]:border-0 [&_.contract-doc-wrapper]:rounded-none [&_.contract-doc-wrapper]:bg-transparent">
-                  <ContractDocument
-                    templateId={displayContract.templateId ?? "custom"}
-                    fields={displayContract.templateFields ?? {}}
-                    alumnos={detail?.signers?.map((s) => ({
-                      nombre: s.name ?? "",
-                      dni: "",
-                      cuil: "",
-                      email: s.email ?? "",
-                      domicilio: "",
-                      signatureUrl: s.signatureUrl ?? null,
-                    })) ?? []}
-                    logoHeader
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full gap-3 py-16 text-center">
-                  <div className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-6 space-y-3 mx-auto">
-                    <div className="h-2.5 bg-zinc-200 rounded-full w-3/4 mx-auto" />
-                    <div className="h-2 bg-zinc-100 rounded-full w-1/2 mx-auto mb-4" />
-                    <div className="h-2 bg-zinc-100 rounded-full w-full" />
-                    <div className="h-2 bg-zinc-100 rounded-full w-5/6" />
-                    <div className="h-2 bg-zinc-100 rounded-full w-4/6" />
+            {/* ── TAB: Contrato ── */}
+            {activeTab === "contract" && (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {(displayContract.templateId || displayContract.templateFields) ? (
+                  <div className="[&_.contract-doc-wrapper]:max-h-none [&_.contract-doc-wrapper]:overflow-visible [&_.contract-doc-wrapper]:shadow-none [&_.contract-doc-wrapper]:border-0 [&_.contract-doc-wrapper]:rounded-none [&_.contract-doc-wrapper]:bg-transparent">
+                    <ContractDocument
+                      templateId={displayContract.templateId ?? "custom"}
+                      fields={displayContract.templateFields ?? {}}
+                      alumnos={detail?.signers?.map((s) => ({
+                        nombre: s.name ?? "",
+                        dni: "",
+                        cuil: "",
+                        email: s.email ?? "",
+                        domicilio: "",
+                        signatureUrl: s.signatureUrl ?? null,
+                      })) ?? []}
+                      logoHeader
+                    />
                   </div>
-                  <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">Sin contenido disponible.</p>
-                </div>
-              )}
-            </div>
+                ) : pdfUrl ? (
+                  <iframe
+                    src={pdfUrl}
+                    className="h-full w-full border-0"
+                    style={{ minHeight: "60vh" }}
+                    title="Vista previa del contrato"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full gap-3 py-16 text-center">
+                    <div className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-6 space-y-3 mx-auto">
+                      <div className="h-2.5 bg-zinc-200 rounded-full w-3/4 mx-auto" />
+                      <div className="h-2 bg-zinc-100 rounded-full w-full" />
+                      <div className="h-2 bg-zinc-100 rounded-full w-5/6" />
+                    </div>
+                    <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">Sin contenido disponible.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── TAB: Auditoría judicial ── */}
+            {activeTab === "audit" && (
+              <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
+                {auditLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Encabezado de auditoría */}
+                    <div className="flex items-center gap-3 pb-2">
+                      <div className="h-9 w-9 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+                        <ShieldCheck size={16} className="text-emerald-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-900">Registro de Trazabilidad Judicial</h3>
+                        <p className="text-[11px] text-zinc-400">Válido como prueba bajo Ley N° 25.506 de Firma Digital</p>
+                      </div>
+                    </div>
+
+                    {/* ── Autoridad firmante (de template_fields) ── */}
+                    {displayContract.templateFields?.autoridad_nombre && (() => {
+                      const tf = displayContract.templateFields!;
+                      return (
+                        <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+                          <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 bg-zinc-50/60">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                              <CheckCircle2 size={15} className="text-blue-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-zinc-800">{tf.autoridad_nombre}</p>
+                              <p className="text-[10px] text-zinc-400">Firma Autorizada — Representante Legal</p>
+                            </div>
+                            <span className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700">
+                              Firmado
+                            </span>
+                          </div>
+                          <div className="p-5 space-y-4">
+                            {/* Datos identificatorios */}
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                              {tf.autoridad_cuil && (
+                                <>
+                                  <div>
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">CUIL/CUIT</p>
+                                    <p className="text-xs font-mono font-semibold text-zinc-800">{tf.autoridad_cuil}</p>
+                                  </div>
+                                </>
+                              )}
+                              {tf.jurisdiccion && (
+                                <div>
+                                  <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Ciudad / Jurisdicción</p>
+                                  <p className="text-xs text-zinc-800">{tf.jurisdiccion}</p>
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Fecha de firma</p>
+                                <p className="text-xs text-zinc-800">{fmtAuditDate(displayContract.createdAt)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Método</p>
+                                <p className="text-xs text-zinc-800">Firma pre-registrada</p>
+                              </div>
+                            </div>
+                            {/* Firma imagen */}
+                            {tf.autoridad_signature_url && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Firma manuscrita</p>
+                                <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 flex items-center justify-center" style={{ minHeight: 72 }}>
+                                  <img src={tf.autoridad_signature_url} alt="Firma autoridad" className="max-h-16 object-contain" />
+                                </div>
+                              </div>
+                            )}
+                            {/* Checklist */}
+                            <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-1.5">
+                              {[
+                                { label: "Firma pre-registrada en el sistema", ok: true },
+                                { label: "Identificación verificada", ok: !!tf.autoridad_cuil },
+                                { label: "Imagen de firma almacenada", ok: !!tf.autoridad_signature_url },
+                              ].map(({ label, ok }) => (
+                                <div key={label} className="flex items-center gap-2 text-[10px]">
+                                  <span className={`shrink-0 h-3.5 w-3.5 rounded-full flex items-center justify-center ${ok ? "bg-emerald-100 text-emerald-600" : "bg-zinc-200 text-zinc-400"}`}>
+                                    {ok ? <Check size={8} strokeWidth={3} /> : <span className="text-[8px]">·</span>}
+                                  </span>
+                                  <span className={ok ? "text-zinc-700" : "text-zinc-400"}>{label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* ── Firmantes (de signatures table) ── */}
+                    {auditRecords.length === 0 && !displayContract.templateFields?.autoridad_nombre && (
+                      <div className="text-center py-10 text-sm text-zinc-400">Sin registros de firma aún.</div>
+                    )}
+                    {auditRecords.map((rec) => (
+                      <div key={rec.signatureRequestId} className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-100 bg-zinc-50/60">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${rec.status === "SIGNED" ? "bg-emerald-100" : "bg-zinc-100"}`}>
+                            {rec.status === "SIGNED"
+                              ? <CheckCircle2 size={15} className="text-emerald-600" />
+                              : <span className="text-xs font-bold text-zinc-500">{(rec.signerName?.[0] ?? "?").toUpperCase()}</span>
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-zinc-800 truncate">{rec.signerName || rec.signerEmail}</p>
+                            <p className="text-[10px] text-zinc-400 truncate">{rec.signerEmail} · Firmante</p>
+                          </div>
+                          <span className={`shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-full border ${rec.status === "SIGNED" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                            {rec.status === "SIGNED" ? "Firmado" : "Pendiente"}
+                          </span>
+                        </div>
+                        <div className="p-5 space-y-4">
+                          {/* Sección: Identidad verificada por KYC */}
+                          {(rec.kycFullName || rec.kycDocumentNumber) && (
+                            <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-3">
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck size={12} className="text-blue-500 shrink-0" />
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-blue-500">Identidad verificada por DIDIT</p>
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                                {rec.kycFullName && (
+                                  <div className="col-span-2">
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Nombre completo (documento)</p>
+                                    <p className="text-xs font-semibold text-zinc-800">{rec.kycFullName}</p>
+                                  </div>
+                                )}
+                                {rec.kycDocumentType && (
+                                  <div>
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Tipo de documento</p>
+                                    <p className="text-xs text-zinc-800">{rec.kycDocumentType}</p>
+                                  </div>
+                                )}
+                                {rec.kycDocumentNumber && (
+                                  <div>
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">N° Documento</p>
+                                    <p className="text-xs font-mono font-semibold text-zinc-800">{rec.kycDocumentNumber}</p>
+                                  </div>
+                                )}
+                                {rec.kycBirthDate && (
+                                  <div>
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Fecha de nacimiento</p>
+                                    <p className="text-xs text-zinc-800">{rec.kycBirthDate}</p>
+                                  </div>
+                                )}
+                                {rec.kycAddress && (
+                                  <div className="col-span-2">
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Domicilio (documento)</p>
+                                    <p className="text-xs text-zinc-800">{rec.kycAddress}</p>
+                                  </div>
+                                )}
+                                {rec.kycFaceMatchScore !== null && (
+                                  <div>
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Score facial DIDIT</p>
+                                    <p className={`text-xs font-bold ${rec.kycFaceMatchScore >= 80 ? "text-emerald-600" : "text-amber-600"}`}>
+                                      {rec.kycFaceMatchScore.toFixed(1)}%
+                                    </p>
+                                  </div>
+                                )}
+                                {rec.kycLivenessScore !== null && (
+                                  <div>
+                                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Score vivacidad</p>
+                                    <p className={`text-xs font-bold ${rec.kycLivenessScore >= 80 ? "text-emerald-600" : "text-amber-600"}`}>
+                                      {rec.kycLivenessScore.toFixed(1)}%
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Selfie KYC */}
+                              {rec.kycSelfieUrl && (
+                                <div>
+                                  <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Selfie KYC</p>
+                                  <div className="flex justify-center">
+                                    <img
+                                      src={rec.kycSelfieUrl}
+                                      alt="Selfie KYC"
+                                      className="h-24 w-24 rounded-full object-cover border-2 border-blue-200"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Sección: Datos de la firma */}
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                            {rec.signerDni && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">DNI (sistema)</p>
+                                <p className="text-xs font-mono font-semibold text-zinc-800">{rec.signerDni}</p>
+                              </div>
+                            )}
+                            {rec.signerCuil && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">CUIL/CUIT</p>
+                                <p className="text-xs font-mono font-semibold text-zinc-800">{rec.signerCuil}</p>
+                              </div>
+                            )}
+                            {rec.signedAt && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Fecha y hora de firma</p>
+                                <p className="text-xs text-zinc-800">{fmtAuditDate(rec.signedAt)}</p>
+                              </div>
+                            )}
+                            {rec.sentAt && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Invitado</p>
+                                <p className="text-xs text-zinc-800">{fmtAuditDate(rec.sentAt)}</p>
+                              </div>
+                            )}
+                            {rec.ipAddress && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">IP de firma</p>
+                                <p className="text-xs font-mono text-zinc-800">{rec.ipAddress}</p>
+                              </div>
+                            )}
+                            {rec.conformityIp && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">IP de conformidad</p>
+                                <p className="text-xs font-mono text-zinc-800">{rec.conformityIp}</p>
+                              </div>
+                            )}
+                            {rec.conformityAcceptedAt && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">T&C aceptados</p>
+                                <p className="text-xs text-zinc-800">{fmtAuditDate(rec.conformityAcceptedAt)}</p>
+                              </div>
+                            )}
+                            {rec.faceSimilarityScore !== null && (
+                              <div>
+                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Similitud facial (firma)</p>
+                                <p className={`text-xs font-bold ${rec.faceSimilarityScore >= 80 ? "text-emerald-600" : "text-amber-600"}`}>
+                                  {rec.faceSimilarityScore.toFixed(1)}%
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Firma manuscrita */}
+                          {rec.signatureData && (
+                            <div>
+                              <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Firma manuscrita</p>
+                              <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 flex items-center justify-center" style={{ minHeight: 72 }}>
+                                <img src={rec.signatureData} alt="Firma" className="max-h-16 object-contain" />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Checklist de proceso */}
+                          <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-3 space-y-1.5">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Proceso de firma</p>
+                            {[
+                              { label: "Identidad verificada por KYC (DIDIT)", ok: !!rec.kycDocumentNumber },
+                              { label: "Términos y condiciones aceptados", ok: !!rec.conformityAcceptedAt },
+                              { label: "Verificación facial completada", ok: rec.faceSimilarityScore !== null },
+                              { label: "Firma manuscrita registrada", ok: !!rec.signatureData },
+                              { label: "Documento firmado electrónicamente", ok: rec.status === "SIGNED" },
+                            ].map(({ label, ok }) => (
+                              <div key={label} className="flex items-center gap-2 text-[11px]">
+                                <span className={`shrink-0 h-4 w-4 rounded-full flex items-center justify-center ${ok ? "bg-emerald-100 text-emerald-600" : "bg-zinc-200 text-zinc-400"}`}>
+                                  {ok ? <Check size={9} strokeWidth={3} /> : <span className="text-[8px]">·</span>}
+                                </span>
+                                <span className={ok ? "text-zinc-700" : "text-zinc-400"}>{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Sello de validez */}
+                    {displayContract.sha256Hash && (
+                      <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Shield size={13} className="text-zinc-400" />
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Huella digital del documento (SHA-256)</p>
+                        </div>
+                        <p className="font-mono text-[10px] text-zinc-500 break-all leading-relaxed bg-zinc-50 rounded-xl p-2.5 border border-zinc-100">
+                          {displayContract.sha256Hash}
+                        </p>
+                        <p className="text-[10px] text-zinc-400">Garantiza que el documento no fue alterado desde su firma.</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
         </div>

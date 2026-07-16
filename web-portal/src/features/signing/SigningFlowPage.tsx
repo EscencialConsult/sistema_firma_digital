@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Download,
   FileSignature,
   Hash,
@@ -22,6 +23,7 @@ import {
   acceptConformity,
   executeSignature,
   generatePerSignerSignedPdf,
+  getMySignatureDataForRequest,
   getSigningRequest,
   tryGenerateConsolidatedPdf,
   verifyFaceLocal,
@@ -29,6 +31,152 @@ import {
 import type { SignatureResult, SigningRequest } from "../../shared/types/signing";
 
 type StepIndex = 0 | 1 | 2 | 3;
+
+// ─── Shared: captura el .contract-doc-wrapper como PDF A4 ─────────────────────
+
+async function downloadContractAsPdf({
+  title,
+  signerName,
+  logoUrl,
+  orgName,
+}: {
+  title: string;
+  signerName: string;
+  logoUrl: string | null;
+  orgName: string;
+}): Promise<void> {
+  const wrapper = document.querySelector(".contract-doc-wrapper") as HTMLElement | null;
+  if (!wrapper) return;
+
+  const container = document.createElement("div");
+  container.style.cssText =
+    "position:fixed;left:-9999px;top:0;width:760px;background:white;padding:48px;box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#09090b;z-index:-1;";
+
+  const header = document.createElement("div");
+  header.style.cssText =
+    "display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;margin-bottom:24px;border-bottom:2px solid #18181b;";
+
+  if (logoUrl) {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.style.cssText = "height:36px;object-fit:contain;max-width:140px;";
+    img.src = logoUrl;
+    header.appendChild(img);
+    await new Promise<void>((res) => {
+      img.onload = () => res();
+      img.onerror = () => res();
+      setTimeout(res, 2000);
+    });
+  } else {
+    const nameEl = document.createElement("strong");
+    nameEl.textContent = orgName;
+    nameEl.style.fontSize = "15px";
+    header.appendChild(nameEl);
+  }
+
+  const metaEl = document.createElement("div");
+  metaEl.style.textAlign = "right";
+  metaEl.innerHTML = `<div style="font-size:11px;font-weight:600;color:#0a0a0a">${title}</div><div style="font-size:9px;color:#71717a;margin-top:2px">${orgName} · Ley 25.506</div>`;
+  header.appendChild(metaEl);
+  container.appendChild(header);
+
+  const clone = wrapper.cloneNode(true) as HTMLElement;
+  clone.style.cssText =
+    "max-height:none;overflow:visible;box-shadow:none;border:none;border-radius:0;background:white;";
+  container.appendChild(clone);
+
+  document.body.appendChild(container);
+  await new Promise((r) => setTimeout(r, 200));
+
+  const containerTop = container.getBoundingClientRect().top;
+  const blockEls = Array.from(container.querySelectorAll("p, h1, h2, h3, h4, h5, h6"));
+  const rawCandidates: number[] = [];
+  for (let i = 0; i < blockEls.length - 1; i++) {
+    const currBottom = (blockEls[i] as HTMLElement).getBoundingClientRect().bottom - containerTop;
+    const nextTop = (blockEls[i + 1] as HTMLElement).getBoundingClientRect().top - containerTop;
+    const gapMid = nextTop > currBottom ? (currBottom + nextTop) / 2 : currBottom + 2;
+    rawCandidates.push(Math.round(gapMid * 2));
+  }
+
+  // Proteger el bloque de firmas: forzar corte ANTES y nunca dentro
+  const sigBlock = container.querySelector("[data-sig-block]") as HTMLElement | null;
+  let sigTopPx = -1;
+  let sigBottomPx = -1;
+  if (sigBlock) {
+    const r = sigBlock.getBoundingClientRect();
+    sigTopPx = Math.round((r.top - containerTop) * 2) - 8;
+    sigBottomPx = Math.round((r.bottom - containerTop) * 2);
+    rawCandidates.push(sigTopPx);
+  }
+  const breakCandidates = rawCandidates
+    .filter((px) => sigTopPx < 0 || px <= sigTopPx || px >= sigBottomPx)
+    .sort((a, b) => a - b);
+
+  const html2canvas = (await import("html2canvas")).default;
+  const canvas = await html2canvas(container, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff",
+    logging: false,
+  });
+  document.body.removeChild(container);
+
+  const pageW_mm = 210;
+  const pageH_mm = 297;
+  const marginX = 15;   // mm izquierda y derecha
+  const marginY = 20;   // mm arriba y abajo (zona segura de impresora)
+  const contentW_mm = pageW_mm - marginX * 2;
+  const contentH_mm = pageH_mm - marginY * 2;
+  const cw = canvas.width;
+  const totalH_mm = (canvas.height * contentW_mm) / cw;
+  const pageH_px = Math.round(canvas.height * (contentH_mm / totalH_mm));
+
+  const breakPxs: number[] = [0];
+  let pos = 0;
+  while (pos + pageH_px < canvas.height) {
+    const target = pos + pageH_px;
+    const minBreak = pos + Math.round(pageH_px * 0.3);
+    let best = target;
+    for (let i = breakCandidates.length - 1; i >= 0; i--) {
+      if (breakCandidates[i] <= target && breakCandidates[i] >= minBreak) {
+        best = breakCandidates[i];
+        break;
+      }
+    }
+    breakPxs.push(best);
+    pos = best;
+  }
+  breakPxs.push(canvas.height);
+
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  for (let p = 0; p < breakPxs.length - 1; p++) {
+    if (p > 0) pdf.addPage();
+    const sy = breakPxs[p];
+    const ey = breakPxs[p + 1];
+    const sliceH_px = ey - sy;
+    const sliceH_mm = (sliceH_px * contentW_mm) / cw;
+    const sc = document.createElement("canvas");
+    sc.width = cw;
+    sc.height = sliceH_px;
+    const sCtx = sc.getContext("2d")!;
+    sCtx.fillStyle = "#fff";
+    sCtx.fillRect(0, 0, cw, sliceH_px);
+    sCtx.drawImage(canvas, 0, sy, cw, sliceH_px, 0, 0, cw, sliceH_px);
+    pdf.addImage(sc.toDataURL("image/jpeg", 0.92), "JPEG", marginX, marginY, contentW_mm, sliceH_mm);
+  }
+
+  const norm = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-zA-Z0-9\s]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+  pdf.save(`${norm(title)}_${norm(signerName)}.pdf`);
+}
 
 const STEPS = [
   "Conformidad legal",
@@ -54,120 +202,15 @@ function ConformityStep({
   async function handleDownloadPdf() {
     setDownloading(true);
     try {
-      const wrapper = document.querySelector('.contract-doc-wrapper') as HTMLElement | null;
-      if (!wrapper) return;
-
       const cached = loadOrgCache();
-      const orgName = cached?.name ?? 'Firma Electrónica';
-      const logoUrl = cached?.logoLightUrl ?? cached?.logoDarkUrl ?? null;
-
-      // Contenedor off-screen — position:fixed;top:0 para coordenadas simples sin corrección de scroll
-      const container = document.createElement('div');
-      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:760px;background:white;padding:48px;box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#09090b;z-index:-1;';
-
-      const header = document.createElement('div');
-      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;margin-bottom:24px;border-bottom:2px solid #18181b;';
-
-      if (logoUrl) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.style.cssText = 'height:36px;object-fit:contain;max-width:140px;';
-        img.src = logoUrl;
-        header.appendChild(img);
-        await new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res(); setTimeout(res, 2000); });
-      } else {
-        const nameEl = document.createElement('strong');
-        nameEl.textContent = orgName;
-        nameEl.style.fontSize = '15px';
-        header.appendChild(nameEl);
-      }
-
-      const metaEl = document.createElement('div');
-      metaEl.style.textAlign = 'right';
-      metaEl.innerHTML = `<div style="font-size:11px;font-weight:600;color:#0a0a0a">${request.documentTitle}</div><div style="font-size:9px;color:#71717a;margin-top:2px">Flujo de firma seguro · Ley 25.506</div>`;
-      header.appendChild(metaEl);
-      container.appendChild(header);
-
-      const clone = wrapper.cloneNode(true) as HTMLElement;
-      clone.style.cssText = 'max-height:none;overflow:visible;box-shadow:none;border:none;border-radius:0;background:white;';
-      container.appendChild(clone);
-
-      document.body.appendChild(container);
-      await new Promise(r => setTimeout(r, 200));
-
-      // Usar midpoints de los ESPACIOS entre párrafos como candidatos de corte.
-      // getBoundingClientRect en position:fixed;top:0 → coordenadas directas, sin corrección de scroll.
-      // Solo p/h* para evitar capturar divs contenedores que abarcan múltiples párrafos.
-      const containerTop = container.getBoundingClientRect().top; // = 0 para fixed;top:0
-      const blockEls = Array.from(container.querySelectorAll('p, h1, h2, h3, h4, h5, h6'));
-      const breakCandidates: number[] = [];
-      for (let i = 0; i < blockEls.length - 1; i++) {
-        const currBottom = (blockEls[i] as HTMLElement).getBoundingClientRect().bottom - containerTop;
-        const nextTop    = (blockEls[i + 1] as HTMLElement).getBoundingClientRect().top - containerTop;
-        // Midpoint del espacio en blanco entre dos elementos = corte garantizado en whitespace
-        const gapMid = nextTop > currBottom
-          ? (currBottom + nextTop) / 2
-          : currBottom + 2; // si no hay gap, dos px después del bottom
-        breakCandidates.push(Math.round(gapMid * 2)); // ×2 por scale:2
-      }
-
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
+      await downloadContractAsPdf({
+        title:     request.documentTitle,
+        signerName: request.signerName,
+        logoUrl:   request.organizationLogo ?? cached?.logoLightUrl ?? cached?.logoDarkUrl ?? null,
+        orgName:   request.organizationName ?? cached?.name ?? "Firma Electrónica",
       });
-      document.body.removeChild(container);
-
-      const pageW_mm = 210;
-      const pageH_mm = 297;
-      const totalH_mm = (canvas.height * pageW_mm) / canvas.width;
-      const pageH_px = Math.round(canvas.height * (pageH_mm / totalH_mm));
-      const cw = canvas.width;
-
-      // Elegir el candidato de corte más cercano al límite de cada página
-      const breakPxs: number[] = [0];
-      let pos = 0;
-      while (pos + pageH_px < canvas.height) {
-        const target = pos + pageH_px;
-        const minBreak = pos + Math.round(pageH_px * 0.3);
-        let best = target; // fallback: corte exacto a 297mm
-        for (let i = breakCandidates.length - 1; i >= 0; i--) {
-          if (breakCandidates[i] <= target && breakCandidates[i] >= minBreak) {
-            best = breakCandidates[i];
-            break;
-          }
-        }
-        breakPxs.push(best);
-        pos = best;
-      }
-      breakPxs.push(canvas.height);
-
-      const { jsPDF } = await import('jspdf');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-      for (let p = 0; p < breakPxs.length - 1; p++) {
-        if (p > 0) pdf.addPage();
-        const sy = breakPxs[p];
-        const ey = breakPxs[p + 1];
-        const sliceH_px = ey - sy;
-        const sliceH_mm = (sliceH_px * pageW_mm) / cw;
-        const sc = document.createElement('canvas');
-        sc.width = cw;
-        sc.height = sliceH_px;
-        const sCtx = sc.getContext('2d')!;
-        sCtx.fillStyle = '#fff';
-        sCtx.fillRect(0, 0, cw, sliceH_px);
-        sCtx.drawImage(canvas, 0, sy, cw, sliceH_px, 0, 0, cw, sliceH_px);
-        pdf.addImage(sc.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageW_mm, sliceH_mm);
-      }
-
-      const norm = (s: string) =>
-        s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '-').toLowerCase();
-      pdf.save(`${norm(request.documentTitle)}_${norm(request.signerName)}.pdf`);
     } catch (err) {
-      console.error('Error generando PDF:', err);
+      console.error("Error generando PDF:", err);
     } finally {
       setDownloading(false);
     }
@@ -213,10 +256,12 @@ function ConformityStep({
 
         {/* Contract content — rendered from template or placeholder */}
         {request.templateId && request.templateFields ? (
-          <div className="p-3">
+          <div className="[&_.contract-doc-wrapper]:max-h-[72vh] [&_.contract-doc-wrapper]:rounded-none [&_.contract-doc-wrapper]:border-0 [&_.contract-doc-wrapper]:shadow-none [&_.contract-doc-wrapper]:bg-white [&_.contract-doc-wrapper]:text-[14px] [&_.contract-doc-wrapper]:leading-7">
             <ContractDocument
               templateId={request.templateId}
               fields={request.templateFields}
+              logoUrl={request.organizationLogo}
+              orgName={request.organizationName}
               alumnos={[
                 {
                   nombre:    request.templateFields.nombre_firmante || request.signerName,
@@ -298,7 +343,7 @@ function FaceVerificationStep({
   didFail,
 }: {
   requestId: string;
-  onVerified: () => void;
+  onVerified: (similarity: number) => void;
   didFail?: boolean;
 }) {
   const [cameraActive, setCameraActive] = useState(false);
@@ -378,7 +423,7 @@ function FaceVerificationStep({
       const base64 = capturedPhoto.split(",")[1];
       const res = await verifyFaceLocal(requestId, base64);
       if (res.verified) {
-        onVerified();
+        onVerified(res.similarity ?? 100);
       } else {
         setError(`Verificación fallida (${res.similarity}% de similitud). Asegurate de estar bien iluminado y de frente a la cámara.`);
         retake();
@@ -639,52 +684,296 @@ function SignaturePadStep({ onConfirm }: { onConfirm: (dataUrl: string) => void 
   );
 }
 
+// ─── Audit helpers ────────────────────────────────────────────────────────────
+
+function AuditRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-xs">
+      <span className="w-28 shrink-0 text-zinc-400">{label}</span>
+      <span className="break-all text-right font-medium text-zinc-800">{value}</span>
+    </div>
+  );
+}
+
+function AuditPartyCard({
+  role, badgeClass, rows, signatureUrl, note,
+}: {
+  role: string;
+  badgeClass: string;
+  rows: { label: string; value: string }[];
+  signatureUrl?: string | null;
+  note?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${badgeClass}`}>
+          {role}
+        </span>
+        {note && <span className="text-[11px] text-zinc-400">{note}</span>}
+      </div>
+      <div className="flex gap-4 rounded-xl border border-zinc-100 bg-zinc-50 p-4">
+        <div className="flex-1 space-y-2">
+          {rows.map(({ label, value }) => (
+            <AuditRow key={label} label={label} value={value} />
+          ))}
+        </div>
+        {signatureUrl && (
+          <div className="flex w-28 shrink-0 flex-col items-center justify-end gap-1">
+            <img src={signatureUrl} alt="Firma" className="max-h-14 max-w-full object-contain" />
+            <div className="w-full border-t border-zinc-300" />
+            <p className="text-center text-[9px] text-zinc-400">Firma registrada</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DownloadContractButton({ request }: { request: SigningRequest }) {
+  const [downloading, setDownloading] = useState(false);
+  const cached = loadOrgCache();
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      await downloadContractAsPdf({
+        title:     request.documentTitle,
+        signerName: request.signerName,
+        logoUrl:   request.organizationLogo ?? cached?.logoLightUrl ?? cached?.logoDarkUrl ?? null,
+        orgName:   request.organizationName ?? cached?.name ?? "Firma Electrónica",
+      });
+    } catch (err) {
+      console.error("Error generando PDF:", err);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={downloading}
+      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 hover:border-zinc-300 transition disabled:opacity-50"
+    >
+      {downloading ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+      {downloading ? "Generando..." : "Descargar PDF"}
+    </button>
+  );
+}
+
+function SignedContractAudit({
+  request,
+  signatureData,
+  ipAddress,
+  faceSimilarity,
+  signedAt,
+  documentHash,
+}: {
+  request: SigningRequest;
+  signatureData: string | null;
+  ipAddress: string | null;
+  faceSimilarity: number | null;
+  signedAt: string | null;
+  documentHash?: string | null;
+}) {
+  const [auditOpen, setAuditOpen] = useState(false);
+  const fields      = request.templateFields ?? {};
+  const autorNombre = fields.autoridad_nombre ?? "";
+  const autorCuil   = fields.autoridad_cuil   ?? "";
+  const autorEmail  = fields.autoridad_email  ?? "";
+  const autorSigUrl = fields.autoridad_signature_url ?? "";
+  const ts          = signedAt ?? request.signedAt;
+
+  return (
+    <div className="space-y-5">
+      {/* Contrato con ambas firmas */}
+      {request.templateId && (
+        <div className="overflow-hidden rounded-2xl border border-zinc-200">
+          <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-5 py-3">
+            <div className="flex items-center gap-2">
+              <FileSignature size={15} className="text-zinc-400" />
+              <p className="max-w-xs truncate text-sm font-semibold text-zinc-900">
+                {request.documentTitle}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <DownloadContractButton request={request} />
+              <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                FIRMADO
+              </span>
+            </div>
+          </div>
+          <div className="bg-zinc-50 p-3">
+            <ContractDocument
+              templateId={request.templateId}
+              fields={fields}
+              logoUrl={request.organizationLogo}
+              orgName={request.organizationName}
+              alumnos={[
+                {
+                  nombre:       fields.nombre_firmante    || request.signerName,
+                  email:        fields.email_firmante     || request.signerEmail,
+                  dni:          fields.dni_firmante       || "",
+                  cuil:         fields.cuil_firmante      || "",
+                  domicilio:    fields.domicilio_firmante || "",
+                  signatureUrl: signatureData,
+                },
+                {
+                  nombre:    fields.nombre_firmante_2    || "",
+                  email:     fields.email_firmante_2     || "",
+                  dni:       fields.dni_firmante_2       || "",
+                  cuil:      fields.cuil_firmante_2      || "",
+                  domicilio: fields.domicilio_firmante_2 || "",
+                },
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Panel de auditoría colapsable */}
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+        <button
+          type="button"
+          onClick={() => setAuditOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-5 py-4 transition hover:bg-zinc-50"
+        >
+          <div className="flex items-center gap-2">
+            <Shield size={15} className="text-zinc-500" />
+            <span className="text-sm font-bold text-zinc-900">Registro de auditoría</span>
+          </div>
+          <ChevronDown
+            size={15}
+            className={`text-zinc-400 transition-transform ${auditOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {auditOpen && (
+          <div className="space-y-5 border-t border-zinc-100 px-5 pb-5 pt-4">
+            {/* Autoridad firmante */}
+            {autorNombre && (
+              <AuditPartyCard
+                role="Autoridad Firmante"
+                badgeClass="bg-blue-50 text-blue-700"
+                note="Representante legal de la organización"
+                signatureUrl={autorSigUrl || null}
+                rows={[
+                  { label: "Nombre",    value: autorNombre },
+                  ...(autorCuil  ? [{ label: "CUIL/CUIT", value: autorCuil  }] : []),
+                  ...(autorEmail ? [{ label: "Email",      value: autorEmail }] : []),
+                  { label: "Rol",       value: "Firma Autorizada" },
+                ]}
+              />
+            )}
+
+            <div className="border-t border-zinc-100" />
+
+            {/* Firmante */}
+            <AuditPartyCard
+              role="Firmante"
+              badgeClass="bg-emerald-50 text-emerald-700"
+              signatureUrl={signatureData}
+              rows={[
+                { label: "Nombre",          value: request.signerName },
+                { label: "Email",           value: request.signerEmail },
+                ...(fields.cuil_firmante     ? [{ label: "CUIL/CUIT",      value: fields.cuil_firmante }]     : []),
+                ...(fields.dni_firmante      ? [{ label: "DNI",             value: fields.dni_firmante }]      : []),
+                ...(fields.domicilio_firmante ? [{ label: "Domicilio",       value: fields.domicilio_firmante }] : []),
+                { label: "IP registrada",   value: ipAddress || "—" },
+                { label: "Fecha y hora",    value: ts ? new Date(ts).toLocaleString("es-AR") : "—" },
+                ...(faceSimilarity !== null ? [{ label: "Similitud facial", value: `${faceSimilarity}%` }] : []),
+              ]}
+            />
+
+            <div className="border-t border-zinc-100" />
+
+            {/* Proceso de firma */}
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                Proceso de firma verificado
+              </p>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {[
+                  "Conformidad legal aceptada",
+                  "Verificación facial completada",
+                  "OTP de identidad validado",
+                  "Firma manuscrita digital registrada",
+                ].map((item) => (
+                  <div key={item} className="flex items-center gap-1.5 text-xs text-zinc-600">
+                    <CheckCircle2 size={12} className="shrink-0 text-emerald-500" />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Hash */}
+            <div className="space-y-1.5 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+              <AuditRow
+                label="Hash (SHA-256)"
+                value={<span className="break-all font-mono text-[10px]">{request.sha256Hash || documentHash || "—"}</span>}
+              />
+            </div>
+
+            {/* Validez */}
+            <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-600" />
+              <div>
+                <p className="text-xs font-bold text-emerald-800">Firma Electrónica Válida</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-700">
+                  Proceso realizado conforme a la Ley N° 25.506 de Firma Digital de la República Argentina.
+                  Método: OTP + Reconocimiento facial + Firma manuscrita digital.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Step 3: Success ──────────────────────────────────────────────────────────
 
-function SuccessStep({ result }: { result: SignatureResult }) {
+function SuccessStep({
+  result,
+  request,
+  signatureData,
+  faceSimilarity,
+}: {
+  result: SignatureResult;
+  request: SigningRequest;
+  signatureData: string;
+  faceSimilarity: number | null;
+}) {
   return (
-    <div className="space-y-6 text-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="grid h-20 w-20 place-items-center rounded-full" style={{ background: "var(--brand-primary-soft)" }}>
-          <CheckCircle2 size={40} style={{ color: "var(--brand-primary)" }} />
+    <div className="space-y-5">
+      {/* Banner de éxito */}
+      <div className="flex items-center gap-3 rounded-2xl p-4" style={{ background: "var(--brand-primary-soft)" }}>
+        <div
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+          style={{ background: "var(--brand-primary)" }}
+        >
+          <CheckCircle2 size={20} style={{ color: "var(--brand-primary-text)" }} />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-zinc-950">¡Documento firmado!</h2>
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="font-bold text-zinc-900">¡Documento firmado!</p>
+          <p className="text-xs text-zinc-500">
             Tu firma quedó registrada con validez legal. Recibirás una copia por email.
           </p>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-left space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">Registro de firma</p>
-        <div className="space-y-2 text-sm">
-          {[
-            { label: "Firmante",        value: result.signerName },
-            { label: "Email",           value: result.signerEmail },
-            { label: "IP registrada",   value: result.ipAddress },
-            { label: "Fecha y hora",    value: new Date(result.signedAt).toLocaleString("es-AR") },
-            {
-              label: "Hash documento",
-              value: <span className="font-mono text-[11px] text-zinc-500">{result.documentHash.slice(0, 32)}...</span>,
-            },
-            {
-              label: "ID de firma",
-              value: <span className="font-mono text-[11px] text-zinc-500">{result.signatureId}</span>,
-            },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-baseline justify-between gap-4">
-              <span className="shrink-0 text-xs text-zinc-400">{label}</span>
-              <span className="font-medium text-zinc-900 text-right">{value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-center gap-2 rounded-xl border p-3 text-xs font-semibold" style={{ borderColor: "var(--brand-primary-soft)", background: "var(--brand-primary-soft)", color: "var(--brand-primary)" }}>
-        <ShieldCheck size={14} />
-        Firma verificada · OTP + Reconocimiento facial + Firma manuscrita
-      </div>
+      <SignedContractAudit
+        request={request}
+        signatureData={signatureData}
+        ipAddress={result.ipAddress}
+        faceSimilarity={faceSimilarity}
+        signedAt={result.signedAt}
+        documentHash={result.documentHash}
+      />
 
       <Link to="/dashboard">
         <Button className="h-11 w-full" variant="secondary">
@@ -701,19 +990,33 @@ export function SigningFlowPage() {
   const { id }       = useParams<{ id: string }>();
   const navigate     = useNavigate();
   const location     = useLocation();
-  const [request, setRequest]         = useState<SigningRequest | null>(null);
-  const [result, setResult]           = useState<SignatureResult | null>(null);
-  const [step, setStep]               = useState<StepIndex>(0);
-  const [loading, setLoading]         = useState(false);
-  const [initLoading, setInitLoading] = useState(true);
-  const [error, setError]             = useState<string | null>(null);
-  const [faceDidFail, setFaceDidFail] = useState(false);
+  const [request, setRequest]           = useState<SigningRequest | null>(null);
+  const [result, setResult]             = useState<SignatureResult | null>(null);
+  const [step, setStep]                 = useState<StepIndex>(0);
+  const [loading, setLoading]           = useState(false);
+  const [initLoading, setInitLoading]   = useState(true);
+  const [error, setError]               = useState<string | null>(null);
+  const [faceDidFail, setFaceDidFail]   = useState(false);
+  const [faceSimilarity, setFaceSimilarity] = useState<number | null>(null);
+  const [signatureData, setSignatureData]   = useState<string | null>(null);
+  // For the "already signed" view — load stored signature from DB
+  const [storedSigData, setStoredSigData] = useState<{
+    signatureData: string | null;
+    ipAddress: string | null;
+    faceSimilarityScore: number | null;
+    signedAt: string | null;
+    documentHash: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!id) return;
     getSigningRequest(id).then((r) => {
       setRequest(r);
       setInitLoading(false);
+      // Load stored signature when coming back to a signed contract
+      if (r?.status === "SIGNED") {
+        getMySignatureDataForRequest(r.id).then(setStoredSigData);
+      }
 
       // Detectar retorno desde DIDIT face verification
       const params = new URLSearchParams(location.search);
@@ -750,7 +1053,8 @@ export function SigningFlowPage() {
   }
 
   // Step 1 → 2: facial verificado → pad de firma
-  function handleFaceVerified() {
+  function handleFaceVerified(similarity: number) {
+    setFaceSimilarity(similarity);
     setStep(2);
   }
 
@@ -760,10 +1064,12 @@ export function SigningFlowPage() {
     setLoading(true); setError(null);
     try {
       const sig = await executeSignature(request.id, {
-        userAgent:     navigator.userAgent,
-        signedAt:      new Date().toISOString(),
-        signatureData: signatureDataUrl,
+        userAgent:           navigator.userAgent,
+        signedAt:            new Date().toISOString(),
+        signatureData:       signatureDataUrl,
+        faceSimilarityScore: faceSimilarity,
       });
+      setSignatureData(signatureDataUrl);
       // Generar PDF con firma visual inmediata (no bloquea el flujo)
       generatePerSignerSignedPdf(request.documentId).catch(() => {});
       // Intentar generar PDF consolidado si el documento quedó COMPLETED
@@ -799,13 +1105,53 @@ export function SigningFlowPage() {
   }
 
   if (request.status === "SIGNED") {
+    const stored = storedSigData;
     return (
-      <div className="grid min-h-screen place-items-center bg-zinc-50 p-4">
-        <div className="w-full max-w-md text-center space-y-4">
-          <CheckCircle2 size={48} className="text-emerald-500 mx-auto" />
-          <p className="text-xl font-bold text-zinc-950">Ya firmaste este documento</p>
-          <Link to="/dashboard"><Button variant="secondary">Volver al dashboard</Button></Link>
-        </div>
+      <div className="min-h-screen" style={{ backgroundColor: "var(--color-bg-primary)" }}>
+        <header className="border-b px-4 py-4" style={{ background: "var(--brand-bg)", color: "var(--brand-bg-text)", borderBottomColor: "var(--brand-primary)" }}>
+          <div className="mx-auto flex max-w-4xl items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link to="/dashboard" className="grid h-9 w-9 place-items-center rounded-xl transition" style={{ border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)" }}>
+                <ArrowLeft size={16} />
+              </Link>
+              <div>
+                <p className="max-w-[200px] truncate text-sm font-bold sm:max-w-xs">{request.documentTitle}</p>
+                <p className="text-[11px] opacity-60">Documento firmado</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-90">
+              <CheckCircle2 size={14} /> Firmado
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto max-w-4xl px-4 py-8 space-y-5">
+          <div className="flex items-center gap-3 rounded-2xl p-4" style={{ background: "var(--brand-primary-soft)" }}>
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: "var(--brand-primary)" }}>
+              <CheckCircle2 size={20} style={{ color: "var(--brand-primary-text)" }} />
+            </div>
+            <div>
+              <p className="font-bold text-zinc-900">Contrato firmado</p>
+              <p className="text-xs text-zinc-500">
+                {stored?.signedAt
+                  ? `Firmado el ${new Date(stored.signedAt).toLocaleString("es-AR")}`
+                  : "Tu firma quedó registrada correctamente."}
+              </p>
+            </div>
+          </div>
+          <SignedContractAudit
+            request={request}
+            signatureData={stored?.signatureData ?? null}
+            ipAddress={stored?.ipAddress ?? null}
+            faceSimilarity={stored?.faceSimilarityScore ?? null}
+            signedAt={stored?.signedAt ?? null}
+            documentHash={stored?.documentHash ?? null}
+          />
+          <Link to="/dashboard">
+            <Button className="h-11 w-full" variant="secondary">
+              Volver al dashboard
+            </Button>
+          </Link>
+        </main>
       </div>
     );
   }
@@ -900,7 +1246,7 @@ export function SigningFlowPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className={`mx-auto px-4 py-8 ${step === 0 || step === 3 ? "max-w-4xl" : "max-w-2xl"}`}>
         <div className="no-print mb-8">
           <Stepper steps={STEPS} current={step} />
         </div>
@@ -926,7 +1272,12 @@ export function SigningFlowPage() {
             <SignaturePadStep onConfirm={handleSignatureConfirmed} />
           )}
           {step === 3 && result && (
-            <SuccessStep result={result} />
+            <SuccessStep
+              result={result}
+              request={request}
+              signatureData={signatureData ?? ""}
+              faceSimilarity={faceSimilarity}
+            />
           )}
         </div>
       </main>

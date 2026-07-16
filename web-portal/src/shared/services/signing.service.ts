@@ -138,19 +138,21 @@ export async function executeSignature(
   const { data: sig, error: sigError } = await supabase
     .from("signatures")
     .insert({
-      signature_request_id: requestId,
-      document_id:          request.documentId,
-      document_version_id:  request.documentVersionId,
-      user_id:              user?.id ?? null,
-      signer_email:         request.signerEmail,
-      signer_name:          request.signerName,
-      document_hash:        request.sha256Hash || `manual-signature:${requestId}:${signedAt}`,
-      ip_address:           clientIp,
-      user_agent:           navigator.userAgent,
-      signed_at:            signedAt,
-      signature_method:     "CANVAS",
-      signature_data:       (metadata.signatureData as string) ?? null,
-      metadata:             { signatureType: "CANVAS", faceVerified: true },
+      signature_request_id:     requestId,
+      document_id:              request.documentId,
+      document_version_id:      request.documentVersionId,
+      user_id:                  user?.id ?? null,
+      signer_email:             request.signerEmail,
+      signer_name:              request.signerName,
+      document_hash:            request.sha256Hash || `manual-signature:${requestId}:${signedAt}`,
+      ip_address:               clientIp,
+      user_agent:               navigator.userAgent,
+      signed_at:                signedAt,
+      signature_method:         "CANVAS",
+      signature_data:           (metadata.signatureData as string) ?? null,
+      face_similarity_score:    (metadata.faceSimilarityScore as number) ?? null,
+      face_verification_method: "LOCAL_WEBCAM",
+      metadata:                 { signatureType: "CANVAS", faceVerified: true },
     })
     .select()
     .single();
@@ -474,6 +476,22 @@ export async function generatePerSignerSignedPdf(documentId: string): Promise<st
     console.warn("[pdf] Error generando PDF con firmas inmediatas:", err);
     return null;
   }
+}
+
+/** Fetch the stored signature image for a completed request (used in the "already signed" view) */
+export async function getMySignatureDataForRequest(requestId: string): Promise<{ signatureData: string | null; ipAddress: string | null; faceSimilarityScore: number | null; signedAt: string | null; documentHash: string | null }> {
+  const { data } = await supabase
+    .from("signatures")
+    .select("signature_data, ip_address, face_similarity_score, signed_at, document_hash")
+    .eq("signature_request_id", requestId)
+    .maybeSingle();
+  return {
+    signatureData:      (data?.signature_data as string) ?? null,
+    ipAddress:          (data?.ip_address as string) ?? null,
+    faceSimilarityScore:(data?.face_similarity_score as number) ?? null,
+    signedAt:           (data?.signed_at as string) ?? null,
+    documentHash:       (data?.document_hash as string) ?? null,
+  };
 }
 
 /** Reject a signing request */

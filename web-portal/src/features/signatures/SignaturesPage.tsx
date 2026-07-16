@@ -328,20 +328,33 @@ function ContractCard({
             </Button>
           ) : r.status === "SIGNED" ? (
             <>
-              <Button
-                variant="secondary"
-                className="h-9 px-4 text-xs"
-                disabled={refreshingPdf}
-                onClick={async () => {
-                  const blob = await generateConsolidatedPdfBlob(r.documentId);
-                  if (blob) downloadBlob(blob, signedPdfFileName({ title: r.documentTitle, fileName: r.fileName, sequence: r.versionNumber }));
-                }}
-              >
-                <Download size={13} /> Descargar
-              </Button>
-              <Button onClick={openDocument} disabled={refreshingPdf} className="h-9 px-4 text-xs">
-                <Eye size={13} /> {refreshingPdf ? "Preparando..." : "Ver PDF"}
-              </Button>
+              {r.templateId ? (
+                /* Contrato de plantilla: el PDF correcto se descarga desde la vista renderizada */
+                <Button
+                  className="h-9 px-4 text-xs"
+                  onClick={() => navigate(`/signing/${r.id}`)}
+                >
+                  <FileSignature size={13} /> Ver y descargar contrato
+                </Button>
+              ) : (
+                /* Contrato por PDF subido: descargar el archivo */
+                <>
+                  <Button
+                    variant="secondary"
+                    className="h-9 px-4 text-xs"
+                    disabled={refreshingPdf}
+                    onClick={async () => {
+                      const blob = await generateConsolidatedPdfBlob(r.documentId);
+                      if (blob) downloadBlob(blob, signedPdfFileName({ title: r.documentTitle, fileName: r.fileName, sequence: r.versionNumber }));
+                    }}
+                  >
+                    <Download size={13} /> Descargar
+                  </Button>
+                  <Button onClick={openDocument} disabled={refreshingPdf} className="h-9 px-4 text-xs">
+                    <Eye size={13} /> {refreshingPdf ? "Preparando..." : "Ver PDF"}
+                  </Button>
+                </>
+              )}
             </>
           ) : (
             <Button variant="secondary" onClick={() => navigate(`/signing/${r.id}`)} className="h-9 px-4 text-xs">
