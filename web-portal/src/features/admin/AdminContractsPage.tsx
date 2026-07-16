@@ -1104,6 +1104,8 @@ export function AdminContractsPage() {
   const [labelFilter, setLabelFilter] = useState("");
   const [labelSearch, setLabelSearch] = useState("");
   const [showLabelSuggestions, setShowLabelSuggestions] = useState(false);
+  const [tplSearch, setTplSearch] = useState("");
+  const [showLabelDropdown, setShowLabelDropdown] = useState(false);
   const [tplSignaturePosition, setTplSignaturePosition] = useState<SignaturePosition>(DEFAULT_SIGNATURE_POSITION);
   const [savingTpl, setSavingTpl] = useState(false);
 
@@ -1690,48 +1692,77 @@ export function AdminContractsPage() {
 
         {activeTab === "templates" && (() => {
           const allLabels = [...new Set(dbTemplates.map((t) => t.label).filter(Boolean))];
-          const visibleLabels = labelSearch
-            ? allLabels.filter((l) => l.toLowerCase().includes(labelSearch.toLowerCase()))
-            : allLabels;
-          const tplFiltered = labelFilter
-            ? dbTemplates.filter((t) => t.label === labelFilter)
-            : dbTemplates;
+          const tplFiltered = dbTemplates.filter((t) => {
+            const matchesLabel = !labelFilter || t.label === labelFilter;
+            const matchesSearch = !tplSearch || t.name.toLowerCase().includes(tplSearch.toLowerCase());
+            return matchesLabel && matchesSearch;
+          });
           return (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-zinc-500">{dbTemplates.length} plantilla{dbTemplates.length !== 1 ? "s" : ""}</p>
-                <Button onClick={openNewTemplate} className="h-9 px-4 shrink-0 text-xs">
-                  <Plus size={13} /> Nueva plantilla
-                </Button>
-              </div>
-
-              {/* Filtros de etiquetas */}
-              {allLabels.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
+              {/* Toolbar: búsqueda + etiquetas + nueva */}
+              <div className="flex items-center gap-2">
+                {/* Búsqueda por nombre */}
+                <div className="flex flex-1 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3.5 py-2 focus-within:border-zinc-300 transition">
+                  <Search size={13} className="shrink-0 text-zinc-400" />
                   <input
-                    value={labelSearch}
-                    onChange={(e) => setLabelSearch(e.target.value)}
-                    placeholder="Buscar etiqueta..."
-                    className="h-7 w-36 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-[11px] text-zinc-700 placeholder:text-zinc-400 outline-none focus:border-zinc-400 transition"
+                    className="w-full bg-transparent text-sm text-zinc-700 outline-none placeholder:text-zinc-400"
+                    placeholder="Buscar plantilla..."
+                    value={tplSearch}
+                    onChange={(e) => setTplSearch(e.target.value)}
                   />
-                  {labelFilter && (
-                    <button type="button" onClick={() => setLabelFilter("")}
-                      className="h-7 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-[11px] text-zinc-500 hover:bg-zinc-100 transition">
-                      × Limpiar
+                  {tplSearch && (
+                    <button type="button" onClick={() => setTplSearch("")} className="text-zinc-400 hover:text-zinc-700 transition">
+                      <X size={12} />
                     </button>
                   )}
-                  {visibleLabels.map((l) => (
-                    <button key={l} type="button" onClick={() => setLabelFilter(l === labelFilter ? "" : l)}
-                      className={`h-7 rounded-full border px-3 text-[11px] font-semibold uppercase tracking-wide transition ${
-                        l === labelFilter
-                          ? "border-zinc-800 bg-zinc-800 text-white"
-                          : "border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700"
-                      }`}>
-                      {l}
-                    </button>
-                  ))}
                 </div>
-              )}
+
+                {/* Etiquetas — botón con dropdown */}
+                {allLabels.length > 0 && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowLabelDropdown((v) => !v)}
+                      onBlur={() => setTimeout(() => setShowLabelDropdown(false), 150)}
+                      className={`flex items-center gap-1.5 h-9 rounded-xl border px-3 text-xs font-semibold transition ${
+                        labelFilter
+                          ? "border-zinc-900 bg-zinc-900 text-white"
+                          : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+                      }`}
+                    >
+                      <LayoutTemplate size={12} />
+                      {labelFilter ? labelFilter.toUpperCase() : "Etiquetas"}
+                      {labelFilter
+                        ? <button type="button" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setLabelFilter(""); }} className="ml-1 opacity-70 hover:opacity-100"><X size={10} /></button>
+                        : <ChevronRight size={11} className={`transition-transform ${showLabelDropdown ? "rotate-90" : ""}`} />
+                      }
+                    </button>
+                    {showLabelDropdown && (
+                      <div className="absolute right-0 top-full mt-1 z-40 min-w-[140px] rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden p-1.5 space-y-0.5">
+                        {allLabels.map((l) => (
+                          <button
+                            key={l}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); setLabelFilter(l === labelFilter ? "" : l); setShowLabelDropdown(false); }}
+                            className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                              l === labelFilter
+                                ? "bg-zinc-900 text-white"
+                                : "text-zinc-600 hover:bg-zinc-50"
+                            }`}
+                          >
+                            {l === labelFilter && <Check size={10} />}
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Button onClick={openNewTemplate} className="h-9 px-4 shrink-0 text-xs">
+                  <Plus size={13} /> Nueva
+                </Button>
+              </div>
 
               {/* Lista de plantillas */}
               {loadingTemplates ? (
@@ -1744,10 +1775,14 @@ export function AdminContractsPage() {
                     <LayoutTemplate size={28} className="text-zinc-400" />
                   </div>
                   <div>
-                    <p className="font-semibold text-zinc-700">{labelFilter ? `Sin plantillas con etiqueta "${labelFilter}"` : "Sin plantillas"}</p>
-                    <p className="text-sm text-zinc-400 mt-1">{labelFilter ? "Probá con otra etiqueta." : "Creá tu primera plantilla para enviar contratos."}</p>
+                    <p className="font-semibold text-zinc-700">
+                      {tplSearch || labelFilter ? "Sin resultados" : "Sin plantillas"}
+                    </p>
+                    <p className="text-sm text-zinc-400 mt-1">
+                      {tplSearch || labelFilter ? "Probá con otros filtros." : "Creá tu primera plantilla para enviar contratos."}
+                    </p>
                   </div>
-                  {!labelFilter && <Button onClick={openNewTemplate} className="h-10 px-5"><Plus size={14} /> Crear primera plantilla</Button>}
+                  {!tplSearch && !labelFilter && <Button onClick={openNewTemplate} className="h-10 px-5"><Plus size={14} /> Crear primera plantilla</Button>}
                 </div>
               ) : (
                 <div className="rounded-2xl border border-zinc-100 bg-white px-2">
