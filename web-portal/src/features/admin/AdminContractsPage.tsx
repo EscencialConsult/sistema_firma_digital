@@ -1010,6 +1010,7 @@ export function AdminContractsPage() {
   const [viewContract, setViewContract]     = useState<Contract | null>(null);
   const [sendThirdParty, setSendThirdParty] = useState<Contract | null>(null);
   const [preparingPdfId, setPreparingPdfId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [sharePreparing, setSharePreparing] = useState(false);
@@ -1730,34 +1731,37 @@ export function AdminContractsPage() {
 
         {activeTab === "contracts" && (
           <>
-            <div className="flex items-start justify-between gap-4">
-              <p className="text-sm text-zinc-500">{contracts.filter((c) => c.status !== "DRAFT").length} contratos enviados</p>
-              <div className="flex gap-2">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-zinc-500">{contracts.filter((c) => c.status !== "DRAFT").length} contratos</p>
+              <div className="flex items-center gap-2">
                 {visibleSignedContracts.length > 0 && (
-                  <Button onClick={toggleVisibleSignedContracts} className="h-10 px-4 shrink-0" variant="secondary">
-                    {allVisibleSignedSelected ? "Quitar firmados" : "Seleccionar firmados"}
-                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectionMode((v) => {
+                        if (v) setSelectedContractIds([]);
+                        return !v;
+                      });
+                    }}
+                    title={selectionMode ? "Cancelar selección" : "Seleccionar para enviar por email"}
+                    className={`grid h-9 w-9 place-items-center rounded-xl border transition ${
+                      selectionMode
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-700"
+                    }`}
+                  >
+                    <Check size={14} />
+                  </button>
                 )}
-                <Button
-                  onClick={openShareModal}
-                  disabled={selectedSignedContracts.length === 0}
-                  className="h-10 px-4 shrink-0"
-                  variant="secondary"
-                >
-                  <Mail size={14} /> Enviar por email
-                  {selectedSignedContracts.length > 0 && (
-                    <span className="rounded-full bg-zinc-900 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      {selectedSignedContracts.length}
-                    </span>
-                  )}
-                </Button>
                 {dbTemplates.length > 0 && (
-                  <Button onClick={() => setView("templates")} className="h-10 px-4 shrink-0" variant="secondary">
-                    <LayoutTemplate size={14} /> Plantillas
-                  </Button>
+                  <button type="button" onClick={() => setView("templates")}
+                    title="Ir a plantillas"
+                    className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-700 transition">
+                    <LayoutTemplate size={14} />
+                  </button>
                 )}
-                <Button onClick={() => setActiveTab("upload")} className="h-10 px-4 shrink-0">
-                  <Upload size={14} /> Subir PDF
+                <Button onClick={() => setActiveTab("upload")} className="h-9 px-4 text-xs shrink-0">
+                  <Upload size={13} /> Subir PDF
                 </Button>
               </div>
             </div>
@@ -1850,51 +1854,65 @@ export function AdminContractsPage() {
                             const signerName = c.templateFields?.nombre_firmante || c.templateFields?.nombre_usuario || c.templateFields?.nombre || null;
                             const signerEmail = c.templateFields?.email_firmante || c.templateFields?.email_usuario || c.ownerEmail;
                             const dateStr = new Date(c.updatedAt).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" });
+                            const isSelected = selectedContractIds.includes(c.id);
                             return (
                               <div key={c.id}
-                                className="flex flex-col gap-2 py-3 pl-16 pr-5 hover:bg-zinc-50 transition sm:flex-row sm:items-center sm:justify-between group">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  {hasSignedPdf && (
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedContractIds.includes(c.id)}
-                                      onChange={() => toggleSelectedContract(c.id)}
-                                      className="h-4 w-4 shrink-0 rounded border-zinc-300"
-                                      aria-label={`Seleccionar ${c.title}`}
-                                    />
-                                  )}
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-zinc-800 truncate">
-                                      {signerName ?? signerEmail}
-                                    </p>
-                                    <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
-                                      {signerName ? signerEmail : null}{signerName ? " · " : null}{dateStr}
-                                    </p>
-                                  </div>
+                                className={`flex items-center gap-3 py-3 pl-16 pr-4 transition group ${isSelected ? "bg-zinc-50" : "hover:bg-zinc-50/60"}`}>
+                                {/* Checkbox — solo en modo selección */}
+                                {selectionMode && hasSignedPdf && (
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleSelectedContract(c.id)}
+                                    className="h-4 w-4 shrink-0 rounded border-zinc-300 accent-zinc-900 cursor-pointer"
+                                    aria-label={`Seleccionar ${c.title}`}
+                                  />
+                                )}
+
+                                {/* Info firmante */}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-zinc-800 truncate leading-tight">
+                                    {signerName ?? signerEmail}
+                                  </p>
+                                  <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+                                    {signerName ? `${signerEmail} · ` : ""}{dateStr}
+                                  </p>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${className}`}>{label}</span>
-                                  {c.status === "COMPLETED" && (
-                                    <button type="button" onClick={(e) => { e.stopPropagation(); setSendThirdParty(c); }}
-                                      className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-100 transition">
-                                      <Send size={11} /> Enviar al tercero
-                                    </button>
-                                  )}
+
+                                {/* Estado */}
+                                <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${className}`}>
+                                  {label}
+                                </span>
+
+                                {/* Acciones — íconos compactos, aparecen al hover */}
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                                  <button type="button" onClick={() => setViewContract(c)}
+                                    title="Ver auditoría"
+                                    className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
+                                    <Eye size={13} />
+                                  </button>
                                   {hasSignedPdf && (
                                     <button type="button"
-                                      className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-100 transition"
+                                      title={isPreparingPdf ? "Preparando PDF..." : "Descargar PDF firmado"}
                                       disabled={isPreparingPdf}
-                                      onClick={(e) => { e.stopPropagation(); void openSignedPdf(c); }}>
-                                      <Download size={11} /> {isPreparingPdf ? "Preparando..." : "PDF firmado"}
+                                      onClick={(e) => { e.stopPropagation(); void openSignedPdf(c); }}
+                                      className="grid h-7 w-7 place-items-center rounded-lg text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 transition disabled:opacity-40">
+                                      <Download size={13} />
                                     </button>
                                   )}
-                                  <button type="button" onClick={() => setViewContract(c)}
-                                    className="flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 hover:bg-zinc-50 transition opacity-0 group-hover:opacity-100">
-                                    <Eye size={11} /> Ver
-                                  </button>
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteContract(c); }}
-                                    className="flex items-center gap-1.5 rounded-lg border border-red-200 px-2.5 py-1 text-xs text-red-400 hover:border-red-300 hover:text-red-600 hover:bg-red-50 transition opacity-0 group-hover:opacity-100">
-                                    <Trash2 size={11} />
+                                  {c.status === "COMPLETED" && (
+                                    <button type="button"
+                                      title="Enviar al tercero"
+                                      onClick={(e) => { e.stopPropagation(); setSendThirdParty(c); }}
+                                      className="grid h-7 w-7 place-items-center rounded-lg text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition">
+                                      <Send size={13} />
+                                    </button>
+                                  )}
+                                  <button type="button"
+                                    title="Eliminar"
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteContract(c); }}
+                                    className="grid h-7 w-7 place-items-center rounded-lg text-zinc-300 hover:bg-red-50 hover:text-red-500 transition">
+                                    <Trash2 size={13} />
                                   </button>
                                 </div>
                               </div>
@@ -1907,6 +1925,34 @@ export function AdminContractsPage() {
                 })
               )}
             </div>
+
+            {/* Barra flotante de selección */}
+            {selectionMode && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-5 py-3 shadow-xl shadow-black/10">
+                <span className="text-sm font-semibold text-zinc-700">
+                  {selectedSignedContracts.length > 0
+                    ? `${selectedSignedContracts.length} seleccionado${selectedSignedContracts.length > 1 ? "s" : ""}`
+                    : "Seleccioná contratos firmados"}
+                </span>
+                <div className="h-4 w-px bg-zinc-200" />
+                <button type="button" onClick={toggleVisibleSignedContracts}
+                  className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition">
+                  {allVisibleSignedSelected ? "Quitar todos" : "Seleccionar todos"}
+                </button>
+                <Button
+                  onClick={openShareModal}
+                  disabled={selectedSignedContracts.length === 0}
+                  className="h-8 px-4 text-xs"
+                >
+                  <Mail size={13} /> Enviar por email
+                </Button>
+                <button type="button"
+                  onClick={() => { setSelectionMode(false); setSelectedContractIds([]); }}
+                  className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
