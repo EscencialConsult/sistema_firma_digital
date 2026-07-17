@@ -96,6 +96,14 @@ export function JoinOrgPage() {
       .finally(() => setMembershipLoading(false));
   }, [user, org]);
 
+  // Auto-redirigir solo si el usuario es miembro activo de esta org
+  useEffect(() => {
+    if (!user || !org || membershipLoading) return;
+    if (membership?.status === "active" || user.organizationId === org.id) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [membership, membershipLoading, user, org, navigate]);
+
   function switchMode(m: Mode) { setMode(m); setError(null); }
 
   async function handleRegister(e: FormEvent) {
@@ -121,7 +129,7 @@ export function JoinOrgPage() {
     try {
       await loginUser(email, password);
       await reloadUser();
-      navigate("/dashboard", { replace: true });
+      // Sin navigate inmediato — el useEffect de membresía decide si redirigir
     } catch (err) {
       setError(err instanceof Error ? err.message : "Email o contraseña incorrectos.");
     } finally { setLoading(false); }
@@ -311,9 +319,9 @@ export function JoinOrgPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-xs leading-5 text-zinc-600">
-                    Tu cuenta (<span className="font-semibold">{user.email}</span>) no está habilitada para esta empresa.
-                    Podés solicitar acceso y un administrador de {org.name} lo aprobará.
+                  <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-xs leading-5 text-zinc-600 space-y-1.5">
+                    <p>Tu cuenta (<span className="font-semibold">{user.email}</span>) no tiene acceso a esta empresa.</p>
+                    <p>Podés solicitar acceso — un administrador de <span className="font-semibold">{org.name}</span> lo aprobará — o pedirle a un responsable que te envíe el link de invitación de la empresa.</p>
                   </div>
 
                   <div className="space-y-2.5">
