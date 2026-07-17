@@ -2,34 +2,38 @@ import { supabase } from "../lib/supabase";
 import { DEFAULT_SIGNATURE_POSITION, type SignaturePosition } from "../types/contract";
 
 export interface DbContractTemplate {
-  id:             string;
-  organizationId: string;
-  name:           string;
-  description:    string;
-  label:          string;
-  logoHeader:     boolean;
-  logoWatermark:  boolean;
-  contentHtml:    string;
+  id:               string;
+  organizationId:   string;
+  name:             string;
+  description:      string;
+  label:            string;
+  logoHeader:       boolean;
+  logoWatermark:    boolean;
+  contentHtml:      string;
   signaturePosition: SignaturePosition;
-  versionMinor:   number;
-  createdAt:      string;
-  updatedAt:      string;
+  versionMinor:     number;
+  templateType:     "html" | "pdf";
+  pdfStoragePath:   string | null;
+  createdAt:        string;
+  updatedAt:        string;
 }
 
 function mapRow(r: Record<string, unknown>): DbContractTemplate {
   return {
-    id:             r.id as string,
-    organizationId: r.organization_id as string,
-    name:           r.name as string,
-    description:    (r.description as string) ?? "",
-    label:          (r.label as string) ?? "",
-    logoHeader:     (r.logo_header as boolean) ?? false,
-    logoWatermark:  (r.logo_watermark as boolean) ?? false,
-    contentHtml:    r.content_html as string,
+    id:               r.id as string,
+    organizationId:   r.organization_id as string,
+    name:             r.name as string,
+    description:      (r.description as string) ?? "",
+    label:            (r.label as string) ?? "",
+    logoHeader:       (r.logo_header as boolean) ?? false,
+    logoWatermark:    (r.logo_watermark as boolean) ?? false,
+    contentHtml:      (r.content_html as string) ?? "",
     signaturePosition: (r.signature_position as SignaturePosition) ?? DEFAULT_SIGNATURE_POSITION,
-    versionMinor:   (r.version_minor as number) ?? 0,
-    createdAt:      r.created_at as string,
-    updatedAt:      r.updated_at as string,
+    versionMinor:     (r.version_minor as number) ?? 0,
+    templateType:     ((r.template_type as string) ?? "html") as "html" | "pdf",
+    pdfStoragePath:   (r.pdf_storage_path as string | null) ?? null,
+    createdAt:        r.created_at as string,
+    updatedAt:        r.updated_at as string,
   };
 }
 
@@ -155,6 +159,51 @@ export const SYSTEM_VARS = new Set([
 export function extractVariables(html: string): string[] {
   const matches = [...html.matchAll(/\{\{(\w+)\}\}/g)];
   return [...new Set(matches.map((m) => m[1]))];
+}
+
+/** Upload a PDF file and save it as a reusable PDF template */
+export async function createPdfContractTemplate(input: {
+  orgId:             string;
+  name:              string;
+  description?:      string;
+  label?:            string;
+  file:              File;
+  ownerId:           string;
+  signaturePosition: SignaturePosition;
+}): Promise<DbContractTemplate> {
+  const { orgId, name, file, ownerId, signaturePosition } = input;
+
+  // Upload PDF to storage
+  const storagePath = `${ownerId}/tpl_${Date.now()}_${file.name}`;
+  const { error: uploadError } = await supabase.storage
+    .from("contract-pdfs")
+    .upload(storagePath, file, { upsert: false, contentType: "application/pdf" });
+  if (uploadError) throw new Error(`Error al subir PDF: ${uploadError.message}`);
+
+  const { data, error } = await supabase
+    .from("contract_templates")
+    .insert({
+      organization_id:   orgId,
+      name,
+      description:       input.description ?? "",
+      label:             input.label ?? "",
+      logo_header:       false,
+      logo_watermark:    false,
+      content_html:      "",
+      signature_position: signaturePosition,
+      template_type:     "pdf",
+      pdf_storage_path:  storagePath,
+    })
+    .select()
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Error guardando plantilla PDF");
+  return mapRow(data as Record<string, unknown>);
+}
+
+/** Get the public URL for a PDF template's file */
+export function getPdfTemplateUrl(storagePath: string): string {
+  const { data } = supabase.storage.from("contract-pdfs").getPublicUrl(storagePath);
+  return data.publicUrl;
 }
 
 /** Replace {{var}} in HTML with values from a map; unknowns left as-is */

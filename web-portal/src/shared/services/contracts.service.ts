@@ -701,6 +701,7 @@ export interface SignatureAuditRecord {
   kycLivenessScore:  number | null;
   kycSelfieUrl:      string | null;
   signingSelfiUrl:   string | null;
+  documentHash:      string | null;
 }
 
 export async function getContractSignatureAudit(documentId: string): Promise<SignatureAuditRecord[]> {
@@ -709,7 +710,7 @@ export async function getContractSignatureAudit(documentId: string): Promise<Sig
     .from("signature_requests")
     .select(`
       id, signer_id, signer_email, signer_name, signer_cuil, signer_dni, sent_at, signed_at, status,
-      signatures(ip_address, face_similarity_score, face_verification_method, signature_data, signing_selfie_url, signed_at),
+      signatures(ip_address, face_similarity_score, face_verification_method, signature_data, signing_selfie_url, signed_at, document_hash),
       conformity_acceptances(accepted_at, ip_address)
     `)
     .eq("document_id", documentId)
@@ -801,6 +802,7 @@ export async function getContractSignatureAudit(documentId: string): Promise<Sig
       kycLivenessScore,
       kycSelfieUrl:    uid ? (selfieUrlMap.get(uid) ?? null) : null,
       signingSelfiUrl: (sig.signing_selfie_url as string) ?? null,
+      documentHash:    (sig.document_hash      as string) ?? null,
     };
   });
 }

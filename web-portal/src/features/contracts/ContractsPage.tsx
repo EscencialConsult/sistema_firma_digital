@@ -117,7 +117,7 @@ export function ContractsPage() {
 
     try {
       const prepared = await Promise.all(selectedSigned.map(async (r) => {
-        const url = r.finalPdfUrl ?? await tryGenerateConsolidatedPdf(r.documentId);
+        const url = await tryGenerateConsolidatedPdf(r.documentId);
         return {
           title: r.documentTitle,
           fileName: signedPdfFileName({

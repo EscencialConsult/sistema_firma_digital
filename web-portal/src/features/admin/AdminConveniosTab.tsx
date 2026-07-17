@@ -4,11 +4,8 @@ import {
   ChevronRight,
   Clock,
   Copy,
-  Download,
   Eye,
   FileText,
-  LayoutTemplate,
-  Pencil,
   Plus,
   Search,
   Send,
@@ -25,18 +22,20 @@ import { sendContractFromTemplate } from "../../shared/services/contracts.servic
 import {
   getConvenioTemplates,
   createConvenioTemplate,
-  updateConvenioTemplate,
   deleteConvenioTemplate,
   activateConvenioTemplate,
   type ConvenioTemplate,
 } from "../../shared/services/convenioTemplates.service";
 import {
+  getContractTemplates,
   extractVariables,
   AUTO_FILL_VARS,
+  ORG_VARS,
+  SYSTEM_VARS,
   VAR_LABELS,
+  type DbContractTemplate,
 } from "../../shared/services/contractTemplates.service";
 import { ContractDocument } from "./components/ContractRenderer";
-import { RichTextEditor } from "./components/RichTextEditor";
 import type { AdminUserSummary } from "../../shared/types/user";
 import type { Contract } from "../../shared/types/contract";
 
@@ -57,8 +56,99 @@ function CopyBtn({ value }: { value: string }) {
   );
 }
 
+// ─── Select Model Modal ───────────────────────────────────────────────────────
+
+function SelectModelModal({
+  contractTemplates,
+  orgId,
+  onClose,
+  onCreate,
+}: {
+  contractTemplates: DbContractTemplate[];
+  orgId: string;
+  onClose: () => void;
+  onCreate: (tpl: ConvenioTemplate) => void;
+}) {
+  const [search, setSearch]     = useState("");
+  const [selected, setSelected] = useState<DbContractTemplate | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [error, setError]       = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search) return contractTemplates;
+    const q = search.toLowerCase();
+    return contractTemplates.filter((t) => t.name.toLowerCase().includes(q));
+  }, [contractTemplates, search]);
+
+  async function handleCreate() {
+    if (!selected) return;
+    setCreating(true);
+    setError("");
+    try {
+      const created = await createConvenioTemplate({
+        orgId,
+        name:        selected.name,
+        description: selected.description,
+        contentHtml: selected.contentHtml,
+      });
+      onCreate(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al crear convenio");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-6 space-y-5">
+        <div className="border-b border-zinc-100 pb-4">
+          <h3 className="font-bold text-zinc-900">Crear convenio desde modelo</h3>
+          <p className="text-xs text-zinc-500 mt-1">
+            Seleccioná un modelo existente. Su contenido se usará como base del convenio y requiere firma de autoridad provisional.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 focus-within:border-zinc-400 transition">
+          <Search size={14} className="text-zinc-400 shrink-0" />
+          <input className="w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-500 outline-none"
+            placeholder="Buscar modelo..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+
+        <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-60 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="py-6 text-center text-xs text-zinc-400">
+              {contractTemplates.length === 0 ? "Sin modelos disponibles. Creá uno desde el tab Modelos." : "Sin resultados"}
+            </p>
+          ) : filtered.map((t) => (
+            <button key={t.id} type="button" onClick={() => setSelected(t)}
+              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50 ${selected?.id === t.id ? "bg-zinc-100" : ""}`}>
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-zinc-100">
+                <FileText size={14} className="text-zinc-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-zinc-900 truncate">{t.name}</p>
+                {t.description && <p className="text-xs text-zinc-500 truncate">{t.description}</p>}
+              </div>
+              {selected?.id === t.id && <Check size={13} className="text-emerald-600 shrink-0" />}
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <Button variant="secondary" onClick={onClose} className="flex-1 h-10 text-zinc-700">Cancelar</Button>
+          <Button onClick={handleCreate} disabled={!selected || creating} className="flex-1 h-10">
+            {creating ? "Creando..." : <><Check size={14} /> Crear convenio</>}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Activation Modal ─────────────────────────────────────────────────────────
-// Seleccionar un usuario existente como autoridad provisional
 
 function ActivateModal({
   template,
@@ -107,7 +197,7 @@ function ActivateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-6 space-y-5">
         {done ? (
           <div className="text-center py-6 space-y-4">
@@ -177,116 +267,155 @@ function ActivateModal({
   );
 }
 
-// ─── Convenio Template Card ───────────────────────────────────────────────────
+// ─── Convenio Template Row ────────────────────────────────────────────────────
 
 function ConvenioTemplateCard({
   template,
   onActivate,
   onSend,
-  onEdit,
   onDelete,
 }: {
   template:   ConvenioTemplate;
   onActivate: () => void;
   onSend:     () => void;
-  onEdit:     () => void;
   onDelete:   () => void;
 }) {
-  const vars      = extractVariables(template.contentHtml);
-  const adminVars = vars.filter((v) => !AUTO_FILL_VARS.has(v));
-  const autoVars  = vars.filter((v) =>  AUTO_FILL_VARS.has(v));
-  const confirmed = template.status === "CONFIRMED";
+  const vars       = extractVariables(template.contentHtml);
+  const autoVars   = vars.filter((v) =>  AUTO_FILL_VARS.has(v));
+  const orgVars    = vars.filter((v) =>  ORG_VARS.has(v) && !AUTO_FILL_VARS.has(v));
+  const systemVars = vars.filter((v) =>  SYSTEM_VARS.has(v));
+  const customVars = vars.filter((v) => !AUTO_FILL_VARS.has(v) && !ORG_VARS.has(v) && !SYSTEM_VARS.has(v));
+  const manualVarsCount = systemVars.length + customVars.length;
+  const confirmed  = template.status === "CONFIRMED";
+  const [showVars, setShowVars] = useState(false);
+  const [showDesc, setShowDesc] = useState(false);
 
   return (
-    <div className="group rounded-2xl border border-zinc-200 bg-white p-5 flex flex-col gap-3 hover:border-zinc-300 hover:shadow-sm transition">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-100">
-            <FileText size={16} className="text-zinc-500" />
+    <div className="border-b border-zinc-100 last:border-0">
+      <div className="flex items-center gap-3 px-1 py-3 hover:bg-zinc-50/60 rounded-xl transition">
+        <FileText size={14} className="shrink-0 text-zinc-400" />
+
+        {/* Nombre + meta */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <p className="text-sm font-semibold text-zinc-900 truncate">{template.name}</p>
+            {/* Estado badge */}
+            {confirmed ? (
+              <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 shrink-0">
+                <Check size={8} /> Confirmado
+              </span>
+            ) : template.approvalDocumentId ? (
+              <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 shrink-0">
+                <Clock size={8} /> Esperando firma de {template.provisionalSignerName}
+              </span>
+            ) : (
+              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-semibold text-zinc-500 shrink-0">
+                Sin confirmar
+              </span>
+            )}
           </div>
-          <div>
-            <p className="font-bold text-zinc-900 text-sm">{template.name}</p>
-            <p className="text-xs text-zinc-500 mt-0.5">{new Date(template.createdAt).toLocaleDateString("es-AR")}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Status badge */}
-          {confirmed ? (
-            <span className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-              <Check size={9} /> Confirmado
-            </span>
-          ) : template.approvalDocumentId ? (
-            <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700">
-              <Clock size={9} /> Esperando firma
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-[10px] font-bold text-zinc-500">
-              Sin confirmar
-            </span>
+          <p className="text-[11px] text-zinc-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span>{new Date(template.createdAt).toLocaleDateString("es-AR")}</span>
+            {vars.length > 0 && (
+              <>
+                <span className="text-zinc-300">·</span>
+                <button type="button" onClick={() => setShowVars((v) => !v)}
+                  className="hover:text-zinc-600 transition hover:underline underline-offset-2">
+                  {manualVarsCount > 0 && <>{manualVarsCount} variable{manualVarsCount !== 1 ? "s" : ""}</>}
+                  {manualVarsCount > 0 && (orgVars.length > 0 || autoVars.length > 0) && <span className="mx-0.5 text-zinc-300">·</span>}
+                  {orgVars.length > 0 && <span className="text-blue-500">{orgVars.length} empresa</span>}
+                  {orgVars.length > 0 && autoVars.length > 0 && <span className="mx-0.5 text-zinc-300">·</span>}
+                  {autoVars.length > 0 && <span className="text-emerald-500">{autoVars.length} auto</span>}
+                </button>
+              </>
+            )}
+            {template.description && (
+              <>
+                <span className="text-zinc-300">·</span>
+                <button type="button" onClick={() => setShowDesc((v) => !v)}
+                  className="hover:text-zinc-600 transition hover:underline underline-offset-2">
+                  {showDesc ? "ocultar" : "descripción"}
+                </button>
+              </>
+            )}
+          </p>
+          {showDesc && template.description && (
+            <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{template.description}</p>
           )}
-          {/* Edit/Delete */}
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-            <button type="button" onClick={onEdit}
-              className="grid h-7 w-7 place-items-center rounded-lg border border-zinc-200 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition">
-              <Pencil size={12} />
+        </div>
+
+        {/* Acciones */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button type="button" onClick={onDelete} title="Eliminar convenio"
+            className="grid h-7 w-7 place-items-center rounded-lg text-zinc-300 hover:bg-red-50 hover:text-red-500 hover:border hover:border-red-200 transition">
+            <Trash2 size={12} />
+          </button>
+          {confirmed ? (
+            <button type="button" onClick={onSend}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 h-8 text-[11px] font-semibold transition ml-1"
+              style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+              <Send size={11} /> Enviar
             </button>
-            <button type="button" onClick={onDelete}
-              className="grid h-7 w-7 place-items-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition">
-              <Trash2 size={12} />
+          ) : !template.approvalDocumentId ? (
+            <button type="button" onClick={onActivate}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 h-8 text-[11px] font-semibold transition ml-1"
+              style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+              <ShieldCheck size={11} /> Activar
             </button>
-          </div>
+          ) : (
+            <button type="button" disabled
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-xl px-3 h-8 text-[11px] font-semibold border border-amber-100 bg-amber-50 text-amber-500 cursor-not-allowed ml-1">
+              <Clock size={11} /> Esperando firma
+            </button>
+          )}
         </div>
       </div>
 
-      {template.description && (
-        <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2">{template.description}</p>
-      )}
-
-      {/* Variables */}
-      {vars.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {adminVars.map((v) => (
-            <span key={v} className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-              {"{{"}{v}{"}}"}
-            </span>
-          ))}
-          {autoVars.map((v) => (
-            <span key={v} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
-              {"{{"}{v}{"}}"}
-            </span>
-          ))}
+      {/* Variables expandibles */}
+      {showVars && vars.length > 0 && (
+        <div className="px-6 pb-3 space-y-1.5">
+          {orgVars.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] text-zinc-400 mr-1 self-center">Empresa:</span>
+              {orgVars.map((v) => (
+                <span key={v} title={VAR_LABELS[v]} className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-mono font-medium text-blue-700">
+                  {"{{"}{v}{"}}"}
+                </span>
+              ))}
+            </div>
+          )}
+          {autoVars.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] text-zinc-400 mr-1 self-center">Firmante:</span>
+              {autoVars.map((v) => (
+                <span key={v} title={VAR_LABELS[v]} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-mono font-medium text-emerald-700">
+                  {"{{"}{v}{"}}"}
+                </span>
+              ))}
+            </div>
+          )}
+          {(systemVars.length > 0 || customVars.length > 0) && (
+            <div className="flex flex-wrap gap-1">
+              <span className="text-[10px] text-zinc-400 mr-1 self-center">A completar:</span>
+              {systemVars.map((v) => (
+                <span key={v} title={VAR_LABELS[v]} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-mono font-medium text-sky-700">
+                  {"{{"}{v}{"}}"}
+                </span>
+              ))}
+              {customVars.map((v) => (
+                <span key={v} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-mono font-medium text-amber-700">
+                  {"{{"}{v}{"}}"}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Provisional signer info (when waiting) */}
-      {!confirmed && template.provisionalSignerName && (
-        <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 space-y-0.5">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-600">Pendiente firma de</p>
-          <p className="text-xs font-semibold text-amber-900">{template.provisionalSignerName}</p>
-          <p className="text-[11px] text-amber-700">{template.provisionalSignerEmail}</p>
-        </div>
-      )}
-
-      {/* CTA */}
-      {confirmed ? (
-        <Button onClick={onSend} className="mt-auto h-9 w-full text-xs bg-zinc-900 hover:bg-zinc-700">
-          <Send size={12} /> Enviar convenio
-        </Button>
-      ) : !template.approvalDocumentId ? (
-        <Button onClick={onActivate} className="mt-auto h-9 w-full text-xs bg-amber-600 hover:bg-amber-700 text-white">
-          <ShieldCheck size={12} /> Activar — asignar autoridad provisional
-        </Button>
-      ) : (
-        <button type="button" disabled
-          className="mt-auto h-9 w-full rounded-xl border border-amber-100 bg-amber-50 text-xs font-semibold text-amber-600 cursor-not-allowed flex items-center justify-center gap-1.5">
-          <Clock size={12} /> Esperando que firme
-        </button>
       )}
     </div>
   );
 }
 
-// ─── Sending Flow (para convenios confirmados) ────────────────────────────────
+// ─── Sending Flow ─────────────────────────────────────────────────────────────
 
 function ConvenioSendingFlow({
   template,
@@ -426,7 +555,6 @@ function ConvenioSendingFlow({
     );
   }
 
-  // ── Step 0: Firmantes ──
   if (step === 0) {
     return (
       <div className="max-w-3xl space-y-6">
@@ -522,7 +650,6 @@ function ConvenioSendingFlow({
     );
   }
 
-  // ── Step 1: Variables ──
   if (step === 1) {
     return (
       <div className="space-y-6 max-w-3xl">
@@ -627,13 +754,12 @@ function ConvenioSendingFlow({
     );
   }
 
-  // ── Step 2: Preview ──
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
         <p className="text-sm text-zinc-400">Vista previa. Las variables en verde son del usuario.</p>
         <Button variant="secondary" onClick={() => setStep(1)} className="h-8 px-3 text-xs text-zinc-700">
-          <Pencil size={11} /> Editar
+          Editar
         </Button>
       </div>
       <ContractDocument templateId="custom" fields={previewFields} alumnos={[]} />
@@ -652,21 +778,16 @@ function ConvenioSendingFlow({
 
 // ─── Main Tab ─────────────────────────────────────────────────────────────────
 
-type TabView = "list" | "editor" | "sending";
+type TabView = "list" | "sending";
 
 export function AdminConveniosTab({ orgId }: { orgId: string }) {
-  const [templates, setTemplates]         = useState<ConvenioTemplate[]>([]);
-  const [loadingTpl, setLoadingTpl]       = useState(true);
-  const [view, setView]                   = useState<TabView>("list");
-  const [editingTemplate, setEditingTemplate] = useState<ConvenioTemplate | null>(null);
+  const [templates, setTemplates]             = useState<ConvenioTemplate[]>([]);
+  const [contractTpls, setContractTpls]       = useState<DbContractTemplate[]>([]);
+  const [loadingTpl, setLoadingTpl]           = useState(true);
+  const [view, setView]                       = useState<TabView>("list");
   const [sendingTemplate, setSendingTemplate] = useState<ConvenioTemplate | null>(null);
   const [activateTarget, setActivateTarget]   = useState<ConvenioTemplate | null>(null);
-
-  // Editor state
-  const [tplName, setTplName] = useState("");
-  const [tplDesc, setTplDesc] = useState("");
-  const [tplHtml, setTplHtml] = useState("");
-  const [saving, setSaving]   = useState(false);
+  const [showSelectModel, setShowSelectModel] = useState(false);
 
   const [toast, setToast] = useState({ visible: false, message: "" });
   const showToast = (message: string) => setToast({ visible: true, message });
@@ -677,96 +798,15 @@ export function AdminConveniosTab({ orgId }: { orgId: string }) {
   }, [orgId]);
 
   useEffect(() => { loadTemplates(); }, [loadTemplates]);
-
-  function openNew() {
-    setEditingTemplate(null);
-    setTplName(""); setTplDesc(""); setTplHtml("");
-    setView("editor");
-  }
-
-  function openEdit(tpl: ConvenioTemplate) {
-    setEditingTemplate(tpl);
-    setTplName(tpl.name); setTplDesc(tpl.description); setTplHtml(tpl.contentHtml);
-    setView("editor");
-  }
-
-  async function handleSave() {
-    const htmlContent = tplHtml.replace(/<[^>]+>/g, "").trim();
-    if (!tplName.trim() || !htmlContent) return;
-    setSaving(true);
-    try {
-      if (editingTemplate) {
-        await updateConvenioTemplate(editingTemplate.id, { name: tplName, description: tplDesc, contentHtml: tplHtml });
-        setTemplates((prev) => prev.map((t) => t.id === editingTemplate.id
-          ? { ...t, name: tplName, description: tplDesc, contentHtml: tplHtml }
-          : t));
-        showToast("Plantilla actualizada.");
-      } else {
-        const created = await createConvenioTemplate({ orgId, name: tplName, description: tplDesc, contentHtml: tplHtml });
-        setTemplates((prev) => [created, ...prev]);
-        showToast("Plantilla creada. Activala asignando una autoridad provisional.");
-      }
-      setView("list");
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Error guardando");
-    } finally {
-      setSaving(false);
-    }
-  }
+  useEffect(() => {
+    getContractTemplates(orgId).then(setContractTpls).catch(() => {});
+  }, [orgId]);
 
   async function handleDelete(id: string) {
-    if (!window.confirm("¿Eliminar esta plantilla?")) return;
+    if (!window.confirm("¿Eliminar este convenio?")) return;
     await deleteConvenioTemplate(id);
     setTemplates((prev) => prev.filter((t) => t.id !== id));
-    showToast("Plantilla eliminada.");
-  }
-
-  // ── Editor view ──────────────────────────────────────────────────────────────
-  if (view === "editor") {
-    const isValid = !!(tplName.trim() && tplHtml.replace(/<[^>]+>/g, "").trim());
-    return (
-      <div className="min-h-screen space-y-6">
-        <div className="flex items-center gap-4">
-          <button type="button" onClick={() => setView("list")}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-800 transition">
-            <ArrowLeft size={15} />
-          </button>
-          <div>
-            <p className="text-xs text-zinc-600">Admin · Convenios</p>
-            <h2 className="font-bold text-zinc-900">{editingTemplate ? "Editar plantilla" : "Nueva plantilla de convenio"}</h2>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="conv-tpl-name" className="mb-1 block text-xs font-semibold text-zinc-400">Nombre de la plantilla *</label>
-            <input id="conv-tpl-name" value={tplName} onChange={(e) => setTplName(e.target.value)}
-              placeholder="Ej: Convenio de representación comercial"
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
-          </div>
-          <div>
-            <label htmlFor="conv-tpl-desc" className="mb-1 block text-xs font-semibold text-zinc-400">Descripción (opcional)</label>
-            <input id="conv-tpl-desc" value={tplDesc} onChange={(e) => setTplDesc(e.target.value)}
-              placeholder="Descripción breve"
-              className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition" />
-          </div>
-        </div>
-
-        <RichTextEditor value={tplHtml} onChange={setTplHtml}
-          placeholder="Redactá el convenio. Usá las variables del panel derecho para datos dinámicos..." />
-
-        <div className="flex justify-between">
-          <Button variant="secondary" onClick={() => setView("list")} className="h-10 px-5 text-zinc-700">
-            <ArrowLeft size={14} /> Cancelar
-          </Button>
-          <Button onClick={handleSave} disabled={!isValid || saving} className="h-10 px-6">
-            {saving ? "Guardando..." : <><Check size={14} /> {editingTemplate ? "Guardar cambios" : "Crear plantilla"}</>}
-          </Button>
-        </div>
-
-        <Toast message={toast.message} type="success" visible={toast.visible} onClose={() => setToast((t) => ({ ...t, visible: false }))} duration={4000} />
-      </div>
-    );
+    showToast("Convenio eliminado.");
   }
 
   // ── Sending view ─────────────────────────────────────────────────────────────
@@ -806,51 +846,69 @@ export function AdminConveniosTab({ orgId }: { orgId: string }) {
         <ActivateModal
           template={activateTarget}
           onClose={() => setActivateTarget(null)}
-          onActivated={() => { setActivateTarget(null); loadTemplates(); showToast("Enviado a la autoridad provisional para su firma."); }}
+          onActivated={() => {
+            setActivateTarget(null);
+            loadTemplates();
+            showToast("Enviado a la autoridad provisional para su firma.");
+          }}
+        />
+      )}
+
+      {showSelectModel && (
+        <SelectModelModal
+          contractTemplates={contractTpls}
+          orgId={orgId}
+          onClose={() => setShowSelectModel(false)}
+          onCreate={(created) => {
+            setTemplates((prev) => [created, ...prev]);
+            setShowSelectModel(false);
+            showToast("Convenio creado. Activalo asignando una autoridad provisional.");
+          }}
         />
       )}
 
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
-          <p className="text-sm text-zinc-500">{templates.length} plantillas de convenio</p>
-          <Button onClick={openNew} className="h-10 px-4 shrink-0">
-            <Plus size={14} /> Nueva plantilla
+          <div>
+            <p className="text-sm text-zinc-500">{templates.length} convenio{templates.length !== 1 ? "s" : ""}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">El contenido se define desde el tab <strong>Modelos</strong></p>
+          </div>
+          <Button onClick={() => setShowSelectModel(true)} className="h-10 px-4 shrink-0">
+            <Plus size={14} /> Crear desde modelo
           </Button>
         </div>
 
         {loadingTpl ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array(3).fill(null).map((_, i) => <div key={i} className="h-52 animate-pulse rounded-2xl bg-zinc-100" />)}
+          <div className="rounded-2xl border border-zinc-100 bg-white px-2">
+            {Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse my-1 rounded-xl bg-zinc-100" />)}
           </div>
         ) : templates.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
             <div className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-100">
-              <LayoutTemplate size={28} className="text-zinc-400" />
+              <FileText size={28} className="text-zinc-400" />
             </div>
             <div>
-              <p className="font-semibold text-zinc-700">Sin plantillas de convenio</p>
-              <p className="text-sm text-zinc-400 mt-1">
-                Creá una plantilla. Luego la activás asignando una autoridad provisional que la apruebe antes de enviarla a usuarios.
+              <p className="font-semibold text-zinc-700">Sin convenios</p>
+              <p className="text-sm text-zinc-400 mt-1 max-w-xs">
+                Creá un convenio seleccionando un modelo existente. Luego se activa con una autoridad provisional antes de enviarlo a usuarios.
               </p>
             </div>
-            <Button onClick={openNew} className="h-10 px-5">
-              <Plus size={14} /> Crear primera plantilla
+            <Button onClick={() => setShowSelectModel(true)} className="h-10 px-5">
+              <Plus size={14} /> Crear desde modelo
             </Button>
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* Confirmadas — listas para enviar */}
+          <div className="space-y-4">
             {confirmed.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Confirmadas — listas para enviar</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Confirmados — listos para enviar</p>
+                <div className="rounded-2xl border border-zinc-100 bg-white px-2">
                   {confirmed.map((tpl) => (
                     <ConvenioTemplateCard
                       key={tpl.id}
                       template={tpl}
                       onActivate={() => setActivateTarget(tpl)}
                       onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
-                      onEdit={() => openEdit(tpl)}
                       onDelete={() => handleDelete(tpl.id)}
                     />
                   ))}
@@ -858,18 +916,16 @@ export function AdminConveniosTab({ orgId }: { orgId: string }) {
               </div>
             )}
 
-            {/* Sin confirmar */}
             {unconfirmed.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Sin confirmar — requieren firma de autoridad provisional</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Sin confirmar — requieren firma de autoridad provisional</p>
+                <div className="rounded-2xl border border-zinc-100 bg-white px-2">
                   {unconfirmed.map((tpl) => (
                     <ConvenioTemplateCard
                       key={tpl.id}
                       template={tpl}
                       onActivate={() => setActivateTarget(tpl)}
                       onSend={() => { setSendingTemplate(tpl); setView("sending"); }}
-                      onEdit={() => openEdit(tpl)}
                       onDelete={() => handleDelete(tpl.id)}
                     />
                   ))}

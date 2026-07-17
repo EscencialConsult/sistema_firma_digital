@@ -1,38 +1,37 @@
 import {
+  Check,
   CheckCircle,
   Clock,
   Copy,
-  Check,
   Loader2,
   Mail,
-  UserPlus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
   Users,
   X,
   XCircle,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../app/providers/AuthProvider";
-import { createAdminUser, getAllUsers, updateUserRole } from "../../shared/services/admin.service";
+import { getAllUsers, updateUserRole } from "../../shared/services/admin.service";
 import {
-  inviteUserToOrg,
   getOrgMemberships,
   updateMembershipStatus,
   getPendingInvitations,
   type OrgMembership,
   type OrgInvitation,
 } from "../../shared/services/memberships.service";
+import {
+  getMyOrganization,
+  regenerateInviteCode,
+} from "../../shared/services/organizations.service";
 import type { AdminUserSummary, UserRole } from "../../shared/types/user";
 
-const ROLE_LABEL: Record<string, string> = {
-  USER:     "Usuario",
-  ORG_ADMIN: "Admin",
-  ADMIN:    "Admin",
-};
-
 const ROLE_COLOR: Record<string, string> = {
-  USER:     "bg-zinc-100 text-zinc-600",
+  USER:      "bg-zinc-100 text-zinc-600",
   ORG_ADMIN: "bg-violet-100 text-violet-700",
-  ADMIN:    "bg-violet-100 text-violet-700",
+  ADMIN:     "bg-violet-100 text-violet-700",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -43,157 +42,109 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ElementType; co
   EXPIRED:   { label: "Expirado",    icon: XCircle,     color: "text-red-600" },
 };
 
-// ─── Modal: crear usuario nuevo (admin) ──────────────────────────────────────
+// ─── Modal: asignar admin desde usuarios existentes ───────────────────────────
 
-function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (u: AdminUserSummary) => void }) {
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole]         = useState<UserRole>("USER");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+function AssignAdminModal({
+  orgId,
+  currentAdminIds,
+  onClose,
+  onAssigned,
+}: {
+  orgId: string;
+  currentAdminIds: string[];
+  onClose: () => void;
+  onAssigned: (user: AdminUserSummary) => void;
+}) {
+  const [allUsers, setAllUsers]   = useState<AdminUserSummary[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState("");
+  const [selected, setSelected]   = useState<AdminUserSummary | null>(null);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState<string | null>(null);
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+  useEffect(() => {
+    getAllUsers(orgId)
+      .then((users) => setAllUsers(users.filter((u) => !currentAdminIds.includes(u.id) && u.role !== "ADMIN")))
+      .finally(() => setLoading(false));
+  }, [orgId]);
+
+  const filtered = useMemo(() => {
+    if (!search) return allUsers;
+    const q = search.toLowerCase();
+    return allUsers.filter((u) => u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  }, [allUsers, search]);
+
+  async function handleAssign() {
+    if (!selected) return;
+    setSaving(true);
     setError(null);
     try {
-      const user = await createAdminUser({ fullName, email, password, role });
-      onCreated(user);
+      await updateUserRole(selected.id, "ORG_ADMIN");
+      onAssigned({ ...selected, role: "ORG_ADMIN" });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear el usuario");
-    } finally { setLoading(false); }
+      setError(err instanceof Error ? err.message : "Error al asignar rol");
+    } finally { setSaving(false); }
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 px-4">
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
-          <h3 className="text-sm font-bold text-zinc-900">Crear usuario nuevo</h3>
-          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100">
-            <X size={16} />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
-          {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
-          {[
-            { label: "Nombre completo", value: fullName, setter: setFullName, type: "text",     placeholder: "Juan Pérez" },
-            { label: "Email",           value: email,    setter: setEmail,    type: "email",    placeholder: "juan@empresa.com" },
-            { label: "Contraseña",      value: password, setter: setPassword, type: "password", placeholder: "Mínimo 8 caracteres" },
-          ].map(({ label, value, setter, type, placeholder }) => (
-            <div key={label}>
-              <label className="mb-1.5 block text-xs font-semibold text-zinc-500">{label}</label>
-              <input type={type} required value={value} onChange={(e) => setter(e.target.value)} placeholder={placeholder}
-                className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
-            </div>
-          ))}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Rol</label>
-            <select value={role} onChange={(e) => setRole(e.target.value as UserRole)}
-              className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 focus:border-zinc-400 focus:outline-none">
-              <option value="USER">Usuario</option>
-              <option value="ORG_ADMIN">Admin de organización</option>
-            </select>
+            <h3 className="text-sm font-bold text-zinc-900">Asignar admin</h3>
+            <p className="text-xs text-zinc-400 mt-0.5">Seleccioná un usuario existente para hacerlo admin</p>
           </div>
-          <button type="submit" disabled={loading}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 transition disabled:opacity-50">
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
-            {loading ? "Creando..." : "Crear usuario"}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ─── Modal: invitar usuario existente (multi-org) ────────────────────────────
-
-function InviteExistingModal({ orgId, onClose }: { orgId: string; onClose: () => void }) {
-  const [email, setEmail]     = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [copied, setCopied]   = useState(false);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const { token } = await inviteUserToOrg(email, orgId);
-      const link = `${window.location.origin}/invite/${token}`;
-      setInviteLink(link);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo generar la invitación.");
-    } finally { setLoading(false); }
-  }
-
-  function copyLink() {
-    if (!inviteLink) return;
-    navigator.clipboard.writeText(inviteLink).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
-          <h3 className="text-sm font-bold text-zinc-900">Invitar usuario existente</h3>
           <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100">
             <X size={16} />
           </button>
         </div>
 
         <div className="p-5 space-y-4">
-          <p className="text-xs leading-5 text-zinc-500">
-            Ingresá el email de una persona que ya tenga cuenta en la plataforma.
-            Se genera un link de invitación que podés copiar y enviar por donde quieras.
-          </p>
+          {/* Búsqueda */}
+          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 focus-within:border-zinc-400 transition">
+            <Search size={14} className="text-zinc-400 shrink-0" />
+            <input className="w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-500 outline-none"
+              placeholder="Buscar usuario..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
 
-          {!inviteLink ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Email del usuario</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
-                    <Mail size={14} />
-                  </span>
-                  <input
-                    type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                    placeholder="usuario@correo.com"
-                    className="w-full rounded-xl border border-zinc-200 py-2.5 pl-9 pr-4 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                  />
+          {/* Lista de usuarios */}
+          <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-60 overflow-y-auto">
+            {loading ? (
+              Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse m-2 rounded-xl bg-zinc-100" />)
+            ) : filtered.length === 0 ? (
+              <p className="py-8 text-center text-xs text-zinc-400">
+                {allUsers.length === 0 ? "Sin usuarios disponibles" : "Sin resultados"}
+              </p>
+            ) : filtered.map((u) => (
+              <button key={u.id} type="button" onClick={() => setSelected(u)}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50 ${selected?.id === u.id ? "bg-zinc-100" : ""}`}>
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-800 text-[10px] font-bold text-white">
+                  {u.fullName[0]?.toUpperCase()}
                 </div>
-              </div>
-              <button type="submit" disabled={loading}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 transition disabled:opacity-50">
-                {loading ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />}
-                {loading ? "Generando..." : "Generar link de invitación"}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-zinc-900 truncate">{u.fullName}</p>
+                  <p className="text-xs text-zinc-500 truncate">{u.email}</p>
+                </div>
+                {selected?.id === u.id && <Check size={13} className="text-emerald-600 shrink-0" />}
               </button>
-            </form>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-700">
-                ✓ Link generado. Copialo y enviáselo al usuario por email, WhatsApp o donde prefieras.
-              </div>
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <p className="text-[11px] font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">Link de invitación</p>
-                <p className="text-xs text-zinc-700 break-all font-mono leading-5">{inviteLink}</p>
-              </div>
-              <button type="button" onClick={copyLink}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition">
-                {copied ? <><Check size={15} className="text-emerald-500" /> Copiado</> : <><Copy size={15} /> Copiar link</>}
-              </button>
-              <button type="button" onClick={onClose}
-                className="inline-flex w-full items-center justify-center rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 transition">
-                Listo
-              </button>
-            </div>
-          )}
+            ))}
+          </div>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose}
+              className="flex-1 h-10 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition">
+              Cancelar
+            </button>
+            <button type="button" onClick={handleAssign} disabled={!selected || saving}
+              className="flex-1 h-10 rounded-xl text-sm font-semibold transition disabled:opacity-40 inline-flex items-center justify-center gap-2"
+              style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+              {saving ? "Asignando..." : "Hacer admin"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -202,16 +153,17 @@ function InviteExistingModal({ orgId, onClose }: { orgId: string; onClose: () =>
 
 // ─── Page principal ───────────────────────────────────────────────────────────
 
-type Modal = "create" | "invite" | null;
-
 export function AdminTeamPage() {
   const { user } = useAuth();
-  const [users, setUsers]         = useState<AdminUserSummary[]>([]);
-  const [memberships, setMemberships] = useState<OrgMembership[]>([]);
+  const [users, setUsers]                     = useState<AdminUserSummary[]>([]);
+  const [memberships, setMemberships]         = useState<OrgMembership[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<OrgInvitation[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
-  const [modal, setModal]         = useState<Modal>(null);
+  const [inviteCode, setInviteCode]           = useState<string | undefined>(undefined);
+  const [loading, setLoading]                 = useState(true);
+  const [error, setError]                     = useState<string | null>(null);
+  const [showAssign, setShowAssign]           = useState(false);
+  const [codeCopied, setCodeCopied]           = useState(false);
+  const [regenerating, setRegenerating]       = useState(false);
 
   useEffect(() => {
     if (!user?.organizationId) return;
@@ -221,11 +173,13 @@ export function AdminTeamPage() {
       getAllUsers(orgId),
       getOrgMemberships(orgId),
       getPendingInvitations(orgId),
+      getMyOrganization(),
     ])
-      .then(([allUsers, membs, invs]) => {
+      .then(([allUsers, membs, invs, org]) => {
         setUsers(allUsers.filter((u) => u.role === "ADMIN" || u.role === "ORG_ADMIN"));
         setMemberships(membs.filter((m) => m.status === "pending"));
         setPendingInvitations(invs);
+        setInviteCode(org?.inviteCode);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -241,6 +195,25 @@ export function AdminTeamPage() {
     setMemberships((prev) => prev.filter((m) => m.id !== membershipId));
   }
 
+  function copyCode() {
+    if (!inviteCode) return;
+    navigator.clipboard.writeText(inviteCode).then(() => {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2500);
+    });
+  }
+
+  async function handleRegenerate() {
+    if (!user?.organizationId) return;
+    setRegenerating(true);
+    try {
+      const newCode = await regenerateInviteCode(user.organizationId);
+      setInviteCode(newCode);
+    } catch { /* silencioso */ } finally {
+      setRegenerating(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -251,21 +224,44 @@ export function AdminTeamPage() {
             {loading ? "Cargando..." : `${users.length} admin${users.length !== 1 ? "s" : ""} en tu organización`}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setModal("invite")}
-            className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition">
-            <Mail size={15} />
-            Invitar existente
-          </button>
-          <button type="button" onClick={() => setModal("create")}
-            className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 transition">
-            <UserPlus size={15} />
-            Crear usuario
-          </button>
-        </div>
+        <button type="button" onClick={() => setShowAssign(true)}
+          className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
+          style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+          <ShieldCheck size={15} />
+          Asignar admin
+        </button>
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
+
+      {/* Código de invitación */}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5 space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-900">Código de invitación</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Compartí este código con quien quieras que se una a tu organización. Primero deben crear su cuenta, luego ingresan este código en su perfil para unirse.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-3.5 text-center">
+            <p className="font-mono text-2xl font-black tracking-[0.3em] text-zinc-900 select-all">
+              {inviteCode ?? (loading ? "..." : "—")}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button type="button" onClick={copyCode} disabled={!inviteCode}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition disabled:opacity-40">
+              {codeCopied ? <><Check size={13} className="text-emerald-500" /> Copiado</> : <><Copy size={13} /> Copiar</>}
+            </button>
+            <button type="button" onClick={handleRegenerate} disabled={regenerating || !inviteCode}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-500 hover:bg-zinc-50 transition disabled:opacity-40">
+              <RefreshCw size={13} className={regenerating ? "animate-spin" : ""} />
+              {regenerating ? "Regenerando..." : "Regenerar"}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Solicitudes de acceso pendientes */}
       {memberships.length > 0 && (
@@ -300,7 +296,7 @@ export function AdminTeamPage() {
         </div>
       )}
 
-      {/* Invitaciones enviadas pendientes */}
+      {/* Invitaciones enviadas (legacy — mientras el sistema de email siga activo) */}
       {pendingInvitations.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-bold text-zinc-700 flex items-center gap-2">
@@ -341,7 +337,7 @@ export function AdminTeamPage() {
         {!loading && users.length === 0 && !error && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-10 flex flex-col items-center gap-3 text-center">
             <p className="text-sm font-semibold text-zinc-500">Sin administradores aún</p>
-            <p className="text-xs text-zinc-400">Creá o invitá el primer miembro del equipo.</p>
+            <p className="text-xs text-zinc-400">Compartí el código para que se unan, o creá uno directamente.</p>
           </div>
         )}
 
@@ -391,11 +387,13 @@ export function AdminTeamPage() {
         )}
       </div>
 
-      {modal === "create" && (
-        <CreateUserModal onClose={() => setModal(null)} onCreated={(u) => setUsers((prev) => [u, ...prev])} />
-      )}
-      {modal === "invite" && user?.organizationId && (
-        <InviteExistingModal orgId={user.organizationId} onClose={() => setModal(null)} />
+      {showAssign && user?.organizationId && (
+        <AssignAdminModal
+          orgId={user.organizationId}
+          currentAdminIds={users.map((u) => u.id)}
+          onClose={() => setShowAssign(false)}
+          onAssigned={(u) => setUsers((prev) => [u, ...prev])}
+        />
       )}
     </div>
   );

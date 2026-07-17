@@ -3,9 +3,10 @@
  * Also includes ContractDetailView for viewing existing contracts.
  */
 
-import { Calendar, Check, CheckCircle2, ChevronDown, Clock, FileText, Hash, Mail, Plus, Shield, ShieldCheck, Trash2, User, UserPlus, X } from "lucide-react";
+import { Calendar, Check, CheckCircle2, ChevronDown, Clock, Download, FileText, Hash, Mail, Plus, Shield, ShieldCheck, Trash2, User, UserPlus, X } from "lucide-react";
 import { loadOrgCache } from "../../../shared/config/orgCache";
 import { useEffect, useState } from "react";
+import { downloadContractAsPdf, downloadContractWithAuditPdf } from "../../../shared/utils/downloadContractPdf";
 import { createPortal } from "react-dom";
 import type { Contract, ContractDetail } from "../../../shared/types/contract";
 import {
@@ -604,8 +605,18 @@ export function ContractDetailModal({
   const [auditRecords, setAuditRecords] = useState<SignatureAuditRecord[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditLoaded, setAuditLoaded] = useState(false);
+  const [orgName, setOrgName] = useState("Escencial Consultora");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const displayContract = detail ?? contract;
   const st = STATUS_LABELS[displayContract.status] ?? { label: displayContract.status, color: "text-zinc-400 bg-zinc-50 border-zinc-200" };
+
+  useEffect(() => {
+    const org = loadOrgCache();
+    if (org?.name) setOrgName(org.name);
+    const logo = org?.logoDarkUrl ?? org?.logoLightUrl ?? null;
+    if (logo) setLogoUrl(logo);
+  }, []);
 
   async function reloadDetail() {
     const fresh = await getContractById(contract.id);
@@ -617,6 +628,57 @@ export function ContractDetailModal({
   useEffect(() => {
     void reloadDetail();
   }, [contract.id]);
+
+  async function handleDownloadContractPdf() {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      const firstSigner = detail?.signers?.[0];
+      await downloadContractAsPdf({
+        title: displayContract.title,
+        signerName: firstSigner?.name || firstSigner?.email || "firmante",
+        logoUrl,
+        orgName,
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
+  async function handleDownloadAuditPdf() {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      const tf = displayContract.templateFields ?? {};
+      const signedRec = auditRecords.find((r) => r.status === "SIGNED") ?? auditRecords[0];
+      const signerRec = detail?.signers?.find((s) => s.email === signedRec?.signerEmail);
+
+      // Hash real del documento — guardado en signatures.document_hash al momento de firmar
+      const documentHash = signedRec?.documentHash ?? displayContract.sha256Hash ?? null;
+
+      await downloadContractWithAuditPdf({
+        title: displayContract.title,
+        signerName: signedRec?.signerName || signedRec?.signerEmail || "firmante",
+        logoUrl,
+        orgName,
+        autorNombre: tf.autoridad_nombre ?? "",
+        autorCuil: tf.autoridad_cuil ?? "",
+        autorEmail: tf.autoridad_email ?? "",
+        autorSigUrl: tf.autoridad_signature_url ?? "",
+        signerEmail: signedRec?.signerEmail ?? "",
+        signerCuil: signedRec?.signerCuil ?? "",
+        signerDni: signedRec?.signerDni ?? "",
+        signatureData: signerRec?.signatureUrl ?? null,
+        signingSelfiUrl: signedRec?.signingSelfiUrl ?? null,
+        ipAddress: signedRec?.ipAddress ?? null,
+        faceSimilarity: signedRec?.faceSimilarityScore ?? null,
+        signedAt: signedRec?.signedAt ?? null,
+        documentHash,
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
 
   function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -674,7 +736,7 @@ export function ContractDetailModal({
   const signersDone = displayContract.completedSigners;
   const signersTotal = displayContract.totalSigners;
   const allSigned = signersDone > 0 && signersDone === signersTotal;
-  const pdfUrl = displayContract.finalPdfUrl || (displayContract as ContractDetail).pdfUrl;
+  const pdfUrl = null; // Formato viejo eliminado — se usa generateConsolidatedPdfBlob
 
   const modalContent = (
     <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center overflow-hidden p-0 sm:p-6">
@@ -891,61 +953,70 @@ export function ContractDetailModal({
                   <ShieldCheck size={12} /> Auditoría judicial
                 </button>
               </div>
-              {/* Botón PDF solo en tab contrato */}
-              {activeTab === "contract" && pdfUrl && (
-                <a
-                  href={pdfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 transition"
+              {/* Botón descarga según tab activo */}
+              {activeTab === "contract" && (displayContract.templateId || displayContract.templateFields) && (
+                <button
+                  type="button"
+                  onClick={handleDownloadContractPdf}
+                  disabled={downloadingPdf}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 transition disabled:opacity-50 disabled:cursor-wait"
                 >
-                  Abrir PDF
-                </a>
+                  <Download size={12} />
+                  {downloadingPdf ? "Generando…" : "Descargar PDF"}
+                </button>
+              )}
+              {activeTab === "audit" && auditLoaded && auditRecords.some((r) => r.status === "SIGNED") && (
+                <button
+                  type="button"
+                  onClick={handleDownloadAuditPdf}
+                  disabled={downloadingPdf}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition disabled:opacity-50 disabled:cursor-wait"
+                >
+                  <Download size={12} />
+                  {downloadingPdf ? "Generando…" : "Descargar con auditoría"}
+                </button>
               )}
             </div>
 
-            {/* ── TAB: Contrato ── */}
-            {activeTab === "contract" && (
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                {(displayContract.templateId || displayContract.templateFields) ? (
-                  <div className="[&_.contract-doc-wrapper]:max-h-none [&_.contract-doc-wrapper]:overflow-visible [&_.contract-doc-wrapper]:shadow-none [&_.contract-doc-wrapper]:border-0 [&_.contract-doc-wrapper]:rounded-none [&_.contract-doc-wrapper]:bg-transparent">
-                    <ContractDocument
-                      templateId={displayContract.templateId ?? "custom"}
-                      fields={displayContract.templateFields ?? {}}
-                      alumnos={detail?.signers?.map((s) => ({
-                        nombre: s.name ?? "",
-                        dni: "",
-                        cuil: "",
-                        email: s.email ?? "",
-                        domicilio: "",
-                        signatureUrl: s.signatureUrl ?? null,
-                      })) ?? []}
-                      logoHeader
-                    />
-                  </div>
-                ) : pdfUrl ? (
-                  <iframe
-                    src={pdfUrl}
-                    className="h-full w-full border-0"
-                    style={{ minHeight: "60vh" }}
-                    title="Vista previa del contrato"
+            {/* ── TAB: Contrato — siempre en DOM para que buildContractPdf pueda capturar .contract-doc-wrapper ── */}
+            <div className={activeTab === "contract" ? "flex-1 min-h-0 overflow-y-auto" : "hidden"}>
+              {(displayContract.templateId || displayContract.templateFields) ? (
+                <div className="[&_.contract-doc-wrapper]:max-h-none [&_.contract-doc-wrapper]:overflow-visible [&_.contract-doc-wrapper]:shadow-none [&_.contract-doc-wrapper]:border-0 [&_.contract-doc-wrapper]:rounded-none [&_.contract-doc-wrapper]:bg-transparent">
+                  <ContractDocument
+                    templateId={displayContract.templateId ?? "custom"}
+                    fields={displayContract.templateFields ?? {}}
+                    alumnos={detail?.signers?.map((s) => ({
+                      nombre: s.name ?? "",
+                      dni: "",
+                      cuil: "",
+                      email: s.email ?? "",
+                      domicilio: "",
+                      signatureUrl: s.signatureUrl ?? null,
+                    })) ?? []}
+                    logoHeader
                   />
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full gap-3 py-16 text-center">
-                    <div className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-6 space-y-3 mx-auto">
-                      <div className="h-2.5 bg-zinc-200 rounded-full w-3/4 mx-auto" />
-                      <div className="h-2 bg-zinc-100 rounded-full w-full" />
-                      <div className="h-2 bg-zinc-100 rounded-full w-5/6" />
-                    </div>
-                    <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">Sin contenido disponible.</p>
+                </div>
+              ) : pdfUrl ? (
+                <iframe
+                  src={pdfUrl}
+                  className="h-full w-full border-0"
+                  style={{ minHeight: "60vh" }}
+                  title="Vista previa del contrato"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-3 py-16 text-center">
+                  <div className="w-full max-w-xs rounded-2xl border border-zinc-200 bg-white p-6 space-y-3 mx-auto">
+                    <div className="h-2.5 bg-zinc-200 rounded-full w-3/4 mx-auto" />
+                    <div className="h-2 bg-zinc-100 rounded-full w-full" />
+                    <div className="h-2 bg-zinc-100 rounded-full w-5/6" />
                   </div>
-                )}
-              </div>
-            )}
+                  <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">Sin contenido disponible.</p>
+                </div>
+              )}
+            </div>
 
             {/* ── TAB: Auditoría judicial ── */}
-            {activeTab === "audit" && (
-              <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
+            <div className={activeTab === "audit" ? "flex-1 min-h-0 overflow-y-auto p-6 space-y-5" : "hidden"}>
                 {auditLoading ? (
                   <div className="flex items-center justify-center py-16">
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700" />
@@ -1249,8 +1320,7 @@ export function ContractDetailModal({
                     )}
                   </>
                 )}
-              </div>
-            )}
+            </div>
           </div>
 
         </div>

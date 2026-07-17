@@ -62,10 +62,6 @@ export function ContractDetailPage() {
 
   useEffect(() => {
     if (!contract || contract.status !== "COMPLETED") return;
-    if (contract.finalPdfUrl) {
-      setSignedPdfUrl(contract.finalPdfUrl);
-      return;
-    }
     generateConsolidatedPdfBlob(contract.id).then((blob) => {
       if (blob) {
         const url = URL.createObjectURL(blob);

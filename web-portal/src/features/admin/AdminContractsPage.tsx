@@ -19,8 +19,9 @@ import {
   User,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { createRoot } from "react-dom/client";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Toast } from "../../shared/components/ui/Toast";
 import { Button } from "../../shared/components/ui/Button";
@@ -29,10 +30,10 @@ import {
   getAllContracts,
   sendContractFromTemplate,
   sendDocumentToThirdParty,
-  uploadContractPdf,
   deleteContract,
+  getContractById,
 } from "../../shared/services/contracts.service";
-import { generateConsolidatedPdfBlob, tryGenerateConsolidatedPdf } from "../../shared/services/signing.service";
+import { tryGenerateConsolidatedPdf } from "../../shared/services/signing.service";
 import { getOrgAuthorities, type OrgAuthority } from "../../shared/services/authorities.service";
 import { getMyOrganization } from "../../shared/services/organizations.service";
 import { getAllUsers } from "../../shared/services/admin.service";
@@ -59,6 +60,7 @@ import { DEFAULT_SIGNATURE_POSITION, type Contract, type SignaturePosition } fro
 import type { AdminUserSummary } from "../../shared/types/user";
 import { downloadBlob, signedPdfDownloadUrl, signedPdfFileName } from "../../shared/utils/downloadFileName";
 import { buildSignedPdfsEmail } from "../../shared/utils/shareEmail";
+import { buildContractPdf } from "../../shared/utils/downloadContractPdf";
 import { ContractDocument, ContractDetailModal } from "./components/ContractRenderer";
 import { RichTextEditor } from "./components/RichTextEditor";
 import { loadOrgCache } from "../../shared/config/orgCache";
@@ -1066,7 +1068,7 @@ function DeleteConfirmModal({
 type PageView = "list" | "editor" | "sending";
 
 export function AdminContractsPage() {
-  const [activeTab, setActiveTab] = useState<"templates" | "contracts" | "upload" | "convenios" | "payments">("contracts");
+  const [activeTab, setActiveTab] = useState<"templates" | "contracts" | "upload" | "convenios">("contracts");
   const [orgId, setOrgId]         = useState<string | null>(null);
   const [orgName, setOrgName]     = useState<string | null>(null);
 
@@ -1210,7 +1212,7 @@ export function AdminContractsPage() {
 
     try {
       const prepared = await Promise.all(selectedSignedContracts.map(async (contract) => {
-        const url = contract.finalPdfUrl ?? await tryGenerateConsolidatedPdf(contract.id);
+        const url = await tryGenerateConsolidatedPdf(contract.id);
         return {
           title: contract.title,
           ownerEmail: contract.ownerEmail,
@@ -1341,24 +1343,49 @@ export function AdminContractsPage() {
 
   async function openSignedPdf(contract: Contract) {
     setPreparingPdfId(contract.id);
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-9999px;top:0;width:0;height:0;overflow:hidden;";
+    document.body.appendChild(container);
+    let root: ReturnType<typeof createRoot> | null = null;
     try {
-      const pdfBlob = await generateConsolidatedPdfBlob(contract.id);
-      if (!pdfBlob) {
-        if (contract.finalPdfUrl) {
-          window.open(`${contract.finalPdfUrl}${contract.finalPdfUrl.includes("?") ? "&" : "?"}v=${Date.now()}`, "_blank", "noopener,noreferrer");
-          return;
-        }
-        window.alert("No se pudo preparar el PDF completo. Verificá que el documento tenga firmas registradas y una versión PDF original.");
+      const detail = await getContractById(contract.id);
+      const org = loadOrgCache();
+      const orgName = org?.name ?? "Escencial Consultora";
+      const logoUrl = org?.logoDarkUrl ?? org?.logoLightUrl ?? null;
+
+      container.style.cssText = "position:fixed;left:-9999px;top:0;width:760px;overflow:visible;";
+      root = createRoot(container);
+      root.render(
+        <ContractDocument
+          templateId={contract.templateId ?? "custom"}
+          fields={contract.templateFields ?? {}}
+          alumnos={(detail?.signers ?? []).map((s) => ({
+            nombre: s.name ?? "",
+            dni: "",
+            cuil: "",
+            email: s.email ?? "",
+            domicilio: "",
+            signatureUrl: s.signatureUrl ?? null,
+          }))}
+          logoHeader
+        />
+      );
+      await new Promise((r) => setTimeout(r, 600));
+
+      const result = await buildContractPdf({
+        title: contract.title,
+        signerName: detail?.signers?.[0]?.name || detail?.signers?.[0]?.email || "firmante",
+        logoUrl,
+        orgName,
+      });
+      if (!result) {
+        window.alert("No se pudo generar el PDF. Verificá que el documento tenga contenido.");
         return;
       }
-
-      downloadBlob(pdfBlob, signedPdfFileName({
-        title: contract.title,
-        fileName: contract.fileName,
-        sequence: contract.versionNumber,
-      }));
-      void tryGenerateConsolidatedPdf(contract.id);
+      result.pdf.save(signedPdfFileName({ title: contract.title, fileName: contract.fileName, sequence: contract.versionNumber }));
     } finally {
+      root?.unmount();
+      document.body.removeChild(container);
       setPreparingPdfId(null);
     }
   }
@@ -1672,7 +1699,6 @@ export function AdminContractsPage() {
               { key: "contracts", label: "Contratos" },
               { key: "upload", label: "Subir PDF" },
               { key: "convenios", label: "Convenios" },
-              { key: "payments", label: "Pagos" },
             ] as const).map((tab) => (
               <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-2.5 text-sm font-semibold transition border-b-2 -mb-px ${
@@ -1685,8 +1711,6 @@ export function AdminContractsPage() {
 
         {activeTab === "convenios" && orgId && <AdminConveniosTab orgId={orgId} />}
         {activeTab === "convenios" && !orgId && <p className="text-sm text-zinc-400">Cargando organización...</p>}
-
-        {activeTab === "payments" && <AdminPaymentTemplatesTab />}
 
         {activeTab === "upload" && <AdminUploadPdfTab />}
 
@@ -2068,54 +2092,212 @@ export function AdminContractsPage() {
   );
 }
 
-// ─── Upload PDF Tab ────────────────────────────────────────────────────────────
+// ─── A4 Visual Signature Picker ───────────────────────────────────────────────
+
+const A4_W_MM = 210;
+const A4_H_MM = 297;
+
+function PdfSignaturePicker({
+  value,
+  onChange,
+}: {
+  value: SignaturePosition;
+  onChange: (v: SignaturePosition) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Convert mm coords to % for CSS positioning (y=0 at bottom in PDF coords)
+  const blockLeftPct   = (value.x / A4_W_MM) * 100;
+  const blockTopPct    = ((A4_H_MM - value.y - value.height) / A4_H_MM) * 100;
+  const blockWidthPct  = (value.width  / A4_W_MM) * 100;
+  const blockHeightPct = (value.height / A4_H_MM) * 100;
+
+  function handleA4Click(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const x = (px / rect.width)  * A4_W_MM - value.width  / 2;
+    const y = A4_H_MM - (py / rect.height) * A4_H_MM - value.height / 2;
+    onChange({
+      ...value,
+      x: Math.max(0, Math.min(A4_W_MM - value.width,  Math.round(x))),
+      y: Math.max(0, Math.min(A4_H_MM - value.height, Math.round(y))),
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Page selector */}
+      <div className="flex items-center gap-3">
+        <label className="text-xs font-semibold text-zinc-500 shrink-0">Página</label>
+        <select
+          value={value.page === "last" ? "last" : "custom"}
+          onChange={(e) => onChange({ ...value, page: e.target.value === "last" ? "last" : 0 })}
+          className="h-8 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500">
+          <option value="last">Última página</option>
+          <option value="custom">Número específico</option>
+        </select>
+        {value.page !== "last" && (
+          <input type="number" min="1" value={Number(value.page) + 1}
+            onChange={(e) => onChange({ ...value, page: Math.max(0, (Number(e.target.value) || 1) - 1) })}
+            className="h-8 w-16 rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500" />
+        )}
+      </div>
+
+      {/* A4 simulator — full width responsive */}
+      <div className="relative w-full overflow-hidden rounded-lg border border-zinc-200 shadow-sm bg-zinc-100 p-3">
+        <div
+          ref={containerRef}
+          onClick={handleA4Click}
+          className="relative w-full bg-white shadow-md cursor-crosshair mx-auto select-none"
+          style={{ aspectRatio: `${A4_W_MM}/${A4_H_MM}`, maxWidth: "100%" }}>
+
+          {/* Líneas de renglón */}
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ backgroundImage: "repeating-linear-gradient(transparent, transparent 23px, #f1f5f9 23px, #f1f5f9 24px)", backgroundSize: "100% 24px" }} />
+
+          {/* Bloque dual: firmante + autoridad lado a lado */}
+          <div
+            className="absolute rounded overflow-hidden pointer-events-none"
+            style={{
+              left:   `${blockLeftPct}%`,
+              top:    `${blockTopPct}%`,
+              width:  `${blockWidthPct}%`,
+              height: `${blockHeightPct}%`,
+              border: "2px dashed #9ca3af",
+            }}>
+            {/* Mitad izquierda — Firmante */}
+            <div className="absolute inset-y-0 left-0 flex flex-col items-center justify-center gap-0.5"
+              style={{ width: "50%", background: "rgba(16,185,129,0.1)", borderRight: "1px dashed #10b981" }}>
+              <span className="text-[6px] sm:text-[8px] font-bold text-emerald-700 leading-none">FIRMA</span>
+              <span className="text-[5px] sm:text-[7px] text-zinc-400 leading-none">Firmante</span>
+            </div>
+            {/* Mitad derecha — Autoridad */}
+            <div className="absolute inset-y-0 right-0 flex flex-col items-center justify-center gap-0.5"
+              style={{ width: "50%", background: "rgba(59,130,246,0.08)" }}>
+              <span className="text-[6px] sm:text-[8px] font-bold text-blue-700 leading-none">FIRMA</span>
+              <span className="text-[5px] sm:text-[7px] text-zinc-400 leading-none">Autoridad</span>
+            </div>
+          </div>
+
+          {/* Hint */}
+          <div className="absolute inset-0 flex items-end justify-center pb-4 pointer-events-none">
+            <span className="text-[9px] text-zinc-300 font-medium bg-white/60 px-2 py-0.5 rounded-full">
+              Hacé clic para posicionar
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Leyenda */}
+      <div className="flex items-center gap-4 text-[10px] text-zinc-500">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 rounded-sm border border-emerald-400 bg-emerald-100" />
+          Firmante
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-2 rounded-sm border border-blue-400 bg-blue-100" />
+          Autoridad
+        </span>
+      </div>
+
+      {/* Size controls */}
+      <div className="grid grid-cols-2 gap-3">
+        {(["width", "height"] as const).map((key) => (
+          <div key={key}>
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+              {key === "width" ? "Ancho (mm)" : "Alto (mm)"}
+            </label>
+            <input type="number" min="10" max="200" value={value[key]}
+              onChange={(e) => onChange({ ...value, [key]: Math.max(10, Number(e.target.value) || 10) })}
+              className="h-8 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-xs font-semibold text-zinc-700 outline-none focus:border-zinc-500" />
+          </div>
+        ))}
+      </div>
+
+      {/* Posición actual */}
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+        <span>X: <strong className="text-zinc-700">{value.x}mm</strong></span>
+        <span>Y: <strong className="text-zinc-700">{value.y}mm</strong></span>
+        <span>Ancho: <strong className="text-zinc-700">{value.width}mm</strong></span>
+        <span>Alto: <strong className="text-zinc-700">{value.height}mm</strong></span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Upload PDF Tab — Creador de plantilla PDF ────────────────────────────────
 
 function AdminUploadPdfTab() {
   const { user } = useAuth();
-  const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState("");
-  const [signerName, setSignerName] = useState("");
-  const [signerEmail, setSignerEmail] = useState("");
-  const [signerCuil, setSignerCuil] = useState("");
-  const [signaturePosition, setSignaturePosition] = useState<SignaturePosition>(DEFAULT_SIGNATURE_POSITION);
-  const [sending, setSending] = useState(false);
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState("");
+  const orgId = user?.organizationId;
 
-  async function handleSubmit() {
-    if (!file || !signerName.trim() || !signerEmail.trim() || !user?.id) return;
-    setSending(true);
+  const [file, setFile]                           = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl]               = useState<string | null>(null);
+  const [tplName, setTplName]                     = useState("");
+  const [tplDesc, setTplDesc]                     = useState("");
+  const [tplLabel, setTplLabel]                   = useState("");
+  const [signaturePosition, setSignaturePosition] = useState<SignaturePosition>(DEFAULT_SIGNATURE_POSITION);
+  const [saving, setSaving]                       = useState(false);
+  const [done, setDone]                           = useState(false);
+  const [error, setError]                         = useState("");
+  const [dragOver, setDragOver]                   = useState(false);
+
+  // Limpia el objectURL al desmontar o al cambiar de archivo
+  useEffect(() => {
+    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
+  }, [previewUrl]);
+
+  function setFileAndPreview(f: File) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setFile(f);
+    setPreviewUrl(URL.createObjectURL(f));
+    if (!tplName) setTplName(f.name.replace(/\.pdf$/i, ""));
+    setError("");
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f?.type === "application/pdf") setFileAndPreview(f);
+    else setError("Solo se aceptan archivos PDF");
+  }
+
+  async function handleSave() {
+    if (!file || !tplName.trim() || !user?.id || !orgId) return;
+    setSaving(true);
     setError("");
     try {
-      await uploadContractPdf({
+      const { createPdfContractTemplate } = await import("../../shared/services/contractTemplates.service");
+      await createPdfContractTemplate({
+        orgId,
+        name: tplName.trim(),
+        description: tplDesc.trim(),
+        label: tplLabel.trim(),
         file,
-        title: title.trim() || file.name,
-        signerName: signerName.trim(),
-        signerEmail: signerEmail.trim(),
-        signerCuil: signerCuil.trim() || undefined,
         ownerId: user.id,
         signaturePosition,
       });
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al subir PDF");
+      setError(err instanceof Error ? err.message : "Error al guardar la plantilla");
     } finally {
-      setSending(false);
+      setSaving(false);
     }
   }
 
   function resetForm() {
     setFile(null);
-    setTitle("");
-    setSignerName("");
-    setSignerEmail("");
-    setSignerCuil("");
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setTplName(""); setTplDesc(""); setTplLabel("");
     setSignaturePosition(DEFAULT_SIGNATURE_POSITION);
-    setDone(false);
-    setError("");
+    setDone(false); setError("");
   }
 
-  const inputCls = "w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-600 outline-none focus:border-zinc-500 transition";
+  const inputCls = "w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-500 outline-none focus:border-zinc-500 transition";
 
   if (done) {
     return (
@@ -2124,8 +2306,10 @@ function AdminUploadPdfTab() {
           <Check size={36} className="text-emerald-600" />
         </div>
         <div>
-          <h3 className="text-xl font-bold text-zinc-900">PDF enviado a firmar</h3>
-          <p className="text-sm text-zinc-500 mt-2">{signerName} recibió el documento y puede firmarlo.</p>
+          <h3 className="text-xl font-bold text-zinc-900">Plantilla PDF guardada</h3>
+          <p className="text-sm text-zinc-500 mt-2">
+            La plantilla <strong>"{tplName}"</strong> quedó guardada. Podés usarla desde la pestaña Modelos para enviar a firmar.
+          </p>
         </div>
         <Button onClick={resetForm} className="h-10 px-6 mt-2">
           <Upload size={14} /> Subir otro PDF
@@ -2135,61 +2319,113 @@ function AdminUploadPdfTab() {
   }
 
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="space-y-6">
+      <p className="text-sm text-zinc-500">
+        Subí un PDF y configurá la plantilla. La firma del firmante y de la autoridad se posicionan en el mismo bloque.
+      </p>
+
+      {/* ─── Fila superior: metadatos de la plantilla ─── */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="col-span-2">
+          <label className="mb-1 block text-xs font-semibold text-zinc-400">Nombre de la plantilla *</label>
+          <input value={tplName} onChange={(e) => setTplName(e.target.value)}
+            placeholder="Ej: Convenio de prácticas profesionales"
+            className={inputCls} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-zinc-400">Etiqueta (opcional)</label>
+          <input value={tplLabel} onChange={(e) => setTplLabel(e.target.value)}
+            placeholder="ej: rrhh, legales"
+            className={inputCls} />
+        </div>
+      </div>
       <div>
-        <p className="text-sm text-zinc-500">Subí un PDF para enviarlo a firmar digitalmente.</p>
+        <label className="mb-1 block text-xs font-semibold text-zinc-400">Descripción (opcional)</label>
+        <input value={tplDesc} onChange={(e) => setTplDesc(e.target.value)}
+          placeholder="Descripción breve del documento"
+          className={inputCls} />
       </div>
 
-      <div className="space-y-4">
-        {/* PDF file */}
-        <div>
+      {/* ─── Cuerpo: PDF + picker ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+
+        {/* Col izquierda: uploader + preview */}
+        <div className="space-y-4">
           <label className="mb-1.5 block text-xs font-semibold text-zinc-500">Archivo PDF *</label>
-          <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-8 transition ${file ? "border-emerald-300 bg-emerald-50" : "border-zinc-200 bg-zinc-50 hover:border-zinc-300"}`}>
-            <Upload size={24} className={file ? "text-emerald-500" : "text-zinc-400"} />
+          <label
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-8 transition ${
+              file     ? "border-emerald-300 bg-emerald-50" :
+              dragOver ? "border-zinc-400 bg-zinc-100"      :
+              "border-zinc-200 bg-zinc-50 hover:border-zinc-300"
+            }`}>
+            <div className={`grid h-12 w-12 place-items-center rounded-2xl ${file ? "bg-emerald-100" : "bg-zinc-100"}`}>
+              <Upload size={22} className={file ? "text-emerald-500" : "text-zinc-400"} />
+            </div>
             {file ? (
               <div className="text-center">
-                <p className="text-sm font-semibold text-zinc-800">{file.name}</p>
-                <p className="text-xs text-zinc-500">{(file.size / 1024).toFixed(1)} KB</p>
+                <p className="text-sm font-bold text-zinc-800">{file.name}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{(file.size / 1024).toFixed(1)} KB</p>
+                <p className="text-xs text-emerald-600 mt-1 font-medium">Cambiar archivo</p>
               </div>
             ) : (
               <div className="text-center">
-                <p className="text-sm font-semibold text-zinc-600">Hacé clic para seleccionar un PDF</p>
-                <p className="text-xs text-zinc-400 mt-1">o arrastrá el archivo aquí</p>
+                <p className="text-sm font-semibold text-zinc-600">Arrastrá o hacé clic para seleccionar</p>
+                <p className="text-xs text-zinc-400 mt-1">Solo archivos PDF</p>
               </div>
             )}
             <input type="file" accept=".pdf,application/pdf" className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f && f.type === "application/pdf") setFile(f);
+                if (f?.type === "application/pdf") setFileAndPreview(f);
                 else setError("Solo se aceptan archivos PDF");
               }} />
           </label>
+
+          {/* Preview del PDF cargado */}
+          {previewUrl && (
+            <div className="rounded-2xl border border-zinc-200 overflow-hidden">
+              <p className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 border-b border-zinc-100 bg-zinc-50">
+                Vista previa
+              </p>
+              <iframe
+                src={previewUrl}
+                title="Vista previa PDF"
+                className="w-full"
+                style={{ height: "420px", border: "none" }}
+              />
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!file || !tplName.trim() || saving}
+            className="h-12 w-full rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 transition disabled:opacity-40"
+            style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
+            {saving ? "Guardando plantilla..." : <><Check size={15} /> Guardar plantilla PDF</>}
+          </button>
         </div>
 
-        <Input label="Título del documento (opcional)" value={title}
-          onChange={(e) => setTitle(e.target.value)} placeholder={file?.name ?? "Ej: Contrato de servicios"} />
-
-        <Input label="Nombre del firmante *" value={signerName}
-          onChange={(e) => setSignerName(e.target.value)} placeholder="Juan José Gimenez" />
-
-        <Input label="Email del firmante *" type="email" value={signerEmail}
-          onChange={(e) => setSignerEmail(e.target.value)} placeholder="juan@ejemplo.com" />
-
-        <Input label="CUIL / CUIT (opcional)" value={signerCuil}
-          onChange={(e) => setSignerCuil(e.target.value)} placeholder="20-40123456-7" />
-
-        <SignaturePositionEditor value={signaturePosition} onChange={setSignaturePosition} />
+        {/* Col derecha: posición del bloque de firma */}
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Posición del bloque de firma</p>
+            <p className="text-xs text-zinc-400 mt-1">
+              Hacé clic en la hoja para posicionar el bloque que contendrá las dos firmas (firmante + autoridad).
+            </p>
+          </div>
+          <PdfSignaturePicker value={signaturePosition} onChange={setSignaturePosition} />
+        </div>
       </div>
-
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
-          {error}
-        </div>
-      )}
-
-      <Button onClick={handleSubmit} disabled={!file || !signerName.trim() || !signerEmail.trim() || sending} className="h-12 w-full">
-        {sending ? "Subiendo y enviando..." : <><Upload size={15} /> Subir PDF y enviar a firmar</>}
-      </Button>
     </div>
   );
 }
