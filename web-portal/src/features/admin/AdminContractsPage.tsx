@@ -423,8 +423,10 @@ function SendingFlow({
 
   // Mapa: nombre de variable → campo del org para sugerir auto-completado
   const ORG_VAR_SUGGESTIONS: Record<string, (o: NonNullable<typeof orgData>, auth: OrgAuthority | null) => string | null | undefined> = {
+    representante_legal:      (o, a) => a?.fullName ?? null,
     representante_consultora: (o, a) => a?.fullName ?? null,
     representante_empresa:    (o, a) => a?.fullName ?? null,
+    razon_social:             (o)    => o.name,
     razon_social_consultora:  (o)    => o.name,
     razon_social_empresa:     (o)    => o.name,
     nombre_consultora:        (o)    => o.name,
@@ -523,19 +525,44 @@ function SendingFlow({
 
   const allAdminFilled = adminVars.every((v) => !!varValues[v]?.trim());
 
-  const previewFields = useMemo(() => ({
-    _templateContent: template.contentHtml,
-    _legalTitle:      template.name,
-        _dbTemplateId:    template.id,
-        _paymentTemplateId: selectedPayment?.id ?? "",
-        ...varValues,
-  }), [template, selectedPayment, varValues]);
+  const previewFields = useMemo(() => {
+    const orgVarValues: Record<string, string> = {};
+    if (orgData) {
+      orgAutoVars.forEach((v) => {
+        const fn = ORG_VAR_SUGGESTIONS[v];
+        if (fn) {
+          const val = fn(orgData, selectedAuth);
+          if (val) orgVarValues[v] = val;
+        }
+      });
+    }
+    return {
+      _templateContent:   template.contentHtml,
+      _legalTitle:        template.name,
+      _dbTemplateId:      template.id,
+      _paymentTemplateId: selectedPayment?.id ?? "",
+      ...orgVarValues,
+      ...varValues,
+    };
+  }, [template, selectedPayment, varValues, orgData, selectedAuth, orgAutoVars]);
 
   async function handleSend() {
     if (!selectedAuth || !selectedUser) return;
     setSending(true);
     setError("");
     try {
+      // Resolver variables de org automáticamente desde los datos de la organización
+      const orgVarValues: Record<string, string> = {};
+      if (orgData) {
+        orgAutoVars.forEach((v) => {
+          const fn = ORG_VAR_SUGGESTIONS[v];
+          if (fn) {
+            const val = fn(orgData, selectedAuth);
+            if (val) orgVarValues[v] = val;
+          }
+        });
+      }
+
       const templateFields: Record<string, string> = {
         _templateContent:  template.contentHtml,
         _legalTitle:       template.name,
@@ -543,6 +570,7 @@ function SendingFlow({
         _paymentTemplateId: selectedPayment?.id ?? "",
         _logoHeader:       template.logoHeader    ? "1" : "0",
         _logoWatermark:    template.logoWatermark ? "1" : "0",
+        ...orgVarValues,
         ...varValues,
       };
       const contract = await sendContractFromTemplate({

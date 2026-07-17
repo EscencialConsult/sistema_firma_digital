@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
   name:    "Firma Electrónica",
   company: "Escencial Consultora",
-  version: "0.1.99",
+  version: "0.2.0",
   defaultDiditWorkflowId: "8b29bf83-289b-44d1-ad28-52ecabe79fbc",
 } as const;
