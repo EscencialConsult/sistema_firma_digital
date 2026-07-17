@@ -88,18 +88,23 @@ function AssignAdminModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-zinc-200/60 overflow-hidden">
-
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-zinc-200/60"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-zinc-100">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
               <ShieldCheck size={16} className="text-violet-600" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-zinc-900">Asignar admin</h3>
-              <p className="text-[11px] text-zinc-400 mt-0.5">Seleccioná un usuario para hacerlo administrador</p>
+              <p className="text-[11px] text-zinc-400 mt-0.5">Seleccioná quién va a administrar la org</p>
             </div>
           </div>
           <button type="button" onClick={onClose}
@@ -108,9 +113,9 @@ function AssignAdminModal({
           </button>
         </div>
 
-        <div className="px-5 pb-5 space-y-3">
+        <div className="px-5 pt-4 pb-5 space-y-3">
           {/* Búsqueda */}
-          <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 focus-within:border-zinc-400 focus-within:bg-white transition">
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 focus-within:border-violet-400 focus-within:bg-white transition">
             <Search size={13} className="text-zinc-400 shrink-0" />
             <input
               className="w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-400 outline-none"
@@ -121,11 +126,11 @@ function AssignAdminModal({
           </div>
 
           {/* Lista */}
-          <div className="rounded-xl border border-zinc-200 max-h-56 overflow-y-auto">
+          <div className="rounded-xl border border-zinc-200 max-h-52 overflow-y-auto divide-y divide-zinc-100">
             {loading ? (
               <div className="p-3 space-y-2">
                 {Array(3).fill(null).map((_, i) => (
-                  <div key={i} className="h-11 animate-pulse rounded-xl bg-zinc-100" />
+                  <div key={i} className="h-12 animate-pulse rounded-xl bg-zinc-100" />
                 ))}
               </div>
             ) : filtered.length === 0 ? (
@@ -137,45 +142,47 @@ function AssignAdminModal({
             ) : filtered.map((u) => {
               const isSel = selected?.id === u.id;
               return (
-                <div
+                <button
                   key={u.id}
-                  role="button"
-                  tabIndex={0}
+                  type="button"
                   onClick={() => setSelected(isSel ? null : u)}
-                  onKeyDown={(e) => e.key === "Enter" && setSelected(isSel ? null : u)}
-                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-zinc-50 last:border-0 ${
-                    isSel ? "bg-violet-50" : "hover:bg-zinc-50"
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                    isSel
+                      ? "bg-violet-50 hover:bg-violet-100"
+                      : "bg-white hover:bg-zinc-50"
                   }`}
                 >
-                  <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[12px] font-bold ${
                     isSel ? "bg-violet-600 text-white" : "bg-zinc-100 text-zinc-600"
                   }`}>
                     {u.fullName[0]?.toUpperCase()}
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 text-left">
                     <p className={`text-sm font-semibold truncate ${isSel ? "text-violet-900" : "text-zinc-900"}`}>
                       {u.fullName}
                     </p>
                     <p className="text-[11px] text-zinc-400 truncate">{u.email}</p>
                   </div>
-                  <div className={`shrink-0 h-4 w-4 rounded-full border-2 transition-all flex items-center justify-center ${
-                    isSel ? "border-violet-600 bg-violet-600" : "border-zinc-300"
+                  <div className={`shrink-0 h-5 w-5 rounded-full border-2 transition-all flex items-center justify-center ${
+                    isSel ? "border-violet-600 bg-violet-600" : "border-zinc-300 bg-white"
                   }`}>
-                    {isSel && <Check size={9} className="text-white" strokeWidth={3} />}
+                    {isSel && <Check size={10} className="text-white" strokeWidth={3} />}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
 
           {/* Usuario seleccionado */}
-          {selected && (
+          {selected ? (
             <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5">
               <ShieldCheck size={13} className="text-violet-600 shrink-0" />
-              <p className="text-xs text-violet-800 font-medium truncate">
+              <p className="text-xs text-violet-800 truncate">
                 <span className="font-bold">{selected.fullName}</span> será administrador de la organización
               </p>
             </div>
+          ) : (
+            <p className="text-center text-[11px] text-zinc-400">Tocá un usuario para seleccionarlo</p>
           )}
 
           {error && (
@@ -195,7 +202,7 @@ function AssignAdminModal({
               type="button"
               onClick={handleAssign}
               disabled={!selected || saving}
-              className="flex-1 h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold transition hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+              className="flex-1 h-10 rounded-xl text-sm font-semibold transition inline-flex items-center justify-center gap-1.5 bg-violet-600 text-white hover:bg-violet-700 disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-not-allowed"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
               {saving ? "Asignando…" : "Hacer admin"}
