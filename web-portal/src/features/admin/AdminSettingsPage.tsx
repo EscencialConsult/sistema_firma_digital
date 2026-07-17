@@ -564,98 +564,75 @@ export function AdminSettingsPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label htmlFor="org-name" className="mb-1.5 block text-xs font-semibold text-zinc-500">Nombre legal *</label>
-                <input
-                  id="org-name"
-                  value={org.name}
-                  disabled
-                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-500 cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label htmlFor="tax-id" className="mb-1.5 block text-xs font-semibold text-zinc-500">CUIT / CUIL</label>
-                <input
-                  id="tax-id"
-                  value={taxId}
-                  onChange={(e) => setTaxId(e.target.value)}
-                  placeholder="30-12345678-9"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label htmlFor="contact-email" className="mb-1.5 block text-xs font-semibold text-zinc-500">Email de contacto</label>
-                <input
-                  id="contact-email"
-                  type="email"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  placeholder="admin@empresa.com"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label htmlFor="phone" className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-zinc-500">
-                  <Phone size={11} /> Teléfono
+                <label htmlFor="org-name" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
+                  Nombre legal *
+                  <span title="Variables en plantillas: {{razon_social}} · {{nombre_empresa}} · {{razon_social_empresa}}" className="cursor-help text-blue-400 hover:text-blue-600">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-.75 3.5h1.5v4.5h-1.5V7.5z"/></svg>
+                  </span>
                 </label>
-                <input
-                  id="phone"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+54 11 1234-5678"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                />
+                <input id="org-name" value={org.name} disabled className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-500 cursor-not-allowed" />
+              </div>
+              <div>
+                <label htmlFor="tax-id" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
+                  CUIT / CUIL
+                  <span title="Variables en plantillas: {{cuit_empresa}} · {{cuit_consultora}}" className="cursor-help text-blue-400 hover:text-blue-600">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-.75 3.5h1.5v4.5h-1.5V7.5z"/></svg>
+                  </span>
+                </label>
+                <input id="tax-id" value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="30-12345678-9" className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
+              </div>
+              <div>
+                <label htmlFor="contact-email" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
+                  Email de contacto
+                  <span title="Variables en plantillas: {{email_empresa}} · {{email_consultora}}" className="cursor-help text-blue-400 hover:text-blue-600">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-.75 3.5h1.5v4.5h-1.5V7.5z"/></svg>
+                  </span>
+                </label>
+                <input id="contact-email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="admin@empresa.com" className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
+              </div>
+              <div>
+                <label htmlFor="phone" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
+                  <Phone size={11} /> Teléfono
+                  <span title="Variables en plantillas: {{telefono_empresa}} · {{telefono_consultora}}" className="cursor-help text-blue-400 hover:text-blue-600">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-.75 3.5h1.5v4.5h-1.5V7.5z"/></svg>
+                  </span>
+                </label>
+                <input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+54 11 1234-5678" className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
               </div>
               <div>
                 <label htmlFor="website" className="mb-1.5 block text-xs font-semibold text-zinc-500">Sitio web</label>
-                <input
-                  id="website"
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  placeholder="https://empresa.com"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                />
+                <input id="website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://empresa.com" className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
               </div>
               <div className="sm:col-span-2">
-                <label htmlFor="address" className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-zinc-500">
+                <label htmlFor="address" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
                   <MapPin size={11} /> Dirección
+                  <span title="Variables en plantillas: {{domicilio_empresa}} · {{domicilio_consultora}}" className="cursor-help text-blue-400 hover:text-blue-600">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-.75 3.5h1.5v4.5h-1.5V7.5z"/></svg>
+                  </span>
                 </label>
-                <input
-                  id="address"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Av. Corrientes 1234, Piso 5°"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                />
+                <input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Av. Corrientes 1234, Piso 5°" className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
               </div>
               <div>
-                <label htmlFor="city" className="mb-1.5 block text-xs font-semibold text-zinc-500">Ciudad</label>
-                <input
-                  id="city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="Ciudad Autónoma de Buenos Aires"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                />
+                <label htmlFor="city" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
+                  Ciudad
+                  <span title="Variables en plantillas: {{ciudad_empresa}} · {{ciudad_consultora}}" className="cursor-help text-blue-400 hover:text-blue-600">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-.75 3.5h1.5v4.5h-1.5V7.5z"/></svg>
+                  </span>
+                </label>
+                <input id="city" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Ciudad Autónoma de Buenos Aires" className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
               </div>
               <div>
-                <label htmlFor="province" className="mb-1.5 block text-xs font-semibold text-zinc-500">Provincia</label>
-                <input
-                  id="province"
-                  value={province}
-                  onChange={(e) => setProvince(e.target.value)}
-                  placeholder="Buenos Aires"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                />
+                <label htmlFor="province" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-zinc-500">
+                  Provincia
+                  <span title="Variables en plantillas: {{provincia_empresa}} · {{provincia_consultora}}" className="cursor-help text-blue-400 hover:text-blue-600">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm-.75 3.5h1.5v4.5h-1.5V7.5z"/></svg>
+                  </span>
+                </label>
+                <input id="province" value={province} onChange={(e) => setProvince(e.target.value)} placeholder="Buenos Aires" className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
               </div>
               <div>
                 <label htmlFor="postal-code" className="mb-1.5 block text-xs font-semibold text-zinc-500">Código postal</label>
-                <input
-                  id="postal-code"
-                  value={postalCode}
-                  onChange={(e) => setPostalCode(e.target.value)}
-                  placeholder="C1043AAH"
-                  className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none"
-                />
+                <input id="postal-code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="C1043AAH" className="w-full rounded-xl border border-zinc-200 px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none" />
               </div>
             </div>
           </div>

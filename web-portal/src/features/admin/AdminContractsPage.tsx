@@ -454,16 +454,33 @@ function SendingFlow({
   }
 
   // Variables
-  const allVars   = useMemo(() => extractVariables(template.contentHtml), [template]);
-  const adminVars = allVars.filter((v) => !AUTO_FILL_VARS.has(v) && !ORG_VARS.has(v));
-  const autoVars  = allVars.filter((v) =>  AUTO_FILL_VARS.has(v));
-  const orgAutoVars = allVars.filter((v) => ORG_VARS.has(v));
+  const allVars     = useMemo(() => extractVariables(template.contentHtml), [template]);
+  const adminVars   = allVars.filter((v) => !AUTO_FILL_VARS.has(v) && !ORG_VARS.has(v));
+  const autoVars    = allVars.filter((v) =>  AUTO_FILL_VARS.has(v));
+  const orgAutoVars = allVars.filter((v) =>  ORG_VARS.has(v));
 
   const [varValues, setVarValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     adminVars.forEach((v) => { init[v] = ""; });
+    orgAutoVars.forEach((v) => { init[v] = ""; });
     return init;
   });
+
+  // Pre-fill org vars when orgData loads
+  useEffect(() => {
+    if (!orgData) return;
+    setVarValues((prev) => {
+      const next = { ...prev };
+      orgAutoVars.forEach((v) => {
+        if (!prev[v]) {
+          const fn = ORG_VAR_SUGGESTIONS[v];
+          const val = fn ? fn(orgData, selectedAuth) : null;
+          if (val) next[v] = val;
+        }
+      });
+      return next;
+    });
+  }, [orgData]);
 
   // Auto-fill user vars when user changes
   useEffect(() => {
@@ -525,52 +542,26 @@ function SendingFlow({
 
   const allAdminFilled = adminVars.every((v) => !!varValues[v]?.trim());
 
-  const previewFields = useMemo(() => {
-    const orgVarValues: Record<string, string> = {};
-    if (orgData) {
-      orgAutoVars.forEach((v) => {
-        const fn = ORG_VAR_SUGGESTIONS[v];
-        if (fn) {
-          const val = fn(orgData, selectedAuth);
-          if (val) orgVarValues[v] = val;
-        }
-      });
-    }
-    return {
-      _templateContent:   template.contentHtml,
-      _legalTitle:        template.name,
-      _dbTemplateId:      template.id,
-      _paymentTemplateId: selectedPayment?.id ?? "",
-      ...orgVarValues,
-      ...varValues,
-    };
-  }, [template, selectedPayment, varValues, orgData, selectedAuth, orgAutoVars]);
+  const previewFields = useMemo(() => ({
+    _templateContent:   template.contentHtml,
+    _legalTitle:        template.name,
+    _dbTemplateId:      template.id,
+    _paymentTemplateId: selectedPayment?.id ?? "",
+    ...varValues,
+  }), [template, selectedPayment, varValues]);
 
   async function handleSend() {
     if (!selectedAuth || !selectedUser) return;
     setSending(true);
     setError("");
     try {
-      // Resolver variables de org automáticamente desde los datos de la organización
-      const orgVarValues: Record<string, string> = {};
-      if (orgData) {
-        orgAutoVars.forEach((v) => {
-          const fn = ORG_VAR_SUGGESTIONS[v];
-          if (fn) {
-            const val = fn(orgData, selectedAuth);
-            if (val) orgVarValues[v] = val;
-          }
-        });
-      }
-
       const templateFields: Record<string, string> = {
-        _templateContent:  template.contentHtml,
-        _legalTitle:       template.name,
-        _dbTemplateId:     template.id,
+        _templateContent:   template.contentHtml,
+        _legalTitle:        template.name,
+        _dbTemplateId:      template.id,
         _paymentTemplateId: selectedPayment?.id ?? "",
-        _logoHeader:       template.logoHeader    ? "1" : "0",
-        _logoWatermark:    template.logoWatermark ? "1" : "0",
-        ...orgVarValues,
+        _logoHeader:        template.logoHeader    ? "1" : "0",
+        _logoWatermark:     template.logoWatermark ? "1" : "0",
         ...varValues,
       };
       const contract = await sendContractFromTemplate({
@@ -909,8 +900,55 @@ function SendingFlow({
             </div>
           </div>
 
-          {/* ── Der: Variables manuales ── */}
+          {/* ── Der: Variables de empresa (semi-automático) ── */}
           <div className="space-y-3">
+            {orgAutoVars.length > 0 && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0" />
+                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Datos de la empresa</p>
+                  <span className="text-[10px] text-zinc-400 font-normal normal-case tracking-normal">Pre-completado desde tu configuración · podés editarlos</span>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-5 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {orgAutoVars.map((v) => {
+                      const label = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                      const filled = !!(varValues[v] ?? "").trim();
+                      const orgVal = orgData ? (() => { const fn = ORG_VAR_SUGGESTIONS[v]; return fn ? fn(orgData, selectedAuth) ?? null : null; })() : null;
+                      const isReset = orgVal && varValues[v] !== orgVal;
+                      return (
+                        <div key={v} className="space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${filled ? "bg-emerald-500" : "bg-blue-300"}`} />
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wide">{label}</label>
+                          </div>
+                          <input
+                            type="text"
+                            value={varValues[v] ?? ""}
+                            placeholder={orgVal ?? `Ingresá ${label.toLowerCase()}...`}
+                            onChange={(e) => setVarValues((p) => ({ ...p, [v]: e.target.value }))}
+                            className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-300 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition"
+                          />
+                          {isReset && orgVal && (
+                            <button
+                              type="button"
+                              onClick={() => setVarValues((p) => ({ ...p, [v]: orgVal }))}
+                              className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 transition-colors"
+                            >
+                              <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 font-medium">
+                                ↩ Restaurar: {orgVal}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── Variables manuales ── */}
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
               <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">Completar manualmente</p>
