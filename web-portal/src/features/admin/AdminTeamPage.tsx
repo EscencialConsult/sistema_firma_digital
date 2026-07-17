@@ -88,14 +88,8 @@ function AssignAdminModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-zinc-200/60"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-zinc-200/60">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-zinc-100">
           <div className="flex items-center gap-3">
@@ -142,22 +136,26 @@ function AssignAdminModal({
             ) : filtered.map((u) => {
               const isSel = selected?.id === u.id;
               return (
-                <button
+                <label
                   key={u.id}
-                  type="button"
-                  onClick={() => setSelected(isSel ? null : u)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                    isSel
-                      ? "bg-violet-50 hover:bg-violet-100"
-                      : "bg-white hover:bg-zinc-50"
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors select-none ${
+                    isSel ? "bg-violet-50" : "hover:bg-zinc-50 bg-white"
                   }`}
                 >
+                  <input
+                    type="radio"
+                    name="assign-admin-user"
+                    value={u.id}
+                    checked={isSel}
+                    onChange={() => setSelected(u)}
+                    className="sr-only"
+                  />
                   <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[12px] font-bold ${
                     isSel ? "bg-violet-600 text-white" : "bg-zinc-100 text-zinc-600"
                   }`}>
                     {u.fullName[0]?.toUpperCase()}
                   </div>
-                  <div className="min-w-0 flex-1 text-left">
+                  <div className="min-w-0 flex-1">
                     <p className={`text-sm font-semibold truncate ${isSel ? "text-violet-900" : "text-zinc-900"}`}>
                       {u.fullName}
                     </p>
@@ -168,7 +166,7 @@ function AssignAdminModal({
                   }`}>
                     {isSel && <Check size={10} className="text-white" strokeWidth={3} />}
                   </div>
-                </button>
+                </label>
               );
             })}
           </div>
