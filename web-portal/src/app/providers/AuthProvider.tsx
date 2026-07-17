@@ -153,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       logout() {
+        localStorage.removeItem("lastOrgSlug");
         void logoutService();
         setUser(null);
       },
