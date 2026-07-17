@@ -64,7 +64,7 @@ function AssignAdminModal({
 
   useEffect(() => {
     getAllUsers(orgId)
-      .then((users) => setAllUsers(users.filter((u) => !currentAdminIds.includes(u.id) && u.role !== "ADMIN")))
+      .then((users) => setAllUsers(users.filter((u) => !currentAdminIds.includes(u.id) && u.role !== "ADMIN" && u.role !== "ORG_ADMIN")))
       .finally(() => setLoading(false));
   }, [orgId]);
 
@@ -88,61 +88,117 @@ function AssignAdminModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
-          <div>
-            <h3 className="text-sm font-bold text-zinc-900">Asignar admin</h3>
-            <p className="text-xs text-zinc-400 mt-0.5">Seleccioná un usuario existente para hacerlo admin</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-zinc-200/60 overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+              <ShieldCheck size={16} className="text-violet-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900">Asignar admin</h3>
+              <p className="text-[11px] text-zinc-400 mt-0.5">Seleccioná un usuario para hacerlo administrador</p>
+            </div>
           </div>
-          <button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100">
-            <X size={16} />
+          <button type="button" onClick={onClose}
+            className="grid h-7 w-7 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 transition">
+            <X size={15} />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="px-5 pb-5 space-y-3">
           {/* Búsqueda */}
-          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 focus-within:border-zinc-400 transition">
-            <Search size={14} className="text-zinc-400 shrink-0" />
-            <input className="w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-500 outline-none"
-              placeholder="Buscar usuario..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 focus-within:border-zinc-400 focus-within:bg-white transition">
+            <Search size={13} className="text-zinc-400 shrink-0" />
+            <input
+              className="w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-400 outline-none"
+              placeholder="Buscar usuario..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
 
-          {/* Lista de usuarios */}
-          <div className="rounded-xl border border-zinc-100 divide-y divide-zinc-50 max-h-60 overflow-y-auto">
+          {/* Lista */}
+          <div className="rounded-xl border border-zinc-200 max-h-56 overflow-y-auto">
             {loading ? (
-              Array(3).fill(null).map((_, i) => <div key={i} className="h-12 animate-pulse m-2 rounded-xl bg-zinc-100" />)
+              <div className="p-3 space-y-2">
+                {Array(3).fill(null).map((_, i) => (
+                  <div key={i} className="h-11 animate-pulse rounded-xl bg-zinc-100" />
+                ))}
+              </div>
             ) : filtered.length === 0 ? (
-              <p className="py-8 text-center text-xs text-zinc-400">
-                {allUsers.length === 0 ? "Sin usuarios disponibles" : "Sin resultados"}
-              </p>
-            ) : filtered.map((u) => (
-              <button key={u.id} type="button" onClick={() => setSelected(u)}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50 ${selected?.id === u.id ? "bg-zinc-100" : ""}`}>
-                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-800 text-[10px] font-bold text-white">
-                  {u.fullName[0]?.toUpperCase()}
+              <div className="py-10 text-center">
+                <p className="text-xs text-zinc-400">
+                  {allUsers.length === 0 ? "No hay usuarios disponibles" : "Sin resultados"}
+                </p>
+              </div>
+            ) : filtered.map((u) => {
+              const isSel = selected?.id === u.id;
+              return (
+                <div
+                  key={u.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelected(isSel ? null : u)}
+                  onKeyDown={(e) => e.key === "Enter" && setSelected(isSel ? null : u)}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-zinc-50 last:border-0 ${
+                    isSel ? "bg-violet-50" : "hover:bg-zinc-50"
+                  }`}
+                >
+                  <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+                    isSel ? "bg-violet-600 text-white" : "bg-zinc-100 text-zinc-600"
+                  }`}>
+                    {u.fullName[0]?.toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-semibold truncate ${isSel ? "text-violet-900" : "text-zinc-900"}`}>
+                      {u.fullName}
+                    </p>
+                    <p className="text-[11px] text-zinc-400 truncate">{u.email}</p>
+                  </div>
+                  <div className={`shrink-0 h-4 w-4 rounded-full border-2 transition-all flex items-center justify-center ${
+                    isSel ? "border-violet-600 bg-violet-600" : "border-zinc-300"
+                  }`}>
+                    {isSel && <Check size={9} className="text-white" strokeWidth={3} />}
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-zinc-900 truncate">{u.fullName}</p>
-                  <p className="text-xs text-zinc-500 truncate">{u.email}</p>
-                </div>
-                {selected?.id === u.id && <Check size={13} className="text-emerald-600 shrink-0" />}
-              </button>
-            ))}
+              );
+            })}
           </div>
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {/* Usuario seleccionado */}
+          {selected && (
+            <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5">
+              <ShieldCheck size={13} className="text-violet-600 shrink-0" />
+              <p className="text-xs text-violet-800 font-medium truncate">
+                <span className="font-bold">{selected.fullName}</span> será administrador de la organización
+              </p>
+            </div>
+          )}
 
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose}
-              className="flex-1 h-10 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition">
+          {error && (
+            <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
+          )}
+
+          {/* Acciones */}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 h-10 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-600 hover:bg-zinc-50 transition"
+            >
               Cancelar
             </button>
-            <button type="button" onClick={handleAssign} disabled={!selected || saving}
-              className="flex-1 h-10 rounded-xl text-sm font-semibold transition disabled:opacity-40 inline-flex items-center justify-center gap-2"
-              style={{ background: "var(--brand-primary)", color: "var(--brand-primary-text)" }}>
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-              {saving ? "Asignando..." : "Hacer admin"}
+            <button
+              type="button"
+              onClick={handleAssign}
+              disabled={!selected || saving}
+              className="flex-1 h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold transition hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+            >
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+              {saving ? "Asignando…" : "Hacer admin"}
             </button>
           </div>
         </div>
