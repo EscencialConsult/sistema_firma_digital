@@ -186,6 +186,11 @@ export async function logout(): Promise<void> {
   await supabase.auth.signOut();
 }
 
+export async function resendConfirmationEmail(email: string): Promise<void> {
+  const { error } = await supabase.auth.resend({ type: "signup", email });
+  if (error) throw new Error("No se pudo reenviar el email. Intentá de nuevo.");
+}
+
 /**
  * Update local profile data in Supabase.
  * Used after KYC status changes (admin approval).
