@@ -588,8 +588,9 @@ export async function uploadContractPdf(input: {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const sha256Hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
-  // 2. Upload file to storage
-  const storagePath = `${ownerId}/${Date.now()}_${file.name}`;
+  // 2. Upload file to storage — sanitizar nombre para evitar espacios/caracteres inválidos
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const storagePath = `${ownerId}/${Date.now()}_${safeName}`;
   const { error: uploadError } = await supabase.storage
     .from("contract-pdfs")
     .upload(storagePath, file, { upsert: true, contentType: file.type });

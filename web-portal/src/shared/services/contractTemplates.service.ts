@@ -173,8 +173,9 @@ export async function createPdfContractTemplate(input: {
 }): Promise<DbContractTemplate> {
   const { orgId, name, file, ownerId, signaturePosition } = input;
 
-  // Upload PDF to storage
-  const storagePath = `${ownerId}/tpl_${Date.now()}_${file.name}`;
+  // Upload PDF to storage — sanitizar nombre para evitar espacios/caracteres inválidos
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const storagePath = `${ownerId}/tpl_${Date.now()}_${safeName}`;
   const { error: uploadError } = await supabase.storage
     .from("contract-pdfs")
     .upload(storagePath, file, { upsert: false, contentType: "application/pdf" });
