@@ -6,7 +6,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
 import { getMySigningRequests } from "../../shared/services/signing.service";
@@ -62,6 +62,11 @@ export function DashboardPage() {
   const [requests, setRequests] = useState<SigningRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // SUPER_ADMIN no usa este dashboard — redirigir a su panel
+  if (user?.role === "SUPER_ADMIN") return <Navigate to="/super-admin" replace />;
+  // ADMIN/ORG_ADMIN tampoco — redirigir al panel de admin
+  if (user?.role === "ADMIN" || user?.role === "ORG_ADMIN") return <Navigate to="/admin" replace />;
 
   useEffect(() => {
     const email = user?.email ?? "";
