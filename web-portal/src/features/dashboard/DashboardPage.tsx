@@ -6,7 +6,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../app/providers/AuthProvider";
 import { Button } from "../../shared/components/ui/Button";
 import { getMySigningRequests } from "../../shared/services/signing.service";
@@ -63,10 +63,6 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // SUPER_ADMIN no usa este dashboard — redirigir a su panel
-  if (user?.role === "SUPER_ADMIN") return <Navigate to="/super-admin" replace />;
-  // ADMIN/ORG_ADMIN tampoco — redirigir al panel de admin
-  if (user?.role === "ADMIN" || user?.role === "ORG_ADMIN") return <Navigate to="/admin" replace />;
 
   useEffect(() => {
     const email = user?.email ?? "";
@@ -104,6 +100,25 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {/* Banner SuperAdmin */}
+      {(user?.role === "SUPER_ADMIN" || user?.role === "ADMIN" || user?.role === "ORG_ADMIN") && (
+        <div className="flex items-center justify-between rounded-2xl border border-violet-200 bg-violet-50 px-5 py-3.5">
+          <div className="flex items-center gap-3">
+            <ShieldCheck size={18} className="text-violet-600 shrink-0" />
+            <p className="text-sm font-medium text-violet-800">
+              Estás viendo la vista de usuario.{" "}
+              <span className="text-violet-500 font-normal">Tu rol es {user.role.replace("_", " ")}.</span>
+            </p>
+          </div>
+          <Link
+            to={user.role === "SUPER_ADMIN" ? "/super-admin" : "/admin"}
+            className="shrink-0 rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-700 transition-colors"
+          >
+            {user.role === "SUPER_ADMIN" ? "Panel SuperAdmin" : "Panel Admin"} →
+          </Link>
+        </div>
+      )}
+
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Portal de firmas</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-950">
