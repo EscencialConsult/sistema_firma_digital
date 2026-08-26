@@ -329,9 +329,10 @@ function KycPendingView({
       </div>
       <h1 className="text-2xl font-bold text-zinc-950">Verificación en proceso</h1>
       <p className="mt-3 max-w-sm text-sm text-zinc-500 leading-relaxed">
-        Recibimos tu documentación y estamos revisándola. Esto puede demorar hasta{" "}
-        <span className="font-semibold text-zinc-700">48 horas hábiles</span>.
-        Te notificaremos por email cuando esté lista.
+        Recibimos tu documentación y queda a la espera de que un administrador la apruebe.
+        Normalmente se resuelve dentro de las{" "}
+        <span className="font-semibold text-zinc-700">24 horas hábiles</span>.
+        Si pasado ese plazo seguís viendo esta pantalla, escribinos y la destrabamos.
       </p>
 
       <div className="mt-10 w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 text-left space-y-3">
@@ -635,6 +636,7 @@ function ProviderVerificationStep({
               Hacé clic en <span className="font-bold">Recargar</span> para generar una nueva sesión de verificación.
             </p>
           </div>
+          {import.meta.env.DEV && (
           <div className="pt-2 border-t border-zinc-200">
             <p className="text-xs text-zinc-400 mb-2">Modo desarrollo: simulá la verificación sin DIDIT</p>
             <Button
@@ -654,6 +656,7 @@ function ProviderVerificationStep({
               <CheckCircle size={15} /> Simular verificación exitosa
             </Button>
           </div>
+          )}
         </div>
       )}
     </div>
@@ -882,18 +885,25 @@ export function KycWizardPage() {
 
       try {
         await kycService.startProviderVerification();
-      } catch {
-        // Si DIDIT no está configurado (dev), usar mock KYC
-        const mockVerification = await kycService.mockCompleteKyc(user.id);
-        if (mockVerification) {
-          await syncSessionVerificationProfile(mockVerification, "VERIFIED");
-          updateUser({ verificationStatus: "VERIFIED" });
-          setVerification(mockVerification);
-          setStep(3);
-          setLoading(false);
-          return;
+      } catch (providerErr) {
+        // Solo en desarrollo: si DIDIT no está configurado, se simula el KYC.
+        // En producción NUNCA auto-verificamos: se informa el error y el usuario queda sin verificar.
+        if (import.meta.env.DEV) {
+          const mockVerification = await kycService.mockCompleteKyc(user.id);
+          if (mockVerification) {
+            await syncSessionVerificationProfile(mockVerification, "VERIFIED");
+            updateUser({ verificationStatus: "VERIFIED" });
+            setVerification(mockVerification);
+            setStep(3);
+            setLoading(false);
+            return;
+          }
         }
-        throw new Error("No se pudo iniciar la verificacion. Verificá la configuración de DIDIT.");
+        throw new Error(
+          providerErr instanceof Error && providerErr.message
+            ? providerErr.message
+            : "No se pudo iniciar la verificación de identidad. Reintentá en unos minutos o escribinos."
+        );
       }
       const updatedVerification = await kycService.getMyVerification(user.id);
       if (!updatedVerification) {
