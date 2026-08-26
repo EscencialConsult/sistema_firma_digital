@@ -1199,13 +1199,27 @@ export function AdminContractsPage() {
   }, [orgId]);
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [groupBy, setGroupBy] = useState<"date" | "template" | "signer">("date");
+  const [groupBy, setGroupBy] = useState<"template" | "label" | "date" | "signer">("template");
+  const [contractLabelFilter, setContractLabelFilter] = useState("");
+
+  // Un envio hereda la etiqueta del modelo del que salio (documents.template_id).
+  const templateOf = (c: Contract) =>
+    c.templateId ? dbTemplates.find((t) => t.id === c.templateId) ?? null : null;
+  const labelOf = (c: Contract) => templateOf(c)?.label || "";
+
+  // Etiquetas realmente presentes entre los contratos, para no ofrecer filtros vacios.
+  const contractLabels = useMemo(
+    () => [...new Set(contracts.map(labelOf).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [contracts, dbTemplates]
+  );
 
   const filtered = useMemo(() => {
     let list = contracts;
     if (filter === "pending") list = list.filter((c) => ["SENT","VIEWED","CONFORMITY_ACCEPTED"].includes(c.status));
     else if (filter === "signed") list = list.filter((c) => ["SIGNED","COMPLETED"].includes(c.status));
     else if (filter === "rejected") list = list.filter((c) => ["REJECTED","EXPIRED"].includes(c.status));
+    if (contractLabelFilter) list = list.filter((c) => labelOf(c) === contractLabelFilter);
     if (search) {
       const q = search.toLowerCase();
       const signerOf = (c: Contract) =>
@@ -1217,13 +1231,15 @@ export function AdminContractsPage() {
       );
     }
     return list;
-  }, [contracts, filter, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contracts, filter, search, contractLabelFilter, dbTemplates]);
 
   const signerOf = (c: Contract) =>
     c.templateFields?.nombre_firmante ?? c.templateFields?.nombre_usuario ?? c.ownerEmail;
 
   const contractGroups = useMemo(() => {
     const keyOf = (c: Contract) => {
+      if (groupBy === "label")  return `label:${labelOf(c) || "_sin"}`;
       if (groupBy === "date")   return `date:${c.createdAt.slice(0, 10)}`;
       if (groupBy === "signer") return `signer:${signerOf(c).toLowerCase()}`;
       return c.templateId ?? `pdf:${c.id}`;
@@ -1248,11 +1264,13 @@ export function AdminContractsPage() {
       const adminVarsCount = vars.filter((v) => !ORG_VARS.has(v) && !AUTO_FILL_VARS.has(v)).length;
 
       const title =
-        groupBy === "date"
-          ? new Date(cs[0].createdAt).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })
-          : groupBy === "signer"
-            ? signerOf(cs[0])
-            : (tpl?.name ?? cs[0].title);
+        groupBy === "label"
+          ? (labelOf(cs[0]) || "Sin etiqueta")
+          : groupBy === "date"
+            ? new Date(cs[0].createdAt).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })
+            : groupBy === "signer"
+              ? signerOf(cs[0])
+              : (tpl?.name ?? templateOf(cs[0])?.name ?? cs[0].title);
 
       return {
         key,
@@ -1978,13 +1996,31 @@ export function AdminContractsPage() {
               </div>
             </div>
 
+            {contractLabels.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-zinc-400">Etiqueta</span>
+                <button onClick={() => setContractLabelFilter("")} type="button"
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    !contractLabelFilter ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-500 hover:border-zinc-300"}`}>
+                  Todas
+                </button>
+                {contractLabels.map((l) => (
+                  <button key={l} onClick={() => setContractLabelFilter(l === contractLabelFilter ? "" : l)} type="button"
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                      l === contractLabelFilter ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-500 hover:border-zinc-300"}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-zinc-400">Agrupar por</span>
-              {([["date", "Tanda de envío"], ["template", "Modelo"], ["signer", "Firmante"]] as const).map(([k, label]) => (
+              {([["template", "Modelo"], ["label", "Etiqueta"], ["date", "Tanda de envío"], ["signer", "Firmante"]] as const).map(([k, lbl]) => (
                 <button key={k} onClick={() => setGroupBy(k)} type="button"
                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                     groupBy === k ? "border-zinc-300 bg-zinc-100 text-zinc-900" : "border-zinc-200 text-zinc-500 hover:border-zinc-300"}`}>
-                  {label}
+                  {lbl}
                 </button>
               ))}
               <span className="text-xs text-zinc-400">
