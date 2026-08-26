@@ -523,7 +523,9 @@ export async function sendContractFromTemplate(input: {
       title:               input.title,
       description:         input.description,
       owner_id:            authUser.id,
-      template_id:         "custom",
+      // El id real del modelo viene en templateFields._dbTemplateId. Guardarlo acá es lo
+      // que permite agrupar los envios por modelo en el panel de contratos.
+      template_id:         input.templateFields._dbTemplateId ?? "custom",
       template_fields:     allFields,
       signature_position:  input.signaturePosition ?? DEFAULT_SIGNATURE_POSITION,
       total_signers:       1,
@@ -604,7 +606,8 @@ export async function uploadContractPdf(input: {
       title: title || file.name,
       description: description || null,
       owner_id: ownerId,
-      template_id: "custom",
+      // PDF suelto: no proviene de un modelo.
+      template_id: null,
       template_fields: {
         nombre_firmante: signerName,
         email_firmante: signerEmail,

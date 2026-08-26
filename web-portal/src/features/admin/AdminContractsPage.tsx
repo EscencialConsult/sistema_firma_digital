@@ -1199,6 +1199,7 @@ export function AdminContractsPage() {
   }, [orgId]);
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [groupBy, setGroupBy] = useState<"date" | "template" | "signer">("date");
 
   const filtered = useMemo(() => {
     let list = contracts;
@@ -1218,23 +1219,45 @@ export function AdminContractsPage() {
     return list;
   }, [contracts, filter, search]);
 
+  const signerOf = (c: Contract) =>
+    c.templateFields?.nombre_firmante ?? c.templateFields?.nombre_usuario ?? c.ownerEmail;
+
   const contractGroups = useMemo(() => {
+    const keyOf = (c: Contract) => {
+      if (groupBy === "date")   return `date:${c.createdAt.slice(0, 10)}`;
+      if (groupBy === "signer") return `signer:${signerOf(c).toLowerCase()}`;
+      return c.templateId ?? `pdf:${c.id}`;
+    };
+
     const map = new Map<string, Contract[]>();
     for (const c of filtered) {
-      const key = c.templateId ?? `pdf:${c.id}`;
+      const key = keyOf(c);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(c);
     }
+
     return Array.from(map.entries()).map(([key, cs]) => {
-      const tpl = cs[0].templateId ? dbTemplates.find((t) => t.id === cs[0].templateId) : null;
+      // Los metadatos del modelo (variables, version) solo aplican agrupando por modelo.
+      const byTemplate = groupBy === "template";
+      const tpl = byTemplate && cs[0].templateId
+        ? dbTemplates.find((t) => t.id === cs[0].templateId)
+        : null;
       const vars     = tpl ? extractVariables(tpl.contentHtml) : [];
       const orgVars  = vars.filter((v) => ORG_VARS.has(v));
       const autoVars = vars.filter((v) => AUTO_FILL_VARS.has(v));
       const adminVarsCount = vars.filter((v) => !ORG_VARS.has(v) && !AUTO_FILL_VARS.has(v)).length;
+
+      const title =
+        groupBy === "date"
+          ? new Date(cs[0].createdAt).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })
+          : groupBy === "signer"
+            ? signerOf(cs[0])
+            : (tpl?.name ?? cs[0].title);
+
       return {
         key,
-        title: cs[0].title,
-        isTemplate: !!cs[0].templateId,
+        title,
+        isTemplate: byTemplate && !!cs[0].templateId,
         contracts: cs,
         template: tpl ?? null,
         vars, orgVars, autoVars, adminVarsCount,
@@ -1242,8 +1265,17 @@ export function AdminContractsPage() {
         pendingCount:  cs.filter((c) => ["SENT","VIEWED","CONFORMITY_ACCEPTED"].includes(c.status)).length,
         rejectedCount: cs.filter((c) => ["REJECTED","EXPIRED"].includes(c.status)).length,
       };
-    });
-  }, [filtered, dbTemplates]);
+    }).sort((a, b) =>
+      groupBy === "date"
+        ? b.key.localeCompare(a.key)              // envio mas reciente primero
+        : a.title.localeCompare(b.title, "es")
+    );
+  }, [filtered, dbTemplates, groupBy]);
+
+  // Si la agrupacion deja un solo grupo, abrirlo: no tiene sentido un acordeon de uno.
+  useEffect(() => {
+    if (contractGroups.length === 1) setExpandedGroups(new Set([contractGroups[0].key]));
+  }, [contractGroups]);
 
   const selectedSignedContracts = contracts.filter((c) =>
     selectedContractIds.includes(c.id) && hasShareableSignedPdf(c)
@@ -1944,6 +1976,20 @@ export function AdminContractsPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-zinc-400">Agrupar por</span>
+              {([["date", "Tanda de envío"], ["template", "Modelo"], ["signer", "Firmante"]] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setGroupBy(k)} type="button"
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    groupBy === k ? "border-zinc-300 bg-zinc-100 text-zinc-900" : "border-zinc-200 text-zinc-500 hover:border-zinc-300"}`}>
+                  {label}
+                </button>
+              ))}
+              <span className="text-xs text-zinc-400">
+                {contractGroups.length} grupo{contractGroups.length !== 1 ? "s" : ""}
+              </span>
             </div>
 
             <div className="space-y-3">

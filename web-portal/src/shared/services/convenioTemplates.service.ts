@@ -137,7 +137,7 @@ export async function activateConvenioTemplate(
       title:           `[Aprobación] ${tpl.name as string}`,
       description:     "Revisión y firma de convenio como autoridad provisional",
       owner_id:        authUser.user.id,
-      template_id:     "custom",
+      template_id:     templateId,
       template_fields: {
         _templateContent:      tpl.content_html,
         _legalTitle:           tpl.name,
