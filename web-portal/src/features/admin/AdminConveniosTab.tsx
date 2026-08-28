@@ -677,7 +677,7 @@ function ConvenioSendingFlow({
                   return (
                     <div key={v}>
                       <label className="mb-1 block text-xs font-semibold text-zinc-400">
-                        {VAR_LABELS[v] ?? v.replace(/_/g, " ")}
+                        {VAR_LABELS[v] ?? v}
                       </label>
                       {isLong ? (
                         <textarea value={varValues[v] ?? ""} rows={2} placeholder={`{{${v}}}`}

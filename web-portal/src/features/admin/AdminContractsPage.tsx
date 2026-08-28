@@ -832,7 +832,7 @@ function SendingFlow({
                 </p>
                 <div className="grid grid-cols-1 gap-2">
                   {autoVars.map((v) => {
-                    const label = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                    const label = VAR_LABELS[v] ?? v;
                     const value = varValues[v] ?? "";
                     return (
                       <button
@@ -912,7 +912,7 @@ function SendingFlow({
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-5 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {orgAutoVars.map((v) => {
-                      const label = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                      const label = VAR_LABELS[v] ?? v;
                       const filled = !!(varValues[v] ?? "").trim();
                       const orgVal = orgData ? (() => { const fn = ORG_VAR_SUGGESTIONS[v]; return fn ? fn(orgData, selectedAuth) ?? null : null; })() : null;
                       const isReset = orgVal && varValues[v] !== orgVal;
@@ -965,7 +965,7 @@ function SendingFlow({
                     const isLong = v.includes("objeto") || v.includes("descripcion");
                     const isDate = v.includes("fecha");
                     const isNum  = v.includes("monto") || v.includes("cuotas") || v.includes("valor");
-                    const label  = VAR_LABELS[v] ?? v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+                    const label  = VAR_LABELS[v] ?? v;
                     const filled = !!(varValues[v] ?? "").trim();
                     const spanFull = isLong || isDate;
                     const suggestion = getOrgSuggestion(v);
