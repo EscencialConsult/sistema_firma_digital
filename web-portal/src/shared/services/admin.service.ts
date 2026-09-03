@@ -87,10 +87,13 @@ function mapRowToUser(row: Record<string, unknown>): AdminUserSummary {
     documentNumber:     (row.document_number as string) ?? null,
     cuilCuit:           (row.cuil_cuit as string)       ?? null,
     address:            (row.address as string)         ?? null,
+    phone:              (row.phone as string)           ?? null,
+    province:           (row.province as string)        ?? null,
+    country:            (row.country as string)         ?? null,
   };
 }
 
-const USER_SELECT = "id, email, full_name, role, verification_status, certificate_status, created_at, document_number, cuil_cuit, address";
+const USER_SELECT = "id, email, full_name, role, verification_status, certificate_status, created_at, document_number, cuil_cuit, address, phone, province, country";
 
 export async function getAllUsers(organizationId?: string): Promise<AdminUserSummary[]> {
   if (!organizationId) {

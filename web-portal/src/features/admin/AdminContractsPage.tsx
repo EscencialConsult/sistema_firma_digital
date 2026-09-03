@@ -574,6 +574,9 @@ function SendingFlow({
           dni:       selectedUser.documentNumber,
           cuil:      selectedUser.cuilCuit,
           domicilio: selectedUser.address,
+          phone:     selectedUser.phone,
+          province:  selectedUser.province,
+          country:   selectedUser.country,
         },
         authority: {
           fullName:     selectedAuth.fullName,

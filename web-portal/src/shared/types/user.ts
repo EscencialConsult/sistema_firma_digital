@@ -44,4 +44,7 @@ export interface AdminUserSummary {
   documentNumber: string | null;
   cuilCuit:       string | null;
   address:        string | null;
+  phone:          string | null;
+  province:       string | null;
+  country:        string | null;
 }

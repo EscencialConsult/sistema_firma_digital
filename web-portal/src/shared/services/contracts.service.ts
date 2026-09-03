@@ -481,6 +481,9 @@ export async function sendContractFromTemplate(input: {
     dni?:      string | null;
     cuil?:     string | null;
     domicilio?: string | null;
+    phone?:    string | null;
+    province?: string | null;
+    country?:  string | null;
   };
   authority: {
     fullName:     string;
@@ -504,6 +507,9 @@ export async function sendContractFromTemplate(input: {
     dni_usuario:             input.user.dni       ?? "",
     cuil_usuario:            input.user.cuil      ?? "",
     domicilio_usuario:       input.user.domicilio ?? "",
+    celular_usuario:         input.user.phone     ?? "",
+    provincia_usuario:       input.user.province  ?? "",
+    pais_usuario:            input.user.country   ?? "",
     // Legacy vars (React templates)
     nombre_firmante:         input.user.name,
     email_firmante:          input.user.email,

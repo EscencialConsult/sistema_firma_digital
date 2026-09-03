@@ -83,6 +83,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   document_number     TEXT,
   cuil_cuit           TEXT,
   birth_date          DATE,
+  province            TEXT,
+  country             TEXT DEFAULT 'Argentina',
   organization_id     UUID REFERENCES public.organizations(id) ON DELETE SET NULL,
   terms_accepted_at   TIMESTAMPTZ,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -353,6 +355,10 @@ BEGIN
         document_number     = COALESCE(NEW.document_number, document_number),
         cuil_cuit           = COALESCE(NEW.cuil_cuit, cuil_cuit),
         birth_date          = COALESCE(NEW.birth_date, birth_date),
+        phone               = COALESCE(NEW.phone, phone),
+        address             = COALESCE(NEW.address, address),
+        province            = COALESCE(NEW.province, province),
+        country             = COALESCE(NEW.country, country),
         updated_at          = now()
     WHERE id = NEW.user_id;
 

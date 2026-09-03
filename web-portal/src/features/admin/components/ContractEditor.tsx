@@ -9,6 +9,9 @@ const AUTO_VAR_DESCRIPTIONS: Record<string, string> = {
   dni_usuario:       "DNI del firmante, verificado durante el proceso KYC.",
   cuil_usuario:      "CUIL/CUIT del firmante, verificado durante el proceso KYC.",
   domicilio_usuario: "Domicilio del firmante, verificado durante el proceso KYC.",
+  provincia_usuario: "Provincia del firmante, extraída del proceso KYC.",
+  pais_usuario:      "País del firmante, extraído del proceso KYC.",
+  celular_usuario:   "Celular del firmante, verificado durante el proceso KYC.",
 };
 
 interface ContractEditorProps {
@@ -26,7 +29,10 @@ const COMMON_VARIABLES = [
   "{{nombre_usuario}}",
   "{{dni_usuario}}",
   "{{domicilio_usuario}}",
+  "{{provincia_usuario}}",
+  "{{pais_usuario}}",
   "{{email_usuario}}",
+  "{{celular_usuario}}",
 ];
 
 export function ContractEditor({ initialContent = "", onChange, variables = COMMON_VARIABLES, placeholder }: ContractEditorProps) {

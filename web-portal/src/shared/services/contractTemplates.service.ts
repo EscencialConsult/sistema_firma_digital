@@ -132,6 +132,9 @@ export const AUTO_FILL_VARS = new Set([
   "dni_usuario",
   "cuil_usuario",
   "domicilio_usuario",
+  "provincia_usuario",
+  "pais_usuario",
+  "celular_usuario",
 ]);
 
 /** Variables de la organización — se autocompletan desde configuración de la empresa */
@@ -220,6 +223,9 @@ export const VAR_LABELS: Record<string, string> = {
   dni_usuario:       "DNI del firmante",
   cuil_usuario:      "CUIL/CUIT del firmante",
   domicilio_usuario: "Domicilio del firmante",
+  provincia_usuario: "Provincia del firmante",
+  pais_usuario:      "País del firmante",
+  celular_usuario:   "Celular del firmante",
   // Datos de la organización (org auto-fill)
   nombre_empresa:    "Nombre de la empresa",
   razon_social:      "Razón social",
