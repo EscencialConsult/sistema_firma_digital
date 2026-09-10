@@ -285,6 +285,14 @@ function FaceVerificationStep({
       const res = await verifyFaceLocal(requestId, base64);
       if (res.verified) {
         onVerified(res.similarity ?? 100, res.selfieUrl);
+      } else if (res.reason) {
+        // No se pudo comparar contra ninguna referencia (sin KYC, sin selfie
+        // registrada, o falla de infraestructura) — no es una foto de mala
+        // calidad, así que reintentar no sirve. Mostrar mensaje distinto,
+        // sin ofrecer "sacar de nuevo" como si fuera un problema de la foto.
+        setError(
+          "No pudimos verificar tu identidad automáticamente porque falta tu foto de referencia (KYC). Contactá a soporte para poder firmar."
+        );
       } else {
         setError(`Verificación fallida (${res.similarity}% de similitud). Asegurate de estar bien iluminado y de frente a la cámara.`);
         retake();
@@ -851,8 +859,10 @@ function SignedContractAudit({
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {[
                   "Conformidad legal aceptada",
-                  "Verificación facial completada",
-                  "OTP de identidad validado",
+                  // Este flujo (SigningFlowPage) verifica identidad por foto, no por OTP —
+                  // antes decía "OTP de identidad validado" siempre, sin importar si se
+                  // usó o no. faceSimilarity no nulo es la señal real de qué pasó acá.
+                  faceSimilarity !== null ? "Verificación facial completada" : "OTP de identidad validado",
                   "Firma manuscrita digital registrada",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-1.5 text-xs text-zinc-600">

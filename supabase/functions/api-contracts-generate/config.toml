@@ -1,0 +1,2 @@
+[functions.api-contracts-generate]
+verify_jwt = false

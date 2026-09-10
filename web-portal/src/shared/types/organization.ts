@@ -26,6 +26,9 @@ export interface Organization {
   postalCode?: string;
   taxId?:     string;
   website?:   string;
+  /** API / Integraciones B2B — habilitado por SUPER_ADMIN */
+  isApiEnabled?:  boolean;
+  apiWebhookUrl?: string;
 }
 
 export interface OrganizationStats {

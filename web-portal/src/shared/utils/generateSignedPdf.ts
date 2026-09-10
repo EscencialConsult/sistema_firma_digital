@@ -205,6 +205,51 @@ function addCertificatePage(pdf: jsPDF, document: SignedPdfDocumentInput, signer
   pdf.text("Las identidades fueron verificadas mediante OTP, reconocimiento facial y firma manuscrita digital.", MARGIN + 5, y + 19);
 }
 
+/**
+ * Renderiza SOLO el cuerpo del contrato (header + texto de la plantilla + footer),
+ * sin bloques de firma ni página de certificado — es el PDF "sin firmar" que se sube
+ * como document_versions v1 para que sign-document (server-side) le agregue después
+ * la hoja de firmas de cada firmante, exactamente como ya hace hoy con un PDF subido
+ * a mano vía uploadContractPdf(). No reemplaza generateSignedPdf() (que sigue siendo
+ * el render del PDF consolidado final, con firmas y certificado) — es la pieza que
+ * faltaba para que un contrato armado desde plantilla tenga un PDF real de base.
+ */
+export async function renderContractBodyPdf(input: SignedPdfDocumentInput): Promise<Blob> {
+  const orgName = input.organizationName ?? "Escencial Consultora";
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  addHeader(pdf, "CONTRATO", `${orgName} - Sistema Firma Electrónica - Ley 25.506 Argentina`);
+
+  let y = 38;
+  if (!input.templateId) {
+    pdf.setTextColor(24, 24, 27);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text(pdf.splitTextToSize(input.title, CONTENT_W), MARGIN, y);
+    y += 16;
+  }
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(8);
+  pdf.setTextColor(82, 82, 91);
+  pdf.text(`ID del documento: ${input.id}`, MARGIN, y);
+  y += 6;
+  pdf.text(`Fecha de emision: ${new Date().toLocaleString("es-AR")}`, MARGIN, y);
+  y += 12;
+
+  pdf.setDrawColor(228, 228, 231);
+  pdf.line(MARGIN, y, PAGE_W - MARGIN, y);
+  y += 10;
+
+  pdf.setFont("times", "normal");
+  pdf.setFontSize(10);
+  pdf.setTextColor(39, 39, 42);
+  addWrappedText(pdf, contractText(input), MARGIN, y, CONTENT_W, 5.2);
+
+  addFooter(pdf, orgName);
+
+  return pdf.output("blob");
+}
+
 export async function generateSignedPdf(
   document: SignedPdfDocumentInput | string,
   legacyDocumentId: string,

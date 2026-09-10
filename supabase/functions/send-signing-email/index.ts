@@ -40,12 +40,17 @@ serve(async (req) => {
   }
 
   try {
-    const { signerEmail, signerName, documentTitle, requestId, isOtpRequest } = await req.json() as {
+    const { signerEmail, signerName, documentTitle, requestId, isOtpRequest, publicToken } = await req.json() as {
       signerEmail:   string;
       signerName:    string;
       documentTitle: string;
       requestId:     string;
       isOtpRequest?: boolean;
+      // Si viene, el link apunta a la firma pública sin cuenta (/sign/:token) en vez
+      // de la ruta autenticada (/signing/:id) — lo usa api-contracts-generate para
+      // firmantes que no tienen ni van a tener cuenta en la plataforma. Opcional y
+      // retrocompatible: si no viene, el comportamiento es idéntico al de siempre.
+      publicToken?:  string;
     };
 
     if (!signerEmail || !requestId) {
@@ -105,7 +110,7 @@ serve(async (req) => {
         </html>
       `;
     } else {
-      const signingUrl = `${APP_URL}/signing/${requestId}`;
+      const signingUrl = publicToken ? `${APP_URL}/sign/${publicToken}` : `${APP_URL}/signing/${requestId}`;
       html = `
         <!DOCTYPE html>
         <html lang="es">

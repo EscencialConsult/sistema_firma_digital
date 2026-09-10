@@ -192,6 +192,31 @@ export async function resendConfirmationEmail(email: string): Promise<void> {
 }
 
 /**
+ * Dispara el email de recuperación de contraseña. El token de recuperación lo
+ * sigue generando Supabase Auth de forma nativa (firmado, expira, un solo
+ * uso) vía la Edge Function `request-password-reset` (necesita service_role,
+ * no se puede llamar directo con la anon key) — pero el ENVÍO del email sale
+ * por Resend, no por el mailer propio de Supabase. El mailer nativo de
+ * Supabase ya viene con problemas de límite de envío en este proyecto (ver el
+ * error de rate limit en register()), así que no conviene apoyar también la
+ * recuperación de contraseña en ese mismo canal.
+ * Nunca informa si el email existe o no (mismo comportamiento de seguridad
+ * que tendría resetPasswordForEmail() de Supabase).
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const { error } = await supabase.functions.invoke("request-password-reset", {
+    body: { email },
+  });
+  if (error) throw new Error("No se pudo enviar el email de recuperación. Intentá de nuevo.");
+}
+
+/** Establece la nueva contraseña. Requiere la sesión de recuperación temporal que deja el link del email. */
+export async function updatePassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+}
+
+/**
  * Update local profile data in Supabase.
  * Used after KYC status changes (admin approval).
  * Returns updated AuthUser or null if failed.

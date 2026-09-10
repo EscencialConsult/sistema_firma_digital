@@ -1,0 +1,2 @@
+[functions.api-contracts-download]
+verify_jwt = false

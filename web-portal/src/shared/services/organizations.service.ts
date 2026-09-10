@@ -29,6 +29,8 @@ function mapRow(row: Record<string, unknown>): Organization {
     taxId:           (row.tax_id          as string) ?? undefined,
     website:         (row.website         as string) ?? undefined,
     inviteCode:      (row.invite_code     as string) ?? undefined,
+    isApiEnabled:    (row.is_api_enabled  as boolean) ?? false,
+    apiWebhookUrl:   (row.api_webhook_url as string) ?? undefined,
   };
 }
 

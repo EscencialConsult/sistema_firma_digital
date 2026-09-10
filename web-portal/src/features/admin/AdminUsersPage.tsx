@@ -442,6 +442,9 @@ export function AdminUsersPage() {
       documentNumber: null,
       cuilCuit:       null,
       address:        null,
+      phone:          null,
+      province:       null,
+      country:        null,
     }));
     setUsers((prev) => [...newUsers, ...prev]);
     setCsvImported(true);

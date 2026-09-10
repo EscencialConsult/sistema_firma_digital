@@ -73,6 +73,12 @@ export function LoginPage() {
           autoComplete="current-password"
         />
 
+        <p className="-mt-1 text-right text-xs">
+          <Link to="/forgot-password" className="text-zinc-500 underline underline-offset-2 hover:text-zinc-800">
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </p>
+
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
             <p className="text-xs font-medium text-red-600">{error}</p>

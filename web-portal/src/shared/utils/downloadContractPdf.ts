@@ -230,11 +230,24 @@ export async function downloadContractWithAuditPdf(args: AuditPdfParams): Promis
     await new Promise<void>((res) => { selfieImg.onload = () => res(); selfieImg.onerror = () => res(); setTimeout(res, 2000); });
   }
 
+  // Antes esta lista era fija ("OTP de identidad validado" incluido siempre),
+  // aunque el flujo autenticado (SigningFlowPage) nunca manda ni verifica OTP
+  // — solo hace verificación facial. Un certificado con valor legal (Ley
+  // 25.506) no puede afirmar un control que no ocurrió. faceSimilarity no
+  // nulo es la señal real de que este firmante pasó por el flujo facial (sin
+  // OTP); si es nulo, pasó por el flujo público con OTP (sin verificación
+  // facial) — mismo criterio que ya usa correctamente ContractRenderer.tsx.
+  const processSteps = [
+    "Conformidad legal aceptada",
+    args.faceSimilarity !== null ? "Verificación facial completada" : "OTP de identidad validado",
+    "Firma manuscrita digital registrada",
+  ];
+
   const processSec = document.createElement("div");
   processSec.style.cssText = "margin-bottom:16px;";
   processSec.innerHTML = `<p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#71717a;margin:0 0 8px">Proceso de firma verificado</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-      ${["Conformidad legal aceptada","Verificación facial completada","OTP de identidad validado","Firma manuscrita digital registrada"]
+      ${processSteps
         .map(s => `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#3f3f46"><span style="color:#10b981;font-size:13px">✓</span>${s}</div>`).join("")}
     </div>`;
   auditEl.appendChild(processSec);

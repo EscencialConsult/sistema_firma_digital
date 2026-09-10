@@ -188,14 +188,33 @@ serve(async (req) => {
     // Buscar foto KYC del firmante via Supabase
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // Si no hay credenciales AWS, devolver mock aprobado (modo desarrollo)
-    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
-      console.warn("[face-verify] Sin credenciales AWS — modo mock activado");
-      const selfieUrl = await uploadSigningSelfie(supabase, requestId, selfieBase64);
+    /**
+     * Registra en audit_logs cada vez que la verificación facial no pudo
+     * compararse contra la foto de referencia (por el motivo que sea) y
+     * devuelve el rechazo correspondiente. Antes estos tres casos aprobaban
+     * automáticamente (fail-open) — un bug de datos (KYC faltante, selfie no
+     * guardada, credenciales AWS caídas) se traducía en "cualquiera firma sin
+     * verificarse" de forma silenciosa e indistinguible de una verificación
+     * real. Decisión explícita: fail-closed — si no se puede verificar, no
+     * se aprueba, aunque eso bloquee a un firmante legítimo hasta que se
+     * resuelva el dato faltante.
+     */
+    async function reject(reason: string, extra?: Record<string, unknown>) {
+      console.error(`[face-verify] Rechazo fail-closed — motivo: ${reason}`, extra ?? {});
+      await supabase.from("audit_logs").insert({
+        action: "FACE_VERIFY_REJECTED",
+        entity_type: "signature_request",
+        entity_id: requestId,
+        metadata: { reason, ...extra },
+      }).then(() => {}, () => {});
       return new Response(
-        JSON.stringify({ ok: true, similarity: 96.4, verified: true, mock: true, selfieUrl }),
+        JSON.stringify({ ok: true, similarity: 0, verified: false, reason }),
         { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
+    }
+
+    if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+      return await reject("no_aws_credentials");
     }
 
     const { data: sr } = await supabase
@@ -229,12 +248,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (!verif) {
-      // Sin verificación KYC → aprobar de todas formas (usuario sin KYC)
-      const selfieUrl = await uploadSigningSelfie(supabase, requestId, selfieBase64);
-      return new Response(
-        JSON.stringify({ ok: true, similarity: 0, verified: true, noKyc: true, selfieUrl }),
-        { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
+      return await reject("no_kyc", { signerEmail: sr.signer_email });
     }
 
     // 3. Buscar la selfie en identity_documents
@@ -246,12 +260,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (!doc?.storage_path) {
-      // Sin foto selfie KYC → aprobar de todas formas
-      const selfieUrl = await uploadSigningSelfie(supabase, requestId, selfieBase64);
-      return new Response(
-        JSON.stringify({ ok: true, similarity: 0, verified: true, noSelfie: true, selfieUrl }),
-        { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-      );
+      return await reject("no_reference_selfie", { verificationId: verif.id });
     }
 
     // Descargar foto KYC desde storage

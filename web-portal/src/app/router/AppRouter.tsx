@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { useAuth } from "../providers/AuthProvider";
 import { AuthGuard } from "../guards/AuthGuard";
 import { VerifiedGuard } from "../guards/VerifiedGuard";
@@ -17,6 +17,12 @@ const LoginPage = lazy(() =>
 );
 const RegisterPage = lazy(() =>
   import("../../features/auth/RegisterPage").then((m) => ({ default: m.RegisterPage }))
+);
+const ForgotPasswordPage = lazy(() =>
+  import("../../features/auth/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage }))
+);
+const ResetPasswordPage = lazy(() =>
+  import("../../features/auth/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage }))
 );
 
 // ─── KYC ─────────────────────────────────────────────────────────────────────
@@ -73,6 +79,20 @@ const PublicSigningPage = lazy(() =>
     default: m.PublicSigningPage,
   }))
 );
+
+/**
+ * PublicSigningPage recibe `token`/`id` como props, no los lee de useParams()
+ * internamente (ver su propio archivo). Este wrapper existe para que la ruta
+ * pública quede realmente cableada — antes montaba <PublicSigningPage /> sin
+ * props, así que la ruta caía siempre en el estado de error, para cualquiera.
+ * Se usa `token` (no `id`): el componente resuelve por token vía la RPC pública
+ * get_signature_request_by_token, diseñada para acceso sin sesión — resolver
+ * por `id` crudo requeriría una policy RLS de lectura pública más ancha.
+ */
+function PublicSigningRoute() {
+  const { token } = useParams<{ token: string }>();
+  return <PublicSigningPage token={token} />;
+}
 
 const PublicSignedPdfDownloadPage = lazy(() =>
   import("../../features/download/PublicSignedPdfDownloadPage").then((m) => ({
@@ -188,12 +208,14 @@ export function AppRouter() {
 
         {/* ── Públicas ── */}
         <Route element={<AuthLayout />}>
-          <Route path="/login"    element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login"           element={<LoginPage />} />
+          <Route path="/register"        element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password"  element={<ResetPasswordPage />} />
         </Route>
 
         {/* Firma pública (sin cuenta) */}
-        <Route path="/sign/:id"    element={<PublicSigningPage />} />
+        <Route path="/sign/:token" element={<PublicSigningRoute />} />
         <Route path="/d/:documentId" element={<PublicSignedPdfDownloadPage />} />
 
         {/* Aceptar invitación de autoridad (sin cuenta) */}

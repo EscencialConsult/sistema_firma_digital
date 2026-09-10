@@ -212,7 +212,7 @@ export async function initiateFaceVerificationDIDIT(requestId: string): Promise<
 export async function verifyFaceLocal(
   requestId: string,
   selfieBase64: string
-): Promise<{ ok: boolean; similarity: number; verified: boolean; selfieUrl?: string | null; mock?: boolean; noKyc?: boolean; noSelfie?: boolean }> {
+): Promise<{ ok: boolean; similarity: number; verified: boolean; selfieUrl?: string | null; reason?: string }> {
   const { data: { session } } = await supabase.auth.getSession();
   const { data, error } = await supabase.functions.invoke("face-verify", {
     body: { requestId, selfieBase64 },

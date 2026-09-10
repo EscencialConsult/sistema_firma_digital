@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase";
 import type { Contract, ContractDetail, ContractSigner, SignaturePosition } from "../types/contract";
 import { DEFAULT_SIGNATURE_POSITION } from "../types/contract";
+import { renderContractBodyPdf } from "../utils/generateSignedPdf";
 
 // ─── Convenio types ───────────────────────────────────────────────────────────
 
@@ -558,7 +559,42 @@ export async function sendContractFromTemplate(input: {
     orgLogo = ((orgRow?.logo_light_url ?? orgRow?.logo_dark_url) as string) ?? null;
   }
 
-  const { error: srErr } = await supabase.from("signature_requests").insert({
+  // Materializar el PDF base (sin firmar) y subirlo como document_versions v1 —
+  // antes, un contrato armado desde plantilla nunca tenía un PDF real ni token,
+  // así que era firmable solo por el flujo autenticado (/signing/:id) y el link
+  // público (/sign/:token) quedaba muerto. Repara ese gap sin cambiar lo que ve
+  // el admin: sigue siendo el mismo botón, el mismo resultado visible.
+  const pdfBlob = await renderContractBodyPdf({
+    title: input.title,
+    id: doc.id as string,
+    templateId: (doc.template_id as string) ?? null,
+    templateFields: allFields,
+    organizationName: orgName,
+  });
+  const storagePath = `${authUser.id}/${Date.now()}_contrato.pdf`;
+  const { error: uploadError } = await supabase.storage
+    .from("contract-pdfs")
+    .upload(storagePath, pdfBlob, { upsert: true, contentType: "application/pdf" });
+  if (uploadError) throw new Error(`Error al generar PDF del contrato: ${uploadError.message}`);
+
+  const pdfBuffer = await pdfBlob.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", pdfBuffer);
+  const sha256Hash = Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  const { error: verErr } = await supabase.from("document_versions").insert({
+    document_id:    doc.id,
+    version_number: 1,
+    file_name:      "contrato.pdf",
+    storage_path:   storagePath,
+    sha256_hash:    sha256Hash,
+    file_size:      pdfBlob.size,
+    uploaded_by:    authUser.id,
+  });
+  if (verErr) throw new Error(verErr.message);
+
+  const token = crypto.randomUUID();
+  const { data: sr, error: srErr } = await supabase.from("signature_requests").insert({
     document_id:       doc.id,
     document_title:    input.title,
     organization_name: orgName,
@@ -569,8 +605,21 @@ export async function sendContractFromTemplate(input: {
     status:            "PENDING",
     expires_at:        expiresAt,
     signing_order:     0,
-  });
-  if (srErr) throw new Error(srErr.message);
+    token,
+  }).select("id").single();
+  if (srErr || !sr) throw new Error(srErr?.message ?? "Error creando solicitud de firma");
+
+  // Enviar email de firma — fire-and-forget, mismo patrón que createContract/
+  // addContractSigner/uploadContractPdf. Si falla, el admin puede reenviar el
+  // link manualmente igual que hoy (SendThirdPartyModal).
+  await supabase.functions.invoke("send-signing-email", {
+    body: {
+      signerEmail:   input.user.email,
+      signerName:    input.user.name,
+      documentTitle: input.title,
+      requestId:     sr.id,
+    },
+  }).catch(() => {});
 
   return mapDocToContract(doc as Record<string, unknown>);
 }

@@ -25,6 +25,7 @@ import { createAdminUser } from "../../shared/services/admin.service";
 import type { Organization, OrganizationStats } from "../../shared/types/organization";
 import { OrgLogo } from "../../shared/components/ui/OrgLogo";
 import { APP_CONFIG } from "../../shared/config/app";
+import { ApiIntegrationsCard } from "./components/ApiIntegrationsCard";
 
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: number; icon: React.ElementType; color: string }) {
@@ -381,6 +382,9 @@ export function OrganizationDetailPage() {
           </div>
         )}
       </div>
+
+      {/* API / Integraciones */}
+      {id && <ApiIntegrationsCard organizationId={id} />}
 
       {/* Info / Edit form */}
       <form onSubmit={handleSave} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">

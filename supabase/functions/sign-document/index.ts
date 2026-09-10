@@ -191,6 +191,19 @@ serve(async (req) => {
     const docTitle = signatureRequest.documentTitle ?? signatureRequest.documents?.title;
     const docId = signatureRequest.documentId ?? signatureRequest.document_id;
     const storagePath = signatureRequest.pdfUrl ?? signatureRequest.documents?.document_versions?.[0]?.storage_path;
+    const expiresAt = signatureRequest.expiresAt ?? signatureRequest.expires_at;
+
+    // El path por token ya filtra por expires_at dentro de la RPC
+    // get_signature_request_by_token, pero el path autenticado (JWT + requestId,
+    // más abajo) hace un select directo sin ese filtro — nunca chequeaba
+    // vencimiento acá. La expiración solo se validaba en el cliente
+    // (SigningFlowPage), así que alguien podía firmar un link vencido llamando
+    // esta función directo. Se chequea acá también, sin depender de un solo lugar.
+    if (expiresAt && new Date(expiresAt) < new Date()) {
+      return new Response(JSON.stringify({ error: "La solicitud de firma venció. Pedí que te reenvíen el link." }), {
+        status: 410, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
 
     if (!storagePath) {
       return new Response(JSON.stringify({ error: "El documento no tiene archivo PDF" }), {
@@ -409,7 +422,22 @@ serve(async (req) => {
 
     const newHash = await sha256(signedPdfBytes);
     const safeName = (signatureRequest.fileName ?? "document.pdf").replace(/[^\w.\- ]+/g, "_");
-    const newStoragePath = `contracts/${docId}/v_signed_${safeName}`;
+
+    // Antes esto era version_number: 2 hardcodeado con un storage_path fijo
+    // (`v_signed_${safeName}`, sin número de versión) — el segundo firmante de
+    // un documento con más de un firmante pisaba el PDF del primero en Storage
+    // y además chocaba contra el UNIQUE(document_id, version_number) al
+    // intentar insertar version_number=2 de nuevo. Se calcula la próxima
+    // versión real en vez de asumir que siempre es la segunda.
+    const { data: latestVersion } = await supabase
+      .from("document_versions")
+      .select("version_number")
+      .eq("document_id", docId)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextVersionNumber = (latestVersion?.version_number ?? 1) + 1;
+    const newStoragePath = `contracts/${docId}/v${nextVersionNumber}_signed_${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("contract-pdfs")
@@ -428,7 +456,7 @@ serve(async (req) => {
       .from("document_versions")
       .insert({
         document_id: docId,
-        version_number: 2,
+        version_number: nextVersionNumber,
         file_name: `signed_${safeName}`,
         storage_path: newStoragePath,
         sha256_hash: newHash,
