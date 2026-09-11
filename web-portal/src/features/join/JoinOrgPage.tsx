@@ -396,6 +396,11 @@ export function JoinOrgPage() {
                     <form onSubmit={handleLogin} className="space-y-4">
                       <OrgInput primary={primary} label="Email"      value={email}    setter={setEmail}    type="email"    icon={Mail} placeholder="tu@email.com"  autocomplete="email" />
                       <OrgInput primary={primary} label="Contraseña" value={password} setter={setPassword} type="password" icon={Lock} placeholder="Tu contraseña" autocomplete="current-password" />
+                      <p className="-mt-1 text-right text-xs">
+                        <Link to="/forgot-password" className="text-zinc-500 underline underline-offset-2 hover:text-zinc-800">
+                          ¿Olvidaste tu contraseña?
+                        </Link>
+                      </p>
                       <button
                         type="submit" disabled={loading}
                         className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition-opacity disabled:opacity-50"
